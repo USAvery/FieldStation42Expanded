@@ -1,7 +1,7 @@
 # FieldStation42Expanded
 
 This repo has some changes and additions to FieldStation42.
-It has an interactive i-Guide.
+It has an interactive guide that resembles ~2005 i-Guide.
 
 TODO: Add diff summary here
 
