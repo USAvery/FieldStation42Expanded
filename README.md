@@ -5,7 +5,7 @@ It has an interactive guide that resembles ~2005 i-Guide.
 
 TODO: Add diff summary here
 
-# ---------- Original FieldStation42 README below ----------
+# -------- Original FieldStation42 README below --------
 
 
 # FieldStation42
