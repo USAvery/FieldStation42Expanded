@@ -1,3 +1,13 @@
+# FieldStation42Expanded
+
+This repo has some changes and additions to FieldStation42.
+It has an interactive i-Guide.
+
+TODO: Add diff summary here
+
+# ---------- Original FieldStation42 README below ----------
+
+
 # FieldStation42
 
 FieldStation42 turns your Linux computer or Raspberry Pi into a broadcast and cable TV simulator. Instead of picking something to watch, you flip channels. Scheduled programming plays on its own timeline, with commercials, station bumps, and all the in-between stuff that made old-school TV feel alive. Learn more at [fieldstation42.com](https://fieldstation42.com).
