@@ -1,79 +1,874 @@
 :root {
-
+  /* Early-2000s Comcast/Xfinity guide reconstruction based on the supplied reference. */
   --layout-mode: "grid";
   --music-autoload: false;
+
+  /*
+  --guide-width: min(100vw, 133.333333vh);
+  --guide-height: min(100vh, 75vw);
+  */
+  --guide-width: min(100vw);
+  --guide-height: min(100vh, 75vw);
+
+  --gh-100: calc(var(--guide-height)/100);
 
   --header-position: bottom;
   --channel-position: before;
   --continued-indicator: " ▶";
   --offair-text: "No Info";
-  --header-text: "FS42 Guide";
+  --header-text: "TV Listings";
 
-  /* core — medium navy blue */
-  --bg-color: #1a3a78;
+  --bg-color: #173867;
   --text-color: #ffffff;
-  --header-bg: #0a1e50;
+  --header-bg: #173867;
   --header-text-color: #ffffff;
 
-  /* grid chrome */
   --time-heading-color: #ffffff;
-  --channel-number-color: #ffffff;
-  --channel-name-color: #ffffff;
+  --channel-number-color: #111111;
+  --channel-name-color: #111111;
   --show-title-color: #ffffff;
-  --row-divider-color: #0e2a60;
+  --row-divider-color: #050b15;
 
-  /* top panel */
-  --top-panel-height: 42%;
-  --video-side: left;
-  --video-width: auto;
-  --video-aspect-ratio: 16/9;
-  --video-panel-bg: #1a3a78;
-  --text-panel-bg: #1a3a78;
+  --top-panel-height: 40.4%;
+  --video-side: right;
+  --video-width: 41.4%;
+  --video-aspect-ratio: auto;
+  --video-panel-bg: #193b6e;
+  --text-panel-bg: #315d92;
   --text-panel-color: #ffffff;
-  --text-panel-title-color: #ffdd44;
-  --text-carousel-speed: 10;
+  --text-panel-title-color: #fff437;
 
-  /* grid header */
-  --grid-header-bg: #0a1e50;
-  --time-slot-bg: #2a4a99;
-  --time-slot-radius: 1em;
+  --grid-header-bg: #173867;
+  --time-slot-bg: transparent;
+  --time-slot-radius: 0;
 
-  /* channel pill — red, rounded */
-  --grid-channel-bg: #bb1122;
-  --grid-channel-width: 5.25em;
-  --channel-pill-radius: 0.4em;
-  --channel-pill-margin-v: 4px;
-  --channel-pill-margin-h: 4px;
+  /* 238px of a 1196px-wide reference image. */
+  --grid-time-slot-width: calc(var(--guide-width) * 0.243);
+  --grid-channel-width: calc(var(--guide-width) * 0.203);
+  --grid-channel-stub-width: calc(var(--guide-width) * 0.198);
+  --grid-channel-bg: #98bddd;
+  --channel-pill-radius: 0;
+  --channel-pill-margin-v: 0;
+  --channel-pill-margin-h: 0;
   --channel-block-border: transparent;
   --channel-block-shadow: transparent;
 
-  /* grid rows */
-  --grid-row-height: 3.0em;
-  --grid-row-odd-bg: #1a3a78;
-  --grid-row-even-bg: #162e65;
-
-  /* program blocks — rounded, blue */
-  --program-block-radius: 0.3em;
-  --program-block-bg: #1e4090;
-  --program-block-border: #4466cc;
-  --program-block-even-bg: #172e70;
-  --program-block-even-border: #3a55bb;
-  --program-block-shadow: #0a1e50;
-  --program-current-bg: #0055cc;
-  --program-current-border: #66aaff;
+  --program-block-radius: 0;
+  --program-block-bg: #23487c;
+  --program-block-even-bg: #23487c;
+  --program-block-border: transparent;
+  --program-block-even-border: transparent;
+  --program-block-shadow: transparent;
+  --program-current-bg: #23487c;
+  --program-current-border: transparent;
   --program-current-color: #ffffff;
 
-  /* type */
-  --font-family: 'Arial', 'Helvetica Neue', sans-serif;
-  --font-size: 1.3rem;
-  --h-padding: 1.5%;
-  --v-padding: 1.5%;
+  --font-family: Arial, Helvetica, sans-serif;
+  --font-size: min(2.15vw, 2.87vh);
+  --h-padding: 0;
+  --v-padding: 0;
 
-  /* scroll */
   --scroll-pause: 4s;
-  --scroll-speed: 0.8;
+  --scroll-speed: 0.55;
 
-  /* audio */
   --music-volume: 0.4;
+  --video-volume: 0.8;
 
+  --guide-selection-border: transparent;
+  --guide-selection-color: #111111;
+  --guide-selection-channel-bg: #98bddd;
+}
+
+/* Keep the reconstruction in the same 4:3 frame as the reference image. */
+html,
+body {
+  width: 100%;
+  height: 100%;
+  background: #000;
+}
+
+body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#guide-wrapper {
+  width: var(--guide-width);
+  height: var(--guide-height);
+  max-width: 100vw;
+  max-height: 100vh;
+
+  overflow: hidden;
+  background: #173867;
+}
+
+/* The grid page itself is split into the 40.4% top panel, 50.5% grid, and 9.1% promo footer. */
+#guide-listings.grid-mode.xfinity-00s {
+  width: 100%;
+  height: 100%;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #173867;
+}
+
+/* ===== TOP INFORMATION / VIDEO AREA ===== */
+
+.xfinity-00s #top-panel {
+  flex: 0 0 40.4%;
+  width: 100%;
+  height: 40.4%;
+  display: flex;
+  flex-direction: row;
+  background: #193b6e;
+  border-bottom: min(0.30vw, 0.40vh) solid #060b14;
+}
+
+.xfinity-00s #text-panel.xfinity-info-panel {
+  order: 0;
+  flex: 0 0 58.6%;
+  width: 58.6%;
+  height: 100%;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
+  text-align: left;
+  gap: 0;
+  overflow: hidden;
+  color: #fff;
+  background: #315d92;
+}
+
+.xfinity-00s #video-panel {
+  order: 1;
+  flex: 0 0 41.4%;
+  width: 41.4%;
+  height: 100%;
+  aspect-ratio: auto;
+  border-left: 0.59vh solid #0b1018;
+  background: #193b6e;
+  overflow: hidden;
+}
+
+.xfinity-00s #video-panel video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.xfinity-00s #video-panel.video-unavailable {
+  background:
+    radial-gradient(circle at 50% 45%, rgba(255,255,255,0.08), transparent 38%),
+    linear-gradient(180deg, #214b80 0%, #16345f 100%);
+}
+
+/* Dark-blue Comcast/Xfinity branding strip. */
+.xfinity-brand-strip {
+  position: relative;
+  flex: 0 0 44.8%;
+  width: 100%;
+  overflow: hidden;
+  background: #1a3665;
+  border-bottom: min(0.24vw, 0.32vh) solid #1b2a42;
+}
+
+/* Comcast Logo */
+.comcast-logo {
+  position: absolute;
+  left: 12.3%;
+  top: 35.2%;
+  width: calc(var(--guide-height) * 0.29);
+  color: #adb6c6;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: min(5.55vw, 7.40vh);
+  font-weight: 300;
+  line-height: 1;
+  letter-spacing: -0.065em;
+  text-shadow: 0 min(0.12vw, 0.16vh) min(0.1vw, 0.13vh) rgba(0, 0, 0, 0.2);
+}
+
+.comcast-logo img {
+  width: 100%;
+  height: 100%;
+
+  /* Keep aspect ratio */
+  object-fit: cover;
+}
+
+/* "TV Listings" Title Envelope and Clock */
+.xfinity-listings-block {
+  position: absolute;
+  left: 54.5%;
+  top: 44%;
+  color: #fff;
+  font-weight: 250;
+  letter-spacing: 0.06em;
+  text-shadow: 0.03em 0.08em 0 #000;
+  white-space: nowrap;
+}
+
+.xfinity-listings-title {
+  color: #faf591;
+  /* font-size: min(4.28vw, 3.75vh); */
+  font-size: calc(var(--guide-height) * 0.0375);
+  line-height: 1;
+}
+
+.xfinity-clock-line {
+  justify-content: flex-end;
+  margin-top: 0.10em;
+  display: flex;
+  align-items: center;
+  gap: 0.30em;
+  font-size: min(2.85vw, 3.80vh);
+  line-height: 1;
+}
+
+.xfinity-clock-line #clock{
+  font-size: 1.05em;
+}
+
+
+/* Envelope */
+.xfinity-envelope {
+  position: relative;
+  display: inline-block;
+  width: 1.25em;
+  height: 0.72em;
+  background: #fff;
+  border: min(0.10vw, 0.13vh) solid #050505;
+  box-shadow: min(0.08vw, 0.11vh) min(0.08vw, 0.11vh) 0 #000;
+  overflow: hidden;
+}
+
+.xfinity-envelope::before,
+.xfinity-envelope::after {
+  content: "";
+  position: absolute;
+  top: -0.04em;
+  width: 0.948em;
+  height: 0.28em;
+  border-bottom: 0.1em solid #000;
+}
+
+.xfinity-envelope::before {
+  left: -0.18em;
+  transform: rotate(35deg);
+}
+
+.xfinity-envelope::after {
+  right: -0.18em;
+  transform: rotate(-35deg);
+}
+
+
+/* TV Guide Logo */
+.tv-guide-badge {
+  position: absolute;
+  right: 2.4%;
+  top: 39%;
+  width: 16.1%;
+  height: 55%;
+  display: flex;
+}
+
+.tv-guide img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover; /* Keeps aspect ratio, crops if necessary */
+}
+
+/* Selected program details under the brand strip. */
+.xfinity-program-details {
+  flex: 1;
+  min-height: 0;
+  padding: 1.4% 3.1% 1.2% 12.8%;
+  background:
+    linear-gradient(180deg, #464754 0%, #225282 5%, #5373a2 50%, #7697ca 95%, #2f4462 100%);
+  color: #fff;
+  text-shadow:
+    min(0.16vw, 0.21vh) min(0.16vw, 0.21vh) 0 #000,
+    0 0 min(0.10vw, 0.13vh) #000;
+  overflow: hidden;
+}
+
+.xfinity-program-heading,
+.xfinity-program-subrow {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+}
+
+#selected-program-title {
+  flex: 1;
+  min-width: 0;
+  padding-right: 0.5em;
+  color: #faf591;
+  font-size: min(2.87vw, 3.83vh);
+  font-weight: 800;
+  line-height: 1.02;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#selected-channel-label {
+  flex: 0 0 24%;
+  text-align: right;
+  font-size: min(2.87vw, 3.83vh);
+  font-weight: 800;
+  line-height: 1.02;
+  white-space: nowrap;
+}
+
+.xfinity-program-subrow {
+  margin-top: 0.18em;
+  min-height: 1.15em;
+}
+
+#selected-program-time {
+  flex: 1;
+  font-size: min(2.62vw, 3.49vh);
+  font-weight: 800;
+  line-height: 1;
+}
+
+#selected-program-icons {
+  flex: 0 0 24%;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.24em;
+  padding-right: 0.02em;
+  font-size: min(1.75vw, 2.33vh);
+  font-weight: 800;
+  line-height: 1;
+  text-shadow: none;
+}
+
+#selected-program-rating {
+  min-width: 1.65em;
+  height: 1.25em;
+  padding: 0 0.16em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #111;
+  background: #fff;
+  border: min(0.10vw, 0.13vh) solid #111;
+  border-radius: 0.20em;
+  font-size: 0.78em;
+}
+
+.xfinity-lock-icon {
+  position: relative;
+  width: 1.18em;
+  height: 1.18em;
+  display: inline-block;
+  background: #fff;
+  border: min(0.10vw, 0.13vh) solid #111;
+  border-radius: 0.08em;
+}
+
+.xfinity-lock-icon::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 13%;
+  width: 44%;
+  height: 42%;
+  transform: translateX(-50%);
+  border: min(0.10vw, 0.13vh) solid #111;
+  border-bottom: 0;
+  border-radius: 50% 50% 0 0;
+}
+
+.xfinity-lock-icon::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 15%;
+  width: 14%;
+  height: 28%;
+  transform: translateX(-50%);
+  background: #111;
+  border-radius: 50% 50% 0 0;
+}
+
+#selected-program-description {
+  margin-top: 0.18em;
+  max-width: 100%;
+  font-size: min(2.48vw, 3.31vh);
+  font-weight: 800;
+  line-height: 1.10;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+
+/* ===== TIME HEADER ===== */
+
+.xfinity-00s #grid-wrapper {
+  flex: 0 0 50.5%;
+  height: 50.5%;
+  min-height: 0;
+  overflow: hidden;
+  background: #173867;
+}
+
+.xfinity-00s #grid-header {
+  position: relative;
+  flex: 0 0 16.86%;
+  height: 16.86%;
+  overflow: hidden;
+  background: #193b70;
+  border-top: min(0.23vw, 0.31vh) solid #05080d;
+  border-bottom: calc(var(--guide-height) * 0.00587) solid #05080d;
+  box-shadow: none;
+}
+
+.xfinity-00s .grid-channel-stub {
+  position: relative;
+  flex: 0 0 var(--grid-channel-stub-width);
+  width: var(--grid-channel-stub-width);
+  height: 100%;
+  justify-content: flex-start;
+  background: #193b70;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.xfinity-00s .grid-channel-stub::after {
+  content: "";
+  position: absolute;
+  right: calc(var(--gh-100) * 0.0963);
+  top: 16%;
+  height: 50%;
+  width: 1.4%;
+  background-color: #00183d;
+}
+
+/* Clock Icon */
+.clock-icon {
+  position: relative;
+  top: -6%;
+  left: calc(var(--grid-channel-width) + var(--guide-width)*0.01);
+  height: 66%;
+  filter: drop-shadow(calc(var(--gh-100) * 0.44) calc(var(--gh-100) * 0.147) #000);
+  overflow: hidden;
+}
+
+.clock-icon img {
+  width: 100%;
+  height: 100%;
+
+  /* Keep aspect ratio */
+  object-fit: cover;
+}
+
+.xfinity-today {
+  position: absolute;
+  left: 38%;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #fff;
+  font-size: min(2.72vw, 3.63vh);
+  font-weight: 700;
+  white-space: nowrap;
+  text-shadow: min(0.14vw, 0.19vh) min(0.14vw, 0.19vh) 0 #000;
+}
+
+.xfinity-prev-arrow {
+  position: absolute;
+  right: 4.5%;
+  top: 16%;
+  width: 0;
+  height: 0;
+  border-top: calc(var(--gh-100) * 1.9069) solid transparent;
+  border-bottom: calc(var(--gh-100) * 1.9069) solid transparent;
+  border-right: calc(var(--gh-100) * 1.9069) solid #fff;
+  filter: drop-shadow(calc(var(--gh-100) * 0.44) calc(var(--gh-100) * 0.147) #000);
+}
+
+.xfinity-list-glyph {
+  position: absolute;
+  left: 105.5%;
+  top: 50%;
+  width: min(4.5vw, 6vh);
+  height: min(3.15vw, 4.2vh);
+  transform: translateY(-50%);
+}
+
+.xfinity-list-glyph i {
+  position: absolute;
+  left: 0;
+  width: 54%;
+  height: min(0.28vw, 0.37vh);
+  background: #fff;
+  border-radius: 0.2em;
+  box-shadow: min(0.10vw, 0.13vh) min(0.10vw, 0.13vh) 0 #000;
+}
+
+.xfinity-list-glyph i:nth-child(1) { top: 5%; }
+.xfinity-list-glyph i:nth-child(2) { top: 36%; }
+.xfinity-list-glyph i:nth-child(3) { top: 67%; }
+
+.xfinity-list-glyph::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 22%;
+  width: 38%;
+  height: 56%;
+  border: min(0.30vw, 0.40vh) solid #fff;
+  border-radius: 50%;
+  box-shadow: min(0.10vw, 0.13vh) min(0.10vw, 0.13vh) 0 #000;
+}
+
+.xfinity-00s .grid-time-slot {
+  flex: 0 0 var(--grid-time-slot-width);
+  width: var(--grid-time-slot-width);
+  height: 100%;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: transparent;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  font-size: min(2.76vw, 3.68vh);
+  font-weight: 700;
+  text-shadow: min(0.14vw, 0.19vh) min(0.14vw, 0.19vh) 0 #000;
+  overflow: visible;
+  position: relative;
+}
+
+
+.xfinity-00s .grid-time-slot::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--gh-100) * 0.0963);
+  top: 16%;
+  height: 50%;
+  width: 1.4%;
+  background-color: #476fbb;
+}
+
+.xfinity-00s .grid-time-slot::after {
+  content: "";
+  position: absolute;
+  right: calc(var(--gh-100) * 0.0963);
+  top: 16%;
+  height: 50%;
+  width: 1.4%;
+  background-color: #00183d;
+}
+
+/* Next Arrow */
+.xfinity-00s #grid-header::after {
+  content: "";
+  position: absolute;
+  right: 4.4%;
+  top: 16%;
+  width: 0;
+  height: 0;
+  border-top: calc(var(--gh-100) * 1.9069) solid transparent;
+  border-bottom: calc(var(--gh-100) * 1.9069) solid transparent;
+  border-left: calc(var(--gh-100) * 1.9069) solid #fff;
+  filter: drop-shadow(calc(var(--gh-100) * 0.44) calc(var(--gh-100) * 0.147) #000);
+  pointer-events: none;
+}
+
+
+
+/* ===== PROGRAM GRID ===== */
+
+.xfinity-00s #grid-listings {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+  background: #173867;
+}
+
+.xfinity-00s #grid-scroll-strip {
+  width: 100%;
+  left: 0;
+  right: auto;
+}
+
+.xfinity-00s .grid-row {
+  width: 100%;
+  height: min(8.47vh, 6.35vw);
+  display: flex;
+  flex-direction: row;
+  overflow: hidden;
+  background: #737e8d !important;
+  border-bottom: min(0.42vw, 0.37vh) solid #08101c;
+  box-shadow: none;
+}
+
+.xfinity-00s .grid-channel {
+  flex: 0 0 var(--grid-channel-width);
+  width: var(--grid-channel-width);
+  height: 100%;
+  margin: 0;
+  padding: 0 min(0.80vw, 1.07vh);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 0.26em;
+  background: #98bddd;
+  border-radius: 0;
+  border-right: calc(var(--guide-height) * 0.00587) solid #080f18;
+  box-shadow: inset calc(var(--guide-height) * -0.00587) 0 0 0 #f6ffff;
+  overflow: hidden;
+}
+
+.xfinity-00s .grid-channel .channel-number,
+.xfinity-00s .grid-channel .channel-name {
+  width: auto;
+  min-width: 0;
+  padding: 0;
+  color: #0c0c0c;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: min(2.58vw, 3.44vh);
+  font-weight: 800;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+  text-overflow: clip;
+  overflow: visible;
+  text-shadow: none;
+}
+
+.xfinity-00s .grid-programs {
+  /* Four generated half-hour slots occupy 97.2% of the whole guide width.
+     Because the row clips after the visible 80.2%, this exposes about 3.3 slots,
+     matching the reference's partial fourth column on the right. */
+  flex: 0 0 97.2%;
+  width: 97.2%;
+  height: 100%;
+  position: relative;
+  overflow: visible;
+}
+
+.xfinity-00s .grid-program-block {
+  top: 0;
+  height: 100%;
+  padding: 0 min(1.0vw, 1.33vh);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  border-radius: 0;
+  border-right: min(0.30vw, 0.40vh) solid #737e8d;
+  background: #23487c !important;
+  box-shadow: none !important;
+  color: #fff;
+  cursor: default;
+}
+
+.xfinity-00s .grid-program-block .program-title {
+  width: 100%;
+  color: #fff;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: min(2.60vw, 3.47vh);
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow:
+    min(0.15vw, 0.20vh) min(0.15vw, 0.20vh) 0 #000,
+    0 0 min(0.08vw, 0.11vh) #000;
+}
+
+.xfinity-00s .grid-program-block .program-desc {
+  display: none;
+}
+
+/* Guide-category colors seen in the reference: blue/default, green/sports,
+   purple/movie, and light blue/kids. */
+.xfinity-00s .grid-program-block.program-category-default,
+.xfinity-00s .grid-program-block.current.program-category-default {
+  background: #23487c !important;
+}
+
+.xfinity-00s .grid-program-block.program-category-sports,
+.xfinity-00s .grid-program-block.current.program-category-sports {
+  background: #0c7738 !important;
+}
+
+.xfinity-00s .grid-program-block.program-category-movie,
+.xfinity-00s .grid-program-block.current.program-category-movie {
+  background: #60348b !important;
+}
+
+.xfinity-00s .grid-program-block.program-category-kids,
+.xfinity-00s .grid-program-block.current.program-category-kids {
+  background: #86b2d4 !important;
+}
+
+/* Interactive selection: pale yellow with black text, like the SpongeBob cell. */
+.xfinity-00s .grid-program-block.guide-selected,
+.xfinity-00s .grid-program-block.current.guide-selected {
+  z-index: 5;
+  background: #fff58b !important;
+  outline: none !important;
+  border-right-color: #858875;
+  color: #111;
+}
+
+.xfinity-00s .grid-program-block.guide-selected .program-title,
+.xfinity-00s .grid-program-block.current.guide-selected .program-title {
+  color: #111 !important;
+  text-shadow: none !important;
+}
+
+.xfinity-00s .grid-row.guide-selected-row .grid-channel {
+  background: #98bddd !important;
+  outline: none !important;
+  color: #111 !important;
+}
+
+/* ===== BOTTOM PARENTAL-CONTROLS PROMO ===== */
+
+#guide-promo {
+  flex: 0 0 9.1%;
+  height: 9.1%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    linear-gradient(180deg, #93b9df 0%, #567dad 46%, #163968 100%);
+  border-top: min(0.22vw, 0.29vh) solid #173d65;
+  overflow: hidden;
+}
+
+.promo-card {
+  width: 53.5%;
+  height: 74%;
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  background: transparent;
+  box-shadow: 0 min(0.12vw, 0.16vh) min(0.25vw, 0.33vh) rgba(0,0,0,0.28);
+}
+
+.promo-lock-panel {
+  position: relative;
+  flex: 0 0 14%;
+  background: #d51d30;
+}
+
+.promo-lock-shackle {
+  position: absolute;
+  left: 50%;
+  top: 13%;
+  width: 37%;
+  height: 39%;
+  transform: translateX(-50%);
+  border: min(0.42vw, 0.56vh) solid #fff;
+  border-bottom: 0;
+  border-radius: 50% 50% 0 0;
+}
+
+.promo-lock-body {
+  position: absolute;
+  left: 50%;
+  bottom: 12%;
+  width: 49%;
+  height: 47%;
+  transform: translateX(-50%);
+  background: #fff;
+  border-radius: min(0.12vw, 0.16vh);
+}
+
+.promo-lock-body i {
+  position: absolute;
+  left: 50%;
+  top: 28%;
+  width: 14%;
+  height: 40%;
+  transform: translateX(-50%);
+  background: #d51d30;
+  border-radius: 50% 50% 0 0;
+}
+
+.promo-copy {
+  flex: 1;
+  padding-left: 2.3%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  color: #3c3c3c;
+  font-size: min(1.52vw, 2.03vh);
+  font-weight: 700;
+  line-height: 1.05;
+  white-space: nowrap;
+}
+
+.promo-copy strong {
+  color: #b9242c;
+  font-style: italic;
+  letter-spacing: 0.04em;
+}
+
+.promo-button {
+  align-self: center;
+  margin-right: 1.7%;
+  padding: 0.48em 0.62em;
+  color: #fff;
+  background: linear-gradient(180deg, #d5323d 0%, #a4111e 100%);
+  border: min(0.10vw, 0.13vh) solid #8f1420;
+  border-radius: 1.2em;
+  font-size: min(1.42vw, 1.89vh);
+  font-weight: 800;
+  white-space: nowrap;
+  box-shadow: inset 0 min(0.10vw, 0.13vh) min(0.08vw, 0.11vh) rgba(255,255,255,0.32);
+}
+
+.promo-button span {
+  font-size: 1.35em;
+  line-height: 0;
+  vertical-align: -0.08em;
+}
+
+/* Tune/status toast. */
+#guide-action-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 11%;
+  z-index: 1000;
+  transform: translate(-50%, min(0.75vw, 1vh));
+  padding: 0.45em 0.9em;
+  border-radius: 0.35em;
+  background: rgba(0, 0, 0, 0.86);
+  color: #fff;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: min(1.55vw, 2.07vh);
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms linear, transform 120ms linear;
+}
+
+#guide-action-toast.visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+#guide-action-toast.error {
+  background: #8b101c;
 }

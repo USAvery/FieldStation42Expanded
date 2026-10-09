@@ -49,10 +49,10 @@
         <!-- Nav Pad - swaps in for the number pad to drive web channels (PPV). -->
         <div class="button-grid nav-pad" id="nav-pad" hidden>
             <button class="remote-btn nav-btn nav-up" data-key="nav_up">▲</button>
-            <!-- PPV binds no horizontal keys - present for the pad shape, inert. -->
-            <button class="remote-btn nav-btn nav-left" data-key="nav_left" disabled>◀</button>
+            <!-- Horizontal keys are used by interactive web channels such as the custom guide. -->
+            <button class="remote-btn nav-btn nav-left" data-key="nav_left">◀</button>
             <button class="remote-btn nav-btn nav-enter" data-key="nav_enter">OK</button>
-            <button class="remote-btn nav-btn nav-right" data-key="nav_right" disabled>▶</button>
+            <button class="remote-btn nav-btn nav-right" data-key="nav_right">▶</button>
             <button class="remote-btn nav-btn pad-toggle-btn" data-key="pad_toggle">123</button>
             <button class="remote-btn nav-btn nav-down" data-key="nav_down">▼</button>
         </div>
@@ -472,6 +472,12 @@
                     break;
                 case 'nav_down':
                     await sendPpvKey('PageDown', 'PREV');
+                    break;
+                case 'nav_left':
+                    await sendPpvKey('ArrowLeft', 'LEFT');
+                    break;
+                case 'nav_right':
+                    await sendPpvKey('ArrowRight', 'RIGHT');
                     break;
                 case 'nav_enter':
                     await sendPpvKey('Enter', 'SELECT');

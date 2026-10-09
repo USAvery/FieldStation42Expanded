@@ -93,9 +93,72 @@ input_lock = threading.Lock()
 current_channel = None
 last_channel = None
 
+# Custom interactive guide routing
+_custom_guide_channel = None
+_custom_guide_channel_checked = False
+
 # Debounce tracking - stores last press time for each function
 last_press_time = {}
 debounce_lock = threading.Lock()
+
+def get_custom_guide_channel():
+    """Return the configured custom web guide channel number, if present."""
+    global _custom_guide_channel, _custom_guide_channel_checked
+
+    if _custom_guide_channel_checked:
+        return _custom_guide_channel
+
+    _custom_guide_channel_checked = True
+    try:
+        from fs42.station_manager import StationManager
+        guide = StationManager().guide_config
+        if (
+            guide
+            and guide.get("network_type") == "web"
+            and "static/customguide/customguide.html" in guide.get("web_url", "")
+        ):
+            _custom_guide_channel = guide.get("channel_number")
+    except Exception as e:
+        print(f"Unable to detect custom guide channel: {e}")
+
+    return _custom_guide_channel
+
+
+def custom_guide_is_active():
+    """Check the actual player status so normal remote mappings resume after tuning away."""
+    guide_channel = get_custom_guide_channel()
+    if guide_channel is None:
+        return False
+
+    try:
+        response = requests.get(f'{FS42_BASE_URL}/player/status', timeout=1)
+        if not response.ok:
+            return False
+        status = response.json()
+        return status.get("channel_number") == guide_channel
+    except Exception:
+        return False
+
+
+def send_custom_guide_key(key_name):
+    """Forward a navigation key into the active custom web guide."""
+    guide_channel = get_custom_guide_channel()
+    if guide_channel is None:
+        return False
+
+    try:
+        response = requests.post(
+            f'{FS42_BASE_URL}/ppv/{guide_channel}/key/{key_name}',
+            timeout=2
+        )
+        if response.ok:
+            print(f"Custom guide key sent: {key_name}")
+            return True
+        print(f"Custom guide key failed: {key_name} ({response.status_code})")
+    except Exception as e:
+        print(f"Custom guide key error: {e}")
+    return False
+
 
 def read_exec_mappings():
     mappings = {}
@@ -597,6 +660,18 @@ def get_key_name_from_code(key_code):
 
 def handle_key_name(key_name):
     """Handle a key press by key name (common logic for evdev and test mode)"""
+    if custom_guide_is_active():
+        guide_keys = {
+            'up': 'PageUp',
+            'down': 'PageDown',
+            'left': 'ArrowLeft',
+            'right': 'ArrowRight',
+            'enter': 'Enter',
+        }
+        if key_name in guide_keys:
+            send_custom_guide_key(guide_keys[key_name])
+            return True
+
     # Check mappings and call appropriate function
     for function_name, mapped_key in KEY_MAPPINGS.items():
         if key_name == mapped_key:
@@ -664,6 +739,9 @@ def handle_key_event(event):
                     channel_input_timer = None
             if confirming:
                 send_channel_change()
+                return True
+            if custom_guide_is_active():
+                send_custom_guide_key('Enter')
                 return True
 
         # Get the key name and check if it's mapped to a function

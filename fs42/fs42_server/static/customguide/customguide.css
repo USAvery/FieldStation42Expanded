@@ -443,3 +443,49 @@ body {
     );
 }
 
+
+
+/* ===== INTERACTIVE GRID NAVIGATION ===== */
+
+body.guide-interactive .grid-program-block {
+  cursor: pointer;
+}
+
+.grid-program-block.guide-selected {
+  z-index: 4;
+  outline: 3px solid var(--guide-selection-border, #ffffff);
+  outline-offset: -3px;
+  color: var(--guide-selection-color, #ffffff);
+}
+
+.grid-row.guide-selected-row .grid-channel {
+  outline: 3px solid var(--guide-selection-border, #ffffff);
+  outline-offset: -3px;
+  background-color: var(--guide-selection-channel-bg, var(--grid-channel-bg));
+}
+
+#guide-action-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 4%;
+  z-index: 1000;
+  transform: translate(-50%, 10px);
+  padding: 0.45em 0.9em;
+  border-radius: 0.35em;
+  background: rgba(0, 0, 0, 0.82);
+  color: #ffffff;
+  font: 700 0.72em/1 var(--font-family);
+  letter-spacing: 0.04em;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms linear, transform 120ms linear;
+}
+
+#guide-action-toast.visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+#guide-action-toast.error {
+  background: #8b101c;
+}
