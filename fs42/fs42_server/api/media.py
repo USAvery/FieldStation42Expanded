@@ -159,8 +159,14 @@ async def guide_preview_state(network_name: str):
 
 
 @router.get("/guide_preview/{network_name}/file")
-async def guide_preview_file(network_name: str):
-    _, _, entry, _, _ = _current_guide_preview_entry(network_name)
+async def guide_preview_file(network_name: str, segment: str = None):
+    _, _, entry, _, segment_id = _current_guide_preview_entry(network_name)
+
+    if segment and segment != segment_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="preview segment changed; refresh preview state",
+        )
 
     if entry.is_stream:
         return RedirectResponse(entry.path)
