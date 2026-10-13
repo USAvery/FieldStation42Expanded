@@ -1204,6 +1204,10 @@ function randomOtherIndex(playlist, current) {
 // ===== MUSIC =====
 
 async function loadMusicPlaylist() {
+  // A live station continues playing underneath the real guide, including its
+  // audio. Do not mix guide music over that channel audio.
+  if (!MOCK && PREVIEW_CHANNEL) return;
+
   try {
     if (MUSIC_PATH) {
       const resp = await fetch('/media/list?path=' + encodeURIComponent(MUSIC_PATH));
