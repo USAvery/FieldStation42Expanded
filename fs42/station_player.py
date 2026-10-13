@@ -204,6 +204,8 @@ class StationPlayer:
         self.skip_reception_check = False
         self.web_process = None
         self.web_queue = None
+        self.guide_process = None
+        self.guide_queue = None
         self.parental_controls_process = None
         self.parental_controls_queue = None
         self.parental_unlocked_network = None
@@ -239,17 +241,111 @@ class StationPlayer:
 
     def handle_runtime_command_outcome(self, response):
         """Handle non-interrupting player commands and continue playback."""
-        if (
+        if not (
             response
             and response.status == PlayerState.SUCCESS
             and isinstance(response.payload, str)
-            and response.payload.startswith("mpv_command:")
         ):
+            return False
+
+        if response.payload.startswith("mpv_command:"):
             action = response.payload.split(":", 1)[1]
             self.mpv_runtime_command(action)
             return True
 
+        if response.payload == "guide_toggle":
+            self._toggle_guide_overlay()
+            return True
+
+        if response.payload.startswith("web_key:"):
+            key_name = response.payload.split(":", 1)[1]
+            if self.guide_process and self.guide_process.is_alive() and self.guide_queue:
+                self.guide_queue.put(f"key:{key_name}")
+                return True
+
         return False
+
+    def _guide_overlay_config(self):
+        guide_conf = StationManager().guide_config
+        if not guide_conf or guide_conf.get("network_type") != "web":
+            return None
+
+        conf = dict(guide_conf)
+        url = conf.get("web_url") or conf.get("url")
+        if not url:
+            return None
+
+        parts = urlsplit(url)
+        query = dict(parse_qsl(parts.query, keep_blank_values=True))
+        query["interactive"] = "1"
+
+        # Preview the station that remains tuned underneath the guide.
+        if self.station_config and self.station_config.get("network_name"):
+            query["preview_channel"] = self.station_config["network_name"]
+
+        conf["web_url"] = urlunsplit((
+            parts.scheme,
+            parts.netloc,
+            parts.path,
+            urlencode(query),
+            parts.fragment,
+        ))
+        return conf
+
+    def _open_guide_overlay(self):
+        if self.guide_process and self.guide_process.is_alive():
+            return True
+
+        if not WEB_RENDER_AVAILABLE:
+            self._l.error("Guide overlay unavailable - PySide6 QtWebEngine is not installed")
+            return False
+
+        guide_conf = self._guide_overlay_config()
+        if not guide_conf:
+            self._l.warning("Interactive web guide is not configured")
+            return False
+
+        ctx = multiprocessing.get_context("spawn")
+        self.guide_queue = ctx.Queue()
+        self.guide_process = ctx.Process(
+            target=web_render_runner,
+            args=(guide_conf, self.guide_queue),
+        )
+        self.guide_process.start()
+
+        network_name = self.station_config.get("network_name", "unknown") if self.station_config else "unknown"
+        self._l.info(f"Opened guide overlay over station: {network_name}")
+        return True
+
+    def _close_guide_overlay(self):
+        if self.guide_queue:
+            try:
+                self.guide_queue.put("hide_window")
+            except Exception:
+                pass
+
+        if self.guide_process and self.guide_process.is_alive():
+            try:
+                self.guide_process.join(timeout=2)
+                if self.guide_process.is_alive():
+                    self.guide_process.terminate()
+                    self.guide_process.join(timeout=1)
+                if self.guide_process.is_alive():
+                    self.guide_process.kill()
+                    self.guide_process.join(timeout=0.5)
+            except Exception as e:
+                self._l.warning(f"Error closing guide overlay: {e}")
+
+        self.guide_process = None
+        self.guide_queue = None
+
+    def _toggle_guide_overlay(self):
+        if self.guide_process and self.guide_process.is_alive():
+            self._close_guide_overlay()
+            self._l.info("Closed guide overlay")
+            return False
+
+        return self._open_guide_overlay()
 
     @staticmethod
     def is_non_interrupting(response):
