@@ -10,7 +10,7 @@ const USE_META = params.get('use_meta') !== '0';
 const SHOW_DESCRIPTION = ['1', 'true'].includes((params.get('show_description') || '').toLowerCase());
 const MUSIC_PATH = params.get('music');
 const VIDEOS = params.get('videos') !== 'false';
-const PREVIEW_CHANNEL = params.get('preview_channel');
+const LIVE_PREVIEW = params.get('live_preview') === '1';
 const MESSAGES_PATH = params.get('messages');
 const LOOP = params.get('loop') !== '0';
 let RANDOM_START = params.get('random_start') === '1';
@@ -52,9 +52,6 @@ let bgPlayer = null;
 let videoPlaylist = [];
 let currentVideoIndex = 0;
 let bgVideoPlayer = null;
-let livePreviewTimer = null;
-let livePreviewSegmentId = null;
-let livePreviewSyncBusy = false;
 
 // text carousel
 let messages = [];
@@ -1204,9 +1201,8 @@ function randomOtherIndex(playlist, current) {
 // ===== MUSIC =====
 
 async function loadMusicPlaylist() {
-  // A live station continues playing underneath the real guide, including its
-  // audio. Do not mix guide music over that channel audio.
-  if (!MOCK && PREVIEW_CHANNEL) return;
+  // The live station underneath supplies the guide audio.
+  if (!MOCK && LIVE_PREVIEW) return;
 
   try {
     if (MUSIC_PATH) {
@@ -1253,10 +1249,7 @@ function setupMusic() {
 
 async function loadVideoPlaylist() {
   if (!VIDEOS) return;
-
-  // On the real interactive guide, the preview mirrors the station that
-  // remained tuned when the guide was opened. Do not load the demo playlist.
-  if (!MOCK && PREVIEW_CHANNEL) return;
+  if (!MOCK && LIVE_PREVIEW) return;
 
   // Local mock mode: use preview.mp4 from the customguide folder.
   if (MOCK) {
@@ -1286,133 +1279,18 @@ function playVideoTrack(index) {
   });
 }
 
-async function fetchLivePreviewState() {
-  const endpoint = '/media/guide_preview/' +
-    encodeURIComponent(PREVIEW_CHANNEL) + '/state';
-
-  const resp = await fetch(endpoint, { cache: 'no-store' });
-  if (!resp.ok) throw new Error('HTTP ' + resp.status);
-  return await resp.json();
-}
-
-function markLivePreviewUnavailable() {
-  const panel = document.getElementById('video-panel');
-  if (panel && THEME === '00s') panel.classList.add('video-unavailable');
-}
-
-function markLivePreviewAvailable() {
-  const panel = document.getElementById('video-panel');
-  if (panel) panel.classList.remove('video-unavailable');
-}
-
-async function syncLiveChannelPreview(forceReload = false) {
-  if (!bgVideoPlayer || !PREVIEW_CHANNEL || livePreviewSyncBusy) return;
-
-  livePreviewSyncBusy = true;
-
-  try {
-    const state = await fetchLivePreviewState();
-    if (!state || !state.available || !state.url || state.media_type === 'audio') {
-      markLivePreviewUnavailable();
-      return;
-    }
-
-    markLivePreviewAvailable();
-
-    const expectedTime = Number(state.seek_seconds) || 0;
-    const segmentChanged = livePreviewSegmentId !== state.segment_id;
-
-    if (forceReload || segmentChanged || !bgVideoPlayer.src) {
-      livePreviewSegmentId = state.segment_id;
-
-      const separator = state.url.includes('?') ? '&' : '?';
-      bgVideoPlayer.src = state.url + separator +
-        'segment=' + encodeURIComponent(state.segment_id);
-
-      // Audio continues from the original MPV station underneath the guide.
-      // Muting this duplicate prevents echo while preserving continuous channel audio.
-      bgVideoPlayer.muted = true;
-      bgVideoPlayer.playsInline = true;
-
-      const startAtCurrentPosition = function () {
-        try {
-          if (Number.isFinite(expectedTime)) {
-            bgVideoPlayer.currentTime = expectedTime;
-          }
-        } catch (e) {
-          console.warn('preview initial seek failed:', e.message);
-        }
-
-        bgVideoPlayer.play().catch(function (e) {
-          console.warn('preview play failed:', e.message);
-        });
-      };
-
-      if (bgVideoPlayer.readyState >= 1) {
-        startAtCurrentPosition();
-      } else {
-        bgVideoPlayer.addEventListener(
-          'loadedmetadata',
-          startAtCurrentPosition,
-          { once: true }
-        );
-      }
-
-      return;
-    }
-
-    // Keep the duplicate preview locked to the wall-clock station schedule.
-    // Small differences are left alone to avoid constant seeking.
-    const drift = Math.abs((bgVideoPlayer.currentTime || 0) - expectedTime);
-    if (drift > 1.25 && bgVideoPlayer.readyState >= 1) {
-      bgVideoPlayer.currentTime = expectedTime;
-    }
-
-    if (bgVideoPlayer.paused) {
-      bgVideoPlayer.play().catch(function (e) {
-        console.warn('preview resume failed:', e.message);
-      });
-    }
-  } catch (e) {
-    console.warn('live channel preview unavailable:', e.message);
-    markLivePreviewUnavailable();
-  } finally {
-    livePreviewSyncBusy = false;
-  }
-}
-
-function setupLiveChannelPreview() {
-  if (!bgVideoPlayer || !PREVIEW_CHANNEL) return;
-
-  bgVideoPlayer.muted = true;
-  bgVideoPlayer.volume = 0;
-
-  bgVideoPlayer.addEventListener('ended', function () {
-    syncLiveChannelPreview(true);
-  });
-
-  bgVideoPlayer.addEventListener('error', function () {
-    // The active station may have crossed into the next plan entry while the
-    // request was in flight. Re-resolve it from the scheduler.
-    setTimeout(function () {
-      syncLiveChannelPreview(true);
-    }, 400);
-  });
-
-  syncLiveChannelPreview(true);
-
-  if (livePreviewTimer) clearInterval(livePreviewTimer);
-  livePreviewTimer = setInterval(function () {
-    syncLiveChannelPreview(false);
-  }, 2000);
-}
-
 function setupVideo() {
   bgVideoPlayer = document.getElementById('bgVideoPlayer');
   if (!bgVideoPlayer) return;
 
-  if (!MOCK && PREVIEW_CHANNEL) {
-    setupLiveChannelPreview();
+  // In the real guide the preview is not a second video player. The WebRender
+  // window is transparent here, so the still-running MPV channel underneath is
+  // literally what appears in the preview rectangle.
+  if (!MOCK && LIVE_PREVIEW) {
+    const videoPanel = document.getElementById('video-panel');
+    if (videoPanel) videoPanel.classList.add('live-channel-preview');
+    bgVideoPlayer.removeAttribute('src');
+    bgVideoPlayer.style.display = 'none';
     return;
   }
 
