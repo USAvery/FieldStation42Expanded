@@ -15,6 +15,10 @@ const MESSAGES_PATH = params.get('messages');
 const LOOP = params.get('loop') !== '0';
 let RANDOM_START = params.get('random_start') === '1';
 
+if (LIVE_PREVIEW && !MOCK) {
+  document.documentElement.classList.add('live-preview-mode');
+}
+
 let stations = [];
 
 // list-mode scroll state
