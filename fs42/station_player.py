@@ -207,6 +207,7 @@ class StationPlayer:
         self.web_queue = None
         self.guide_process = None
         self.guide_queue = None
+        self._guide_video_layout = None
         self.parental_controls_process = None
         self.parental_controls_queue = None
         self.parental_unlocked_network = None
@@ -295,6 +296,41 @@ class StationPlayer:
         ))
         return conf
 
+    def _apply_guide_video_layout(self):
+        """Shrink the live MPV picture into the 00s guide preview rectangle."""
+        if self._guide_video_layout is not None:
+            return
+
+        try:
+            self._guide_video_layout = {
+                "video_zoom": self.mpv.video_zoom,
+                "video_align_x": self.mpv.video_align_x,
+                "video_align_y": self.mpv.video_align_y,
+            }
+
+            # The 00s guide preview occupies 40.4% of screen height. mpv's
+            # video-zoom is log2 scale, so log2(0.404) ~= -1.307.
+            # Keep aspect ratio and anchor the complete live picture top-right.
+            self.mpv.video_zoom = -1.307
+            self.mpv.video_align_x = 1.0
+            self.mpv.video_align_y = -1.0
+        except Exception as e:
+            self._l.warning(f"Could not place live channel in guide preview: {e}")
+            self._guide_video_layout = None
+
+    def _restore_guide_video_layout(self):
+        if self._guide_video_layout is None:
+            return
+
+        try:
+            self.mpv.video_zoom = self._guide_video_layout["video_zoom"]
+            self.mpv.video_align_x = self._guide_video_layout["video_align_x"]
+            self.mpv.video_align_y = self._guide_video_layout["video_align_y"]
+        except Exception as e:
+            self._l.warning(f"Could not restore full-screen channel layout: {e}")
+        finally:
+            self._guide_video_layout = None
+
     def _open_guide_overlay(self):
         if self.guide_process and self.guide_process.is_alive():
             return True
@@ -307,6 +343,10 @@ class StationPlayer:
         if not guide_conf:
             self._l.warning("Interactive web guide is not configured")
             return False
+
+        # Reuse the exact MPV instance that is already playing the channel.
+        # Only its presentation changes; playback/audio continue uninterrupted.
+        self._apply_guide_video_layout()
 
         ctx = multiprocessing.get_context("spawn")
         self.guide_queue = ctx.Queue()
@@ -341,6 +381,7 @@ class StationPlayer:
 
         self.guide_process = None
         self.guide_queue = None
+        self._restore_guide_video_layout()
 
     def _toggle_guide_overlay(self):
         if self.guide_process and self.guide_process.is_alive():
