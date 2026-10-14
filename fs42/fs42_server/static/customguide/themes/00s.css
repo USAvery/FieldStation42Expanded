@@ -872,3 +872,36 @@ body {
 #guide-action-toast.error {
   background: #8b101c;
 }
+
+
+/* ===== LIVE CHANNEL PREVIEW OVERLAY =====
+   In live-preview mode the underlying MPV window never stops. These backgrounds
+   must be transparent all the way down to the QWebEngine surface so the actual
+   tuned station is visible through the upper-right preview rectangle. */
+html.live-preview-mode,
+html.live-preview-mode body {
+  background: transparent !important;
+}
+
+html.live-preview-mode #guide-wrapper,
+html.live-preview-mode #guide-listings.grid-mode.xfinity-00s {
+  background: transparent !important;
+}
+
+html.live-preview-mode .xfinity-00s #top-panel {
+  background: transparent !important;
+}
+
+html.live-preview-mode .xfinity-00s #video-panel,
+html.live-preview-mode .xfinity-00s #video-panel.live-channel-preview {
+  background: transparent !important;
+}
+
+html.live-preview-mode .xfinity-00s #video-panel.live-channel-preview::before,
+html.live-preview-mode .xfinity-00s #video-panel.live-channel-preview::after {
+  display: none !important;
+}
+
+html.live-preview-mode .xfinity-00s #video-panel.live-channel-preview video {
+  display: none !important;
+}
