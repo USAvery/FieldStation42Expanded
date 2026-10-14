@@ -308,11 +308,13 @@ class StationPlayer:
                 "video_align_y": self.mpv.video_align_y,
             }
 
-            # The 00s guide preview occupies 40.4% of screen height. mpv's
-            # video-zoom is log2 scale, so log2(0.404) ~= -1.307.
-            # Keep aspect ratio and anchor the complete live picture top-right.
+            # The 00s guide preview occupies the upper-right 41.4% x 40.4%
+            # of the guide. mpv's video-zoom is log2 scale, so log2(0.404)
+            # ~= -1.307. The resulting picture is slightly narrower than the
+            # preview on a 4:3 source, so center it within that preview instead
+            # of pinning it to the right edge.
             self.mpv.video_zoom = -1.307
-            self.mpv.video_align_x = 1.0
+            self.mpv.video_align_x = 0.983
             self.mpv.video_align_y = -1.0
         except Exception as e:
             self._l.warning(f"Could not place live channel in guide preview: {e}")
