@@ -1420,4 +1420,36 @@ async function init() {
   }
 }
 
+
+window.addEventListener('fs42-guide-show', function () {
+  if (MOCK) return;
+
+  // The guide process stays alive between opens. Refresh the visible grid after
+  // the already-rendered window is shown so opening is not blocked on API work.
+  if (THEME === '00s') {
+    Promise.resolve()
+      .then(fetchStations)
+      .then(buildGrid)
+      .then(function () {
+        if (INTERACTIVE) {
+          const rows = getInteractiveRows();
+          if (!rows.length) return;
+
+          interactiveRowIndex = Math.min(interactiveRowIndex, rows.length - 1);
+          const programs = getProgramsForRow(rows[interactiveRowIndex]);
+          const currentIndex = programs.findIndex(function (program) {
+            return program.classList.contains('current');
+          });
+          interactiveProgramIndex = currentIndex >= 0
+            ? currentIndex
+            : findClosestProgramIndex(programs, Date.now());
+          applyInteractiveSelection();
+        }
+      })
+      .catch(function (e) {
+        console.warn('guide refresh after show failed:', e.message);
+      });
+  }
+});
+
 document.addEventListener('DOMContentLoaded', init);
