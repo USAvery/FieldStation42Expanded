@@ -57,12 +57,12 @@ def input_check():
                 case "reload_data":
                     LiquidManager().reload_schedules()
                 case "guide":
-                    try:
-                        c_number = StationManager().guide_config["channel_number"]
-                        change_request = {"command": "direct", "channel": c_number}
-                        return PlayerOutcome(PlayerState.CHANNEL_CHANGE, json.dumps(change_request))
-                    except TypeError:
-                        logging.getLogger("InputCheck").warning("Guide channel not configured")
+                    if StationManager().guide_config:
+                        # The guide is an overlay, not a channel change. Keeping this
+                        # non-interrupting lets the currently tuned station continue
+                        # playing underneath the guide preview.
+                        return PlayerOutcome(PlayerState.SUCCESS, "guide_toggle")
+                    logging.getLogger("InputCheck").warning("Guide channel not configured")
                 case "ticker":
                     message = q_message.get("message", None)
                     header = q_message.get("header", None)
@@ -159,8 +159,13 @@ def main_loop(transition_fn, shutdown_queue=None, api_proc=None, schedule_lock=N
 
     player.load_up()
 
+    # Chromium/QtWebEngine startup is expensive on the Pi. Pay that cost once
+    # during FieldStation42 startup, while the guide remains hidden.
+    player.preload_guide_overlay()
+
     def signal_handler(sig, frame):
         logger.critical("Received sig-int signal, attempting to exit gracefully...")
+        player._shutdown_guide_overlay()
         player.shutdown()
 
         update_status_socket("stopped", "", -1)
@@ -220,6 +225,9 @@ def main_loop(transition_fn, shutdown_queue=None, api_proc=None, schedule_lock=N
 
         if player_state.status == PlayerState.CHANNEL_CHANGE:
             stuck_timer = 0
+            # Any real tune closes the guide overlay and restores normal full-screen
+            # video before the channel transition begins.
+            player._close_guide_overlay()
             player.parental_unlocked_network = None
             # Close any lingering pop-up overlay
             player._close_now_playing()

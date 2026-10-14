@@ -8,6 +8,7 @@ import json
 import os
 import glob
 import random
+from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 import logging
 import time
 from python_mpv_jsonipc import MPV
@@ -204,6 +205,10 @@ class StationPlayer:
         self.skip_reception_check = False
         self.web_process = None
         self.web_queue = None
+        self.guide_process = None
+        self.guide_queue = None
+        self.guide_visible = False
+        self._guide_video_layout = None
         self.parental_controls_process = None
         self.parental_controls_queue = None
         self.parental_unlocked_network = None
@@ -239,17 +244,197 @@ class StationPlayer:
 
     def handle_runtime_command_outcome(self, response):
         """Handle non-interrupting player commands and continue playback."""
-        if (
+        if not (
             response
             and response.status == PlayerState.SUCCESS
             and isinstance(response.payload, str)
-            and response.payload.startswith("mpv_command:")
         ):
+            return False
+
+        if response.payload.startswith("mpv_command:"):
             action = response.payload.split(":", 1)[1]
             self.mpv_runtime_command(action)
             return True
 
+        if response.payload == "guide_toggle":
+            self._toggle_guide_overlay()
+            return True
+
+        if response.payload.startswith("web_key:"):
+            key_name = response.payload.split(":", 1)[1]
+            if self.guide_visible and self.guide_process and self.guide_process.is_alive() and self.guide_queue:
+                self.guide_queue.put(f"key:{key_name}")
+                return True
+
         return False
+
+    def _guide_overlay_config(self):
+        guide_conf = StationManager().guide_config
+        if not guide_conf or guide_conf.get("network_type") != "web":
+            return None
+
+        conf = dict(guide_conf)
+        url = conf.get("web_url") or conf.get("url")
+        if not url:
+            return None
+
+        parts = urlsplit(url)
+        query = dict(parse_qsl(parts.query, keep_blank_values=True))
+        query["interactive"] = "1"
+
+        # The guide is drawn as a transparent overlay over the still-running
+        # MPV window. The preview rectangle is a hole in the web UI, not a
+        # second media player.
+        query["live_preview"] = "1"
+        conf["transparent"] = True
+        conf["persistent"] = True
+        conf["start_hidden"] = True
+
+        conf["web_url"] = urlunsplit((
+            parts.scheme,
+            parts.netloc,
+            parts.path,
+            urlencode(query),
+            parts.fragment,
+        ))
+        return conf
+
+    def _apply_guide_video_layout(self):
+        """Shrink the live MPV picture into the 00s guide preview rectangle."""
+        if self._guide_video_layout is not None:
+            return
+
+        try:
+            self._guide_video_layout = {
+                "video_zoom": self.mpv.video_zoom,
+                "video_align_x": self.mpv.video_align_x,
+                "video_align_y": self.mpv.video_align_y,
+                "video_margin_ratio_left": self.mpv.video_margin_ratio_left,
+                "video_margin_ratio_right": self.mpv.video_margin_ratio_right,
+                "video_margin_ratio_top": self.mpv.video_margin_ratio_top,
+                "video_margin_ratio_bottom": self.mpv.video_margin_ratio_bottom,
+            }
+
+            # Box the live video into the guide's upper-right preview rectangle.
+            # mpv preserves the source aspect ratio and centers it inside this
+            # box automatically, so 4:3, 16:9, 2.35:1, etc. all remain centered.
+            #
+            # Preview geometry from the 00s theme:
+            #   left   = 58.6% of screen width
+            #   right  = 0%
+            #   top    = 0%
+            #   bottom = 59.6% of screen height
+            self.mpv.video_zoom = 0.0
+            self.mpv.video_align_x = 0.0
+            self.mpv.video_align_y = 0.0
+            self.mpv.video_margin_ratio_left = 0.586
+            self.mpv.video_margin_ratio_right = 0.0
+            self.mpv.video_margin_ratio_top = 0.0
+            self.mpv.video_margin_ratio_bottom = 0.596
+        except Exception as e:
+            self._l.warning(f"Could not place live channel in guide preview: {e}")
+            self._guide_video_layout = None
+
+    def _restore_guide_video_layout(self):
+        if self._guide_video_layout is None:
+            return
+
+        try:
+            self.mpv.video_zoom = self._guide_video_layout["video_zoom"]
+            self.mpv.video_align_x = self._guide_video_layout["video_align_x"]
+            self.mpv.video_align_y = self._guide_video_layout["video_align_y"]
+            self.mpv.video_margin_ratio_left = self._guide_video_layout["video_margin_ratio_left"]
+            self.mpv.video_margin_ratio_right = self._guide_video_layout["video_margin_ratio_right"]
+            self.mpv.video_margin_ratio_top = self._guide_video_layout["video_margin_ratio_top"]
+            self.mpv.video_margin_ratio_bottom = self._guide_video_layout["video_margin_ratio_bottom"]
+        except Exception as e:
+            self._l.warning(f"Could not restore full-screen channel layout: {e}")
+        finally:
+            self._guide_video_layout = None
+
+    def preload_guide_overlay(self):
+        """Start and load the interactive guide once, hidden, for instant opening."""
+        if self.guide_process and self.guide_process.is_alive():
+            return True
+
+        if not WEB_RENDER_AVAILABLE:
+            return False
+
+        guide_conf = self._guide_overlay_config()
+        if not guide_conf:
+            return False
+
+        ctx = multiprocessing.get_context("spawn")
+        self.guide_queue = ctx.Queue()
+        self.guide_process = ctx.Process(
+            target=web_render_runner,
+            args=(guide_conf, self.guide_queue),
+        )
+        self.guide_process.start()
+        self.guide_visible = False
+        self._l.info("Preloading interactive guide renderer in background")
+        return True
+
+    def _open_guide_overlay(self):
+        if not self.preload_guide_overlay():
+            self._l.warning("Interactive web guide is not configured")
+            return False
+
+        # Reuse the exact MPV instance that is already playing the channel.
+        # Only its presentation changes; playback/audio continue uninterrupted.
+        self._apply_guide_video_layout()
+
+        if self.guide_queue:
+            self.guide_queue.put("show_window")
+
+        self.guide_visible = True
+        network_name = self.station_config.get("network_name", "unknown") if self.station_config else "unknown"
+        self._l.info(f"Opened preloaded guide overlay over station: {network_name}")
+        return True
+
+    def _close_guide_overlay(self):
+        if self.guide_visible and self.guide_queue:
+            try:
+                self.guide_queue.put("hide_window")
+            except Exception:
+                pass
+
+        self.guide_visible = False
+        self._restore_guide_video_layout()
+
+    def _shutdown_guide_overlay(self):
+        """Terminate the persistent guide renderer during application shutdown."""
+        self.guide_visible = False
+        self._restore_guide_video_layout()
+
+        if self.guide_queue:
+            try:
+                self.guide_queue.put("shutdown_window")
+            except Exception:
+                pass
+
+        if self.guide_process and self.guide_process.is_alive():
+            try:
+                self.guide_process.join(timeout=2)
+                if self.guide_process.is_alive():
+                    self.guide_process.terminate()
+                    self.guide_process.join(timeout=1)
+                if self.guide_process.is_alive():
+                    self.guide_process.kill()
+                    self.guide_process.join(timeout=0.5)
+            except Exception as e:
+                self._l.warning(f"Error shutting down guide renderer: {e}")
+
+        self.guide_process = None
+        self.guide_queue = None
+
+    def _toggle_guide_overlay(self):
+        if self.guide_visible:
+            self._close_guide_overlay()
+            self._l.info("Closed guide overlay")
+            return False
+
+        return self._open_guide_overlay()
 
     @staticmethod
     def is_non_interrupting(response):

@@ -10,9 +10,14 @@ const USE_META = params.get('use_meta') !== '0';
 const SHOW_DESCRIPTION = ['1', 'true'].includes((params.get('show_description') || '').toLowerCase());
 const MUSIC_PATH = params.get('music');
 const VIDEOS = params.get('videos') !== 'false';
+const LIVE_PREVIEW = params.get('live_preview') === '1';
 const MESSAGES_PATH = params.get('messages');
 const LOOP = params.get('loop') !== '0';
 let RANDOM_START = params.get('random_start') === '1';
+
+if (LIVE_PREVIEW && !MOCK) {
+  document.documentElement.classList.add('live-preview-mode');
+}
 
 let stations = [];
 
@@ -1200,6 +1205,9 @@ function randomOtherIndex(playlist, current) {
 // ===== MUSIC =====
 
 async function loadMusicPlaylist() {
+  // The live station underneath supplies the guide audio.
+  if (!MOCK && LIVE_PREVIEW) return;
+
   try {
     if (MUSIC_PATH) {
       const resp = await fetch('/media/list?path=' + encodeURIComponent(MUSIC_PATH));
@@ -1245,6 +1253,7 @@ function setupMusic() {
 
 async function loadVideoPlaylist() {
   if (!VIDEOS) return;
+  if (!MOCK && LIVE_PREVIEW) return;
 
   // Local mock mode: use preview.mp4 from the customguide folder.
   if (MOCK) {
@@ -1277,6 +1286,17 @@ function playVideoTrack(index) {
 function setupVideo() {
   bgVideoPlayer = document.getElementById('bgVideoPlayer');
   if (!bgVideoPlayer) return;
+
+  // In the real guide the preview is not a second video player. The WebRender
+  // window is transparent here, so the still-running MPV channel underneath is
+  // literally what appears in the preview rectangle.
+  if (!MOCK && LIVE_PREVIEW) {
+    const videoPanel = document.getElementById('video-panel');
+    if (videoPanel) videoPanel.classList.add('live-channel-preview');
+    bgVideoPlayer.removeAttribute('src');
+    bgVideoPlayer.style.display = 'none';
+    return;
+  }
 
   if (!videoPlaylist.length) {
     const videoPanel = document.getElementById('video-panel');
@@ -1399,5 +1419,37 @@ async function init() {
     setupMusic();
   }
 }
+
+
+window.addEventListener('fs42-guide-show', function () {
+  if (MOCK) return;
+
+  // The guide process stays alive between opens. Refresh the visible grid after
+  // the already-rendered window is shown so opening is not blocked on API work.
+  if (THEME === '00s') {
+    Promise.resolve()
+      .then(fetchStations)
+      .then(buildGrid)
+      .then(function () {
+        if (INTERACTIVE) {
+          const rows = getInteractiveRows();
+          if (!rows.length) return;
+
+          interactiveRowIndex = Math.min(interactiveRowIndex, rows.length - 1);
+          const programs = getProgramsForRow(rows[interactiveRowIndex]);
+          const currentIndex = programs.findIndex(function (program) {
+            return program.classList.contains('current');
+          });
+          interactiveProgramIndex = currentIndex >= 0
+            ? currentIndex
+            : findClosestProgramIndex(programs, Date.now());
+          applyInteractiveSelection();
+        }
+      })
+      .catch(function (e) {
+        console.warn('guide refresh after show failed:', e.message);
+      });
+  }
+});
 
 document.addEventListener('DOMContentLoaded', init);
