@@ -306,16 +306,28 @@ class StationPlayer:
                 "video_zoom": self.mpv.video_zoom,
                 "video_align_x": self.mpv.video_align_x,
                 "video_align_y": self.mpv.video_align_y,
+                "video_margin_ratio_left": self.mpv.video_margin_ratio_left,
+                "video_margin_ratio_right": self.mpv.video_margin_ratio_right,
+                "video_margin_ratio_top": self.mpv.video_margin_ratio_top,
+                "video_margin_ratio_bottom": self.mpv.video_margin_ratio_bottom,
             }
 
-            # The 00s guide preview occupies the upper-right 41.4% x 40.4%
-            # of a 16:9 output. A 4:3 picture scaled to 40.4% of screen height
-            # occupies 30.3% of screen width, leaving 11.1% of the preview width
-            # as pillarbox space. video_align_x ~= 0.841 centers that picture
-            # inside the preview rectangle rather than within the full screen.
-            self.mpv.video_zoom = -1.307
-            self.mpv.video_align_x = 0.841
-            self.mpv.video_align_y = -1.0
+            # Box the live video into the guide's upper-right preview rectangle.
+            # mpv preserves the source aspect ratio and centers it inside this
+            # box automatically, so 4:3, 16:9, 2.35:1, etc. all remain centered.
+            #
+            # Preview geometry from the 00s theme:
+            #   left   = 58.6% of screen width
+            #   right  = 0%
+            #   top    = 0%
+            #   bottom = 59.6% of screen height
+            self.mpv.video_zoom = 0.0
+            self.mpv.video_align_x = 0.0
+            self.mpv.video_align_y = 0.0
+            self.mpv.video_margin_ratio_left = 0.586
+            self.mpv.video_margin_ratio_right = 0.0
+            self.mpv.video_margin_ratio_top = 0.0
+            self.mpv.video_margin_ratio_bottom = 0.596
         except Exception as e:
             self._l.warning(f"Could not place live channel in guide preview: {e}")
             self._guide_video_layout = None
@@ -328,6 +340,10 @@ class StationPlayer:
             self.mpv.video_zoom = self._guide_video_layout["video_zoom"]
             self.mpv.video_align_x = self._guide_video_layout["video_align_x"]
             self.mpv.video_align_y = self._guide_video_layout["video_align_y"]
+            self.mpv.video_margin_ratio_left = self._guide_video_layout["video_margin_ratio_left"]
+            self.mpv.video_margin_ratio_right = self._guide_video_layout["video_margin_ratio_right"]
+            self.mpv.video_margin_ratio_top = self._guide_video_layout["video_margin_ratio_top"]
+            self.mpv.video_margin_ratio_bottom = self._guide_video_layout["video_margin_ratio_bottom"]
         except Exception as e:
             self._l.warning(f"Could not restore full-screen channel layout: {e}")
         finally:
