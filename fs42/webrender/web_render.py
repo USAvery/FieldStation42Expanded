@@ -110,12 +110,17 @@ class WebRenderApp(QApplication):
         super().__init__([])
 
         self.queue = queue
+        self.user_conf = user_conf
+        self.persistent = bool(user_conf.get("persistent", False))
+        self.start_hidden = bool(user_conf.get("start_hidden", False))
+        self.windowed = "width" in user_conf and "height" in user_conf
+        self.window_x = None
+        self.window_y = None
 
         self.window = WebRender(transparent=bool(user_conf.get("transparent", False)))
 
         # Set window properties
-        if "width" in user_conf and "height" in user_conf:
-            # Use specified dimensions
+        if self.windowed:
             width = user_conf["width"]
             height = user_conf["height"]
 
@@ -125,27 +130,15 @@ class WebRenderApp(QApplication):
 
             # Calculate position
             if "x" in user_conf and "y" in user_conf:
-                # Use specified position
-                x = user_conf["x"]
-                y = user_conf["y"]
+                self.window_x = user_conf["x"]
+                self.window_y = user_conf["y"]
             else:
-                # Center on screen
                 screen = self.primaryScreen().availableGeometry()
-                x = screen.center().x() - width // 2
-                y = screen.center().y() - height // 2
+                self.window_x = screen.center().x() - width // 2
+                self.window_y = screen.center().y() - height // 2
 
-            # Show window and position it (delay needed for X11 window managers)
-            self.window.show()
-
-            # Store position for delayed move
-            def delayed_move():
-                if self.window and not self.window.isHidden():
-                    self.window.move(x, y)
-
-            QTimer.singleShot(100, delayed_move)
-        else:
-            # Go fullscreen by default (no decorations)
-            self.window.showFullScreen()
+        if not self.start_hidden:
+            self.show_window()
         
         # Set up timer for queue processing
         self.timer = QTimer()
@@ -158,22 +151,54 @@ class WebRenderApp(QApplication):
             self.refresh_timer.timeout.connect(self.window.browser.reload)
             self.refresh_timer.start(int(user_conf["refresh_interval"] * 1000))
 
+    def show_window(self):
+        if self.windowed:
+            self.window.show()
+            if self.window_x is not None and self.window_y is not None:
+                self.window.move(self.window_x, self.window_y)
+        else:
+            self.window.showFullScreen()
+
+        self.window.raise_()
+        self.window.activateWindow()
+
+        # Let cached web UIs update themselves after they are already visible.
+        self.window.browser.page().runJavaScript(
+            "window.dispatchEvent(new CustomEvent('fs42-guide-show'));"
+        )
+
+    def hide_window(self):
+        self.window.hide()
+        self.window.browser.page().runJavaScript(
+            "window.dispatchEvent(new CustomEvent('fs42-guide-hide'));"
+        )
+
+    def shutdown_window(self):
+        self.timer.stop()
+        if hasattr(self, 'refresh_timer'):
+            self.refresh_timer.stop()
+        self.window.close()
+        self.quit()
+
     def tick(self):
         if self.queue and self.queue.qsize() > 0:
             msg = self.queue.get_nowait()
             print(f"WebRender received message: {msg}")
-            # Handle queue messages similar to GuideApp
-            if hasattr(msg, 'hide_window') or msg == "hide_window":
-                print("WebRender window is shutting down now.")
-                print("Stopping timer...")
-                self.timer.stop()
-                if hasattr(self, 'refresh_timer'):
-                    self.refresh_timer.stop()
-                print("Closing window...")
-                self.window.close()
-                print("Quitting application...")
-                self.quit()
-                print("WebRender shutdown complete")
+            # Persistent renderers stay alive between open/close operations so
+            # QtWebEngine/Chromium only pays its startup cost once.
+            if msg == "show_window":
+                self.show_window()
+                return
+
+            if msg == "hide_window":
+                if self.persistent:
+                    self.hide_window()
+                else:
+                    self.shutdown_window()
+                return
+
+            if msg == "shutdown_window":
+                self.shutdown_window()
                 return
             # Handle key injection commands
             if isinstance(msg, str) and msg.startswith("key:"):
