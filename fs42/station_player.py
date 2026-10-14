@@ -280,9 +280,11 @@ class StationPlayer:
         query = dict(parse_qsl(parts.query, keep_blank_values=True))
         query["interactive"] = "1"
 
-        # Preview the station that remains tuned underneath the guide.
-        if self.station_config and self.station_config.get("network_name"):
-            query["preview_channel"] = self.station_config["network_name"]
+        # The guide is drawn as a transparent overlay over the still-running
+        # MPV window. The preview rectangle is a hole in the web UI, not a
+        # second media player.
+        query["live_preview"] = "1"
+        conf["transparent"] = True
 
         conf["web_url"] = urlunsplit((
             parts.scheme,
