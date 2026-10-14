@@ -1,14 +1,24 @@
 import signal
 from PySide6.QtCore import QUrl, QTimer, Qt
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QApplication, QMainWindow
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWebEngineCore import QWebEngineSettings
 from PySide6.QtQuick import QQuickWindow, QSGRendererInterface
 
 class WebRender(QMainWindow):
-    def __init__(self):
+    def __init__(self, transparent=False):
         super().__init__()
+        self.transparent = transparent
         self.browser = QWebEngineView()
+
+        if self.transparent:
+            # QWebEngine normally paints an opaque page/background. Make both
+            # the top-level window and the browser surface alpha-capable so
+            # transparent CSS can reveal the MPV window below.
+            self.setAttribute(Qt.WA_TranslucentBackground, True)
+            self.browser.setAttribute(Qt.WA_TranslucentBackground, True)
+            self.browser.setStyleSheet("background: transparent;")
 
         # Configure QWebEngineSettings to enable autoplay
         settings = self.browser.settings()
@@ -20,8 +30,12 @@ class WebRender(QMainWindow):
         # Set custom user agent for identification
         self.browser.page().profile().setHttpUserAgent("FieldStation42-WebRender/1.0")
 
-        # Set black background color
-        self.browser.page().setBackgroundColor(Qt.black)
+        # Set page background. Overlay mode needs a real alpha channel so the
+        # live MPV channel can show through the guide preview rectangle.
+        if self.transparent:
+            self.browser.page().setBackgroundColor(QColor(0, 0, 0, 0))
+        else:
+            self.browser.page().setBackgroundColor(Qt.black)
 
         self.setCentralWidget(self.browser)
 
@@ -97,7 +111,7 @@ class WebRenderApp(QApplication):
 
         self.queue = queue
 
-        self.window = WebRender()
+        self.window = WebRender(transparent=bool(user_conf.get("transparent", False)))
 
         # Set window properties
         if "width" in user_conf and "height" in user_conf:
