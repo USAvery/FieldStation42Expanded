@@ -207,6 +207,7 @@ class StationPlayer:
         self.web_queue = None
         self.guide_process = None
         self.guide_queue = None
+        self.guide_visible = False
         self._guide_video_layout = None
         self.parental_controls_process = None
         self.parental_controls_queue = None
@@ -261,7 +262,7 @@ class StationPlayer:
 
         if response.payload.startswith("web_key:"):
             key_name = response.payload.split(":", 1)[1]
-            if self.guide_process and self.guide_process.is_alive() and self.guide_queue:
+            if self.guide_visible and self.guide_process and self.guide_process.is_alive() and self.guide_queue:
                 self.guide_queue.put(f"key:{key_name}")
                 return True
 
@@ -286,6 +287,8 @@ class StationPlayer:
         # second media player.
         query["live_preview"] = "1"
         conf["transparent"] = True
+        conf["persistent"] = True
+        conf["start_hidden"] = True
 
         conf["web_url"] = urlunsplit((
             parts.scheme,
@@ -349,22 +352,17 @@ class StationPlayer:
         finally:
             self._guide_video_layout = None
 
-    def _open_guide_overlay(self):
+    def preload_guide_overlay(self):
+        """Start and load the interactive guide once, hidden, for instant opening."""
         if self.guide_process and self.guide_process.is_alive():
             return True
 
         if not WEB_RENDER_AVAILABLE:
-            self._l.error("Guide overlay unavailable - PySide6 QtWebEngine is not installed")
             return False
 
         guide_conf = self._guide_overlay_config()
         if not guide_conf:
-            self._l.warning("Interactive web guide is not configured")
             return False
-
-        # Reuse the exact MPV instance that is already playing the channel.
-        # Only its presentation changes; playback/audio continue uninterrupted.
-        self._apply_guide_video_layout()
 
         ctx = multiprocessing.get_context("spawn")
         self.guide_queue = ctx.Queue()
@@ -373,15 +371,45 @@ class StationPlayer:
             args=(guide_conf, self.guide_queue),
         )
         self.guide_process.start()
+        self.guide_visible = False
+        self._l.info("Preloading interactive guide renderer in background")
+        return True
 
+    def _open_guide_overlay(self):
+        if not self.preload_guide_overlay():
+            self._l.warning("Interactive web guide is not configured")
+            return False
+
+        # Reuse the exact MPV instance that is already playing the channel.
+        # Only its presentation changes; playback/audio continue uninterrupted.
+        self._apply_guide_video_layout()
+
+        if self.guide_queue:
+            self.guide_queue.put("show_window")
+
+        self.guide_visible = True
         network_name = self.station_config.get("network_name", "unknown") if self.station_config else "unknown"
-        self._l.info(f"Opened guide overlay over station: {network_name}")
+        self._l.info(f"Opened preloaded guide overlay over station: {network_name}")
         return True
 
     def _close_guide_overlay(self):
-        if self.guide_queue:
+        if self.guide_visible and self.guide_queue:
             try:
                 self.guide_queue.put("hide_window")
+            except Exception:
+                pass
+
+        self.guide_visible = False
+        self._restore_guide_video_layout()
+
+    def _shutdown_guide_overlay(self):
+        """Terminate the persistent guide renderer during application shutdown."""
+        self.guide_visible = False
+        self._restore_guide_video_layout()
+
+        if self.guide_queue:
+            try:
+                self.guide_queue.put("shutdown_window")
             except Exception:
                 pass
 
@@ -395,14 +423,13 @@ class StationPlayer:
                     self.guide_process.kill()
                     self.guide_process.join(timeout=0.5)
             except Exception as e:
-                self._l.warning(f"Error closing guide overlay: {e}")
+                self._l.warning(f"Error shutting down guide renderer: {e}")
 
         self.guide_process = None
         self.guide_queue = None
-        self._restore_guide_video_layout()
 
     def _toggle_guide_overlay(self):
-        if self.guide_process and self.guide_process.is_alive():
+        if self.guide_visible:
             self._close_guide_overlay()
             self._l.info("Closed guide overlay")
             return False
