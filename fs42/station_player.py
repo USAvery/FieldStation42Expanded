@@ -591,7 +591,20 @@ class StationPlayer:
                 # self.mpv.vf = "lavfi=[]"
                 self._l.info(f"playing {file_path}")
                 self.mpv.command("playlist-clear")
-                self.mpv.play(file_path)
+
+                if not is_stream and offset_seconds is not None and offset_seconds > 0:
+                    self.mpv.command(
+                        "loadfile",
+                        file_path,
+                        "replace",
+                        "start={}".format(offset_seconds),
+                    )
+                else:
+                    self.mpv.command(
+                        "loadfile",
+                        file_path,
+                        "replace",
+                    )
                 
 
                 timeout_seconds = StationManager().server_conf.get("video_seek_timeout", 10)
@@ -619,10 +632,6 @@ class StationPlayer:
                             self._l.error(f"Error waiting for playback: {e}")
                             return False
                         time.sleep(0.05)
-
-                # Perform seek if needed (before showing overlay)
-                if not is_stream and offset_seconds is not None and offset_seconds > 0:
-                    self._seek_with_verify(file_path, offset_seconds, timeout_seconds)
 
                 # Show Now Playing overlay for audio feature files
                 self._l.info(f"Media type: {media_type}, Content type: {content_type}")
