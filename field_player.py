@@ -159,9 +159,13 @@ def main_loop(transition_fn, shutdown_queue=None, api_proc=None, schedule_lock=N
 
     player.load_up()
 
+    # Chromium/QtWebEngine startup is expensive on the Pi. Pay that cost once
+    # during FieldStation42 startup, while the guide remains hidden.
+    player.preload_guide_overlay()
+
     def signal_handler(sig, frame):
         logger.critical("Received sig-int signal, attempting to exit gracefully...")
-        player._close_guide_overlay()
+        player._shutdown_guide_overlay()
         player.shutdown()
 
         update_status_socket("stopped", "", -1)
