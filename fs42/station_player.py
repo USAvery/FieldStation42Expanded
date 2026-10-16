@@ -180,22 +180,14 @@ class StationPlayer:
         if "start_mpv" in StationManager().server_conf:
             start_it = StationManager().server_conf["start_mpv"]
 
-        if not mpv:
-            self._l.info("Starting MPV instance")
-            # command on client: mpv --input-ipc-server=runtime/mpv.socket --idle --force-window
+        self._start_mpv_managed = start_it
+        self._using_dmabuf_wayland = False
+        self._fallback_retry_active = False
 
-            # if not running on trixie
-            self.mpv = MPV(
-                start_mpv=start_it,
-                ipc_socket="runtime/mpv.socket",
-                input_default_bindings=False,
-                fs=True,
-                idle=True,
-                force_window=True,
-                script_opts="osc-idlescreen=no",
-                hr_seek="yes",
-                hwdec="auto-copy",
-            )
+        if not mpv:
+            self.mpv = self._create_mpv(prefer_dmabuf=True)
+        else:
+            self.mpv = mpv
 
         self.station_config = station_config
         # self.playlist = self.read_json(runtime_filepath)
@@ -218,6 +210,99 @@ class StationPlayer:
         self.schedule_lock = None
         self._active_afx = None
         self._pending_response = None
+
+    def _create_mpv(self, prefer_dmabuf=True):
+        """Create MPV using the fast Wayland path with a compatible fallback."""
+        common_options = {
+            'start_mpv': self._start_mpv_managed,
+            'ipc_socket': 'runtime/mpv.socket',
+            'input_default_bindings': False,
+            'fs': True,
+            'idle': True,
+            'force_window': True,
+            'script_opts': 'osc-idlescreen=no',
+            'hr_seek': 'yes',
+        }
+
+        if not self._start_mpv_managed:
+            self._l.info('Connecting to externally managed MPV instance')
+            return MPV(**common_options)
+
+        if prefer_dmabuf:
+            try:
+                self._l.info(
+                    'Starting MPV with DMA-BUF Wayland output and direct hardware decoding'
+                )
+                player = MPV(
+                    vo='dmabuf-wayland',
+                    hwdec='auto',
+                    **common_options
+                )
+                self._using_dmabuf_wayland = True
+                return player
+            except Exception as exc:
+                self._l.warning(
+                    'DMA-BUF Wayland MPV startup failed; using GPU copy-back fallback: {}'.format(
+                        exc
+                    )
+                )
+
+        self._l.info('Starting MPV with GPU output and copy-back hardware decoding')
+        self._using_dmabuf_wayland = False
+        return MPV(
+            vo='gpu',
+            hwdec='auto-copy',
+            **common_options
+        )
+
+    def _switch_to_mpv_fallback(self):
+        """Restart managed MPV on the compatible GPU/copy-back path."""
+        if not self._start_mpv_managed or not self._using_dmabuf_wayland:
+            return False
+
+        self._l.warning(
+            'DMA-BUF playback failed; restarting MPV with GPU/copy-back fallback'
+        )
+
+        try:
+            self.mpv.terminate()
+        except Exception as exc:
+            self._l.debug('Could not cleanly terminate DMA-BUF MPV: {}'.format(exc))
+
+        try:
+            self.mpv = self._create_mpv(prefer_dmabuf=False)
+            return True
+        except Exception as exc:
+            self._l.error('Could not start fallback MPV instance: {}'.format(exc))
+            return False
+
+    def _retry_playback_with_fallback(
+        self,
+        file_path,
+        file_duration,
+        offset_seconds,
+        is_stream,
+        title,
+        content_type,
+        media_type,
+    ):
+        """Retry one failed playback attempt using the compatible MPV path."""
+        if self._fallback_retry_active or not self._switch_to_mpv_fallback():
+            return False
+
+        self._fallback_retry_active = True
+        try:
+            return self.play_file(
+                file_path,
+                file_duration=file_duration,
+                offset_seconds=offset_seconds,
+                is_stream=is_stream,
+                title=title,
+                content_type=content_type,
+                media_type=media_type,
+            )
+        finally:
+            self._fallback_retry_active = False
 
     def load_up(self):
         start_time = time.perf_counter()
@@ -801,7 +886,19 @@ class StationPlayer:
                         if self.mpv.time_pos is not None:
                             break
                         if time.time() - start_time > timeout_seconds:
-                            self._l.error(f"Timeout waiting for playback to start on {file_path}")
+                            self._l.error(
+                                'Timeout waiting for playback to start on {}'.format(file_path)
+                            )
+                            if self._using_dmabuf_wayland:
+                                return self._retry_playback_with_fallback(
+                                    file_path,
+                                    file_duration,
+                                    offset_seconds,
+                                    is_stream,
+                                    title,
+                                    content_type,
+                                    media_type,
+                                )
                             return False
                         if is_stream:
                             response = self.input_check_fn()
@@ -815,7 +912,17 @@ class StationPlayer:
                         time.sleep(0.05)
                     except Exception as e:
                         if time.time() - start_time > timeout_seconds:
-                            self._l.error(f"Error waiting for playback: {e}")
+                            self._l.error('Error waiting for playback: {}'.format(e))
+                            if self._using_dmabuf_wayland:
+                                return self._retry_playback_with_fallback(
+                                    file_path,
+                                    file_duration,
+                                    offset_seconds,
+                                    is_stream,
+                                    title,
+                                    content_type,
+                                    media_type,
+                                )
                             return False
                         time.sleep(0.05)
 
@@ -847,8 +954,20 @@ class StationPlayer:
         except Exception as e:
             self._l.exception(e)
             self._l.error(
-                f"Encountered unknown error attempting to play {file_path} - please check your configurations."
+                'Encountered unknown error attempting to play {} - please check your configurations.'.format(
+                    file_path
+                )
             )
+            if self._using_dmabuf_wayland:
+                return self._retry_playback_with_fallback(
+                    file_path,
+                    file_duration,
+                    offset_seconds,
+                    is_stream,
+                    title,
+                    content_type,
+                    media_type,
+                )
             return False
 
     def _seek_with_verify(self, file_path, offset_seconds, timeout_seconds,
