@@ -42,13 +42,14 @@ start_marker = '<!-- FS42 GUIDE PREVIEW START -->'
 end_marker = '<!-- FS42 GUIDE PREVIEW END -->'
 
 bindings = '''    <!-- FS42 GUIDE PREVIEW START -->
+    <!-- CRT 640x480 -->
     <keybind key="W-F10">
       <action name="ForEach">
         <query identifier="mpv" />
         <then>
           <action name="SetDecorations" decorations="none" />
-          <action name="ResizeTo" width="265" height="194" />
-          <action name="MoveTo" x="375" y="0" />
+          <action name="ResizeTo" width="259" height="194" />
+          <action name="MoveTo" x="378" y="0" />
         </then>
       </action>
     </keybind>
@@ -57,8 +58,50 @@ bindings = '''    <!-- FS42 GUIDE PREVIEW START -->
         <query identifier="mpv" />
         <then>
           <action name="SetDecorations" decorations="none" />
-          <action name="ResizeTo" width="795" height="436" />
-          <action name="MoveTo" x="1125" y="0" />
+          <action name="ResizeTo" width="265" height="149" />
+          <action name="MoveTo" x="375" y="22" />
+        </then>
+      </action>
+    </keybind>
+    <keybind key="W-F12">
+      <action name="ForEach">
+        <query identifier="mpv" />
+        <then>
+          <action name="SetDecorations" decorations="none" />
+          <action name="ResizeTo" width="265" height="113" />
+          <action name="MoveTo" x="375" y="40" />
+        </then>
+      </action>
+    </keybind>
+
+    <!-- Normal display 1920x1080 -->
+    <keybind key="W-F7">
+      <action name="ForEach">
+        <query identifier="mpv" />
+        <then>
+          <action name="SetDecorations" decorations="none" />
+          <action name="ResizeTo" width="581" height="436" />
+          <action name="MoveTo" x="1232" y="0" />
+        </then>
+      </action>
+    </keybind>
+    <keybind key="W-F8">
+      <action name="ForEach">
+        <query identifier="mpv" />
+        <then>
+          <action name="SetDecorations" decorations="none" />
+          <action name="ResizeTo" width="775" height="436" />
+          <action name="MoveTo" x="1135" y="0" />
+        </then>
+      </action>
+    </keybind>
+    <keybind key="W-F9">
+      <action name="ForEach">
+        <query identifier="mpv" />
+        <then>
+          <action name="SetDecorations" decorations="none" />
+          <action name="ResizeTo" width="795" height="338" />
+          <action name="MoveTo" x="1125" y="49" />
         </then>
       </action>
     </keybind>
