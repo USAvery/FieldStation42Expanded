@@ -894,7 +894,29 @@ html.live-preview-mode .xfinity-00s #top-panel {
 
 html.live-preview-mode .xfinity-00s #video-panel,
 html.live-preview-mode .xfinity-00s #video-panel.live-channel-preview {
-  background: transparent !important;
+  --live-preview-left: 0%;
+  --live-preview-right: 0%;
+  --live-preview-top: 0%;
+  --live-preview-bottom: 0%;
+
+  /*
+   * The live MPV surface sits underneath this transparent panel. Paint only
+   * the unused letterbox/pillarbox area black so wallpaper can never show
+   * around aspect-ratio-correct preview video.
+   */
+  background:
+    linear-gradient(#000, #000) top left /
+      100% var(--live-preview-top) no-repeat,
+    linear-gradient(#000, #000) bottom left /
+      100% var(--live-preview-bottom) no-repeat,
+    linear-gradient(#000, #000) left var(--live-preview-top) /
+      var(--live-preview-left)
+      calc(100% - var(--live-preview-top) - var(--live-preview-bottom))
+      no-repeat,
+    linear-gradient(#000, #000) right var(--live-preview-top) /
+      var(--live-preview-right)
+      calc(100% - var(--live-preview-top) - var(--live-preview-bottom))
+      no-repeat !important;
 }
 
 html.live-preview-mode .xfinity-00s #video-panel.live-channel-preview::before,
