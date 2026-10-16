@@ -365,7 +365,7 @@ class OsdWindow(QWidget):
             if self._window_visible:
                 self.hide()
                 self._window_visible = False
-            self.timer.setInterval(100)
+            self.timer.setInterval(250)
 
     def paintEvent(self, event):
         painter = QPainter(self)
