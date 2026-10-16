@@ -15,6 +15,7 @@ from python_mpv_jsonipc import MPV
 
 from fs42.guide_tk import guide_channel_runner, GuideCommands
 from fs42.autobump_agent import AutoBumpAgent
+from fs42.display_refresh import match_display_refresh_rate
 
 # Try to import web_render_runner, but handle gracefully if PySide6 (with QtWebEngine)
 # isn't available -- web rendering is an optional feature.
@@ -225,6 +226,7 @@ class StationPlayer:
             'force_window': True,
             'script_opts': 'osc-idlescreen=no',
             'hr_seek': 'yes',
+            'video_sync': 'display-resample',
         }
 
         if not self._start_mpv_managed:
@@ -1002,6 +1004,25 @@ class StationPlayer:
                             content_type,
                             media_type,
                         )
+
+                if prefer_dmabuf and (
+                    is_stream
+                    or content_type in (None, 'feature')
+                ):
+                    fps = None
+
+                    try:
+                        fps = self.mpv.container_fps
+                    except Exception:
+                        pass
+
+                    if not fps:
+                        try:
+                            fps = self.mpv.estimated_vf_fps
+                        except Exception:
+                            pass
+
+                    match_display_refresh_rate(fps, logger=self._l)
 
                 # Show Now Playing overlay for audio feature files
                 self._l.info(f"Media type: {media_type}, Content type: {content_type}")
