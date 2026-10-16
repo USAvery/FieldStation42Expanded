@@ -110,10 +110,14 @@ class StatusDisplay(object):
         self.time_since_change += dt
         self.check_status()
 
+    def is_visible(self):
+        return bool(
+            self._string
+            and self.time_since_change < self.config.display_time
+        )
+
     def draw(self, painter: QPainter, screen_w: float, screen_h: float):
-        if self.time_since_change >= self.config.display_time:
-            return
-        if not self._string:
+        if not self.is_visible():
             return
 
         painter.setFont(self._font)
@@ -204,8 +208,11 @@ class VolumeDisplay(object):
         self.time_since_change += dt
         self.check_volume()
 
+    def is_visible(self):
+        return self.time_since_change < self.config.display_time
+
     def draw(self, painter: QPainter, screen_w: float, screen_h: float):
-        if self.time_since_change >= self.config.display_time:
+        if not self.is_visible():
             return
 
         w = frac_to_size_px(self.config.width, screen_w)
@@ -286,6 +293,7 @@ class OsdWindow(QWidget):
     def __init__(self, objects: list):
         super().__init__()
         self.objects = objects
+        self._window_visible = False
 
         self.setWindowFlags(
             Qt.FramelessWindowHint
@@ -312,7 +320,24 @@ class OsdWindow(QWidget):
 
         self.timer = QTimer(self)
         self.timer.timeout.connect(self._tick)
-        self.timer.start(int(1000 / 30))  # ~30 FPS, matching the old glfw.wait_events_timeout cadence
+        # Poll status at 10 Hz. The old code repainted a full-screen transparent
+        # surface at 30 FPS even while every OSD element was hidden.
+        self.timer.start(100)
+
+    def _object_is_visible(self, obj):
+        visible_fn = getattr(obj, 'is_visible', None)
+        if visible_fn is None:
+            return True
+        try:
+            return bool(visible_fn())
+        except Exception:
+            return True
+
+    def _object_is_animated(self, obj):
+        return bool(
+            self._object_is_visible(obj)
+            and getattr(obj, 'is_animated', False)
+        )
 
     def _tick(self):
         now_ns = self._elapsed.nsecsElapsed()
@@ -322,7 +347,25 @@ class OsdWindow(QWidget):
         for obj in self.objects:
             obj.update(dt)
 
-        self.update()
+        any_visible = any(self._object_is_visible(obj) for obj in self.objects)
+        any_animated = any(self._object_is_animated(obj) for obj in self.objects)
+
+        if any_visible:
+            if not self._window_visible:
+                self.show()
+                self._window_visible = True
+
+            # Static OSD elements only need a repaint when the 10 Hz state poll
+            # runs. Animated logos temporarily restore the old 30 FPS cadence.
+            self.timer.setInterval(int(1000 / 30) if any_animated else 100)
+            self.update()
+        else:
+            # Removing the transparent full-screen surface lets the compositor
+            # skip blending it on every display refresh.
+            if self._window_visible:
+                self.hide()
+                self._window_visible = False
+            self.timer.setInterval(100)
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -342,7 +385,8 @@ def main():
     app = QApplication(sys.argv)
     objects = load_objects()
     window = OsdWindow(objects)
-    window.show()
+    # _tick() shows the overlay only when at least one OSD element is visible.
+    window._tick()
     sys.exit(app.exec())
 
 
