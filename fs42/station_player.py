@@ -185,7 +185,10 @@ class StationPlayer:
         self._fallback_retry_active = False
 
         if not mpv:
-            self.mpv = self._create_mpv(prefer_dmabuf=True)
+            # Start on the compatible GPU path because FieldStation42 displays
+            # standby PNGs before the first video. Video playback switches to
+            # DMA-BUF on demand.
+            self.mpv = self._create_mpv(prefer_dmabuf=False)
         else:
             self.mpv = mpv
 
@@ -255,6 +258,54 @@ class StationPlayer:
             **common_options
         )
 
+    def _switch_mpv_output(self, prefer_dmabuf):
+        """Switch the managed MPV process between fast and compatible outputs."""
+        if not self._start_mpv_managed:
+            return False
+
+        if self._using_dmabuf_wayland == prefer_dmabuf:
+            return True
+
+        target_name = 'DMA-BUF Wayland' if prefer_dmabuf else 'GPU/copy-back'
+        self._l.info('Switching MPV output to {}'.format(target_name))
+
+        try:
+            self.mpv.terminate()
+        except Exception as exc:
+            self._l.debug('Could not cleanly terminate MPV: {}'.format(exc))
+
+        try:
+            self.mpv = self._create_mpv(prefer_dmabuf=prefer_dmabuf)
+            return True
+        except Exception as exc:
+            self._l.error(
+                'Could not switch MPV output to {}: {}'.format(target_name, exc)
+            )
+            return False
+
+    @staticmethod
+    def _media_prefers_dmabuf(file_path, is_stream, media_type):
+        """Use DMA-BUF for video, but keep still images/audio on the GPU path."""
+        if media_type is not None:
+            return media_type == 'video'
+
+        if is_stream:
+            return True
+
+        extension = os.path.splitext(str(file_path))[1].lower()
+        return extension in {
+            '.avi',
+            '.m2ts',
+            '.m4v',
+            '.mkv',
+            '.mov',
+            '.mp4',
+            '.mpeg',
+            '.mpg',
+            '.ts',
+            '.webm',
+        }
+
     def _switch_to_mpv_fallback(self):
         """Restart managed MPV on the compatible GPU/copy-back path."""
         if not self._start_mpv_managed or not self._using_dmabuf_wayland:
@@ -264,17 +315,7 @@ class StationPlayer:
             'DMA-BUF playback failed; restarting MPV with GPU/copy-back fallback'
         )
 
-        try:
-            self.mpv.terminate()
-        except Exception as exc:
-            self._l.debug('Could not cleanly terminate DMA-BUF MPV: {}'.format(exc))
-
-        try:
-            self.mpv = self._create_mpv(prefer_dmabuf=False)
-            return True
-        except Exception as exc:
-            self._l.error('Could not start fallback MPV instance: {}'.format(exc))
-            return False
+        return self._switch_mpv_output(prefer_dmabuf=False)
 
     def _retry_playback_with_fallback(
         self,
@@ -847,6 +888,21 @@ class StationPlayer:
                     self.show_web(conf, blocking=False)
                     return True
 
+                prefer_dmabuf = self._media_prefers_dmabuf(
+                    file_path,
+                    is_stream,
+                    media_type,
+                )
+
+                # A fallback retry must remain on the compatible GPU path for
+                # this playback attempt. The next video gets another chance to
+                # use the fast DMA-BUF path.
+                if not self._fallback_retry_active:
+                    if not self._switch_mpv_output(prefer_dmabuf):
+                        self._l.warning(
+                            'Could not select preferred MPV output; continuing with current output'
+                        )
+
                 if "panscan" in self.station_config:
                     self.mpv.panscan = self.station_config["panscan"]
                 else:
@@ -925,6 +981,27 @@ class StationPlayer:
                                 )
                             return False
                         time.sleep(0.05)
+
+                if self._using_dmabuf_wayland:
+                    try:
+                        hwdec_current = self.mpv.hwdec_current
+                    except Exception:
+                        hwdec_current = None
+
+                    if not hwdec_current or hwdec_current == 'no':
+                        self._l.warning(
+                            'DMA-BUF playback has no active hardware decoder; '
+                            'retrying with GPU/copy-back'
+                        )
+                        return self._retry_playback_with_fallback(
+                            file_path,
+                            file_duration,
+                            offset_seconds,
+                            is_stream,
+                            title,
+                            content_type,
+                            media_type,
+                        )
 
                 # Show Now Playing overlay for audio feature files
                 self._l.info(f"Media type: {media_type}, Content type: {content_type}")
