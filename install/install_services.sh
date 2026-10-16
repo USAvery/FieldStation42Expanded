@@ -91,6 +91,14 @@ if [[ "$enable_osd" =~ ^[Yy]$ ]]; then
     SERVICES_TO_ENABLE+=("fs42-osd.service")
 fi
 
+# EPG Updater
+echo ""
+echo -e "${BLUE}EPG Updater${NC} - Cached guide data for streaming channels (every 6 hours)"
+read -p "Enable fs42-epg-update.timer? (Y/n): " enable_epg
+if [[ ! "$enable_epg" =~ ^[Nn]$ ]]; then
+    SERVICES_TO_ENABLE+=("fs42-epg-update.timer")
+fi
+
 # Enable selected services
 if [ ${#SERVICES_TO_ENABLE[@]} -eq 0 ]; then
     echo ""
@@ -124,5 +132,6 @@ echo -e "${INFO} Useful commands:"
 echo -e "  ${CYAN}systemctl --user status fs42*${NC}        - Check status of enabled services"
 echo -e "  ${CYAN}systemctl --user stop <service>${NC}      - Stop a specific service"
 echo -e "  ${CYAN}systemctl --user restart <service>${NC}   - Restart a specific service"
+echo -e "  ${CYAN}systemctl --user start fs42-epg-update.service${NC} - Refresh streaming guide data now"
 echo -e "  ${CYAN}journalctl --user -u <service> -f${NC}    - View logs for a service"
 echo ""
