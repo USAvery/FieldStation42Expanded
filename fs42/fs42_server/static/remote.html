@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <style>
         /* Treat rapid taps as remote-control input, not browser zoom gestures. */
         .remote-btn {
@@ -429,21 +429,39 @@
 
         // Button press handler
         document.querySelectorAll('.remote-btn').forEach(btn => {
-            // Safari can interpret two quick taps as a page-zoom gesture.
-            // Keep both click events, but suppress the browser's dblclick default.
-            btn.addEventListener('dblclick', function(event) {
+            let lastTouchActivation = 0;
+
+            function activateButton(button) {
+                const key = button.getAttribute('data-key');
+                handleRemoteCommand(key);
+
+                // Visual feedback
+                button.style.transform = 'translateY(2px)';
+                setTimeout(() => {
+                    button.style.transform = '';
+                }, 100);
+            }
+
+            // iPhone Safari may still reserve a rapid second tap for page zoom
+            // even when touch-action is set. Handle touch release ourselves and
+            // prevent Safari from producing the native gesture/click.
+            btn.addEventListener('touchend', function(event) {
                 event.preventDefault();
+                lastTouchActivation = Date.now();
+                activateButton(this);
+            }, { passive: false });
+
+            // Keep normal mouse/trackpad behavior on desktop. Some browsers may
+            // still synthesize a click after touchend, so ignore that duplicate.
+            btn.addEventListener('click', function() {
+                if (Date.now() - lastTouchActivation < 500) {
+                    return;
+                }
+                activateButton(this);
             });
 
-            btn.addEventListener('click', function() {
-                const key = this.getAttribute('data-key');
-                handleRemoteCommand(key);
-                
-                // Visual feedback
-                this.style.transform = 'translateY(2px)';
-                setTimeout(() => {
-                    this.style.transform = '';
-                }, 100);
+            btn.addEventListener('dblclick', function(event) {
+                event.preventDefault();
             });
         });
 
