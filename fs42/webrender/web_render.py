@@ -186,6 +186,32 @@ class WebRenderApp(QApplication):
             print(f"WebRender received message: {msg}")
             # Persistent renderers stay alive between open/close operations so
             # QtWebEngine/Chromium only pays its startup cost once.
+            if isinstance(msg, dict) and msg.get('type') == 'show_window':
+                geometry = msg.get('preview_geometry') or {}
+                if geometry:
+                    left = float(geometry.get('left_pct', 0.0))
+                    right = float(geometry.get('right_pct', 0.0))
+                    top = float(geometry.get('top_pct', 0.0))
+                    bottom = float(geometry.get('bottom_pct', 0.0))
+                    js = """
+                    document.documentElement.style.setProperty(
+                        '--live-preview-left', '{:.4f}%'
+                    );
+                    document.documentElement.style.setProperty(
+                        '--live-preview-right', '{:.4f}%'
+                    );
+                    document.documentElement.style.setProperty(
+                        '--live-preview-top', '{:.4f}%'
+                    );
+                    document.documentElement.style.setProperty(
+                        '--live-preview-bottom', '{:.4f}%'
+                    );
+                    """.format(left, right, top, bottom)
+                    self.window.browser.page().runJavaScript(js)
+
+                self.show_window()
+                return
+
             if msg == "show_window":
                 self.show_window()
                 return
