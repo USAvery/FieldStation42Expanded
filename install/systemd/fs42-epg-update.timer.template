@@ -1,0 +1,12 @@
+[Unit]
+Description=Refresh FieldStation42 EPG Cache
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=6h
+RandomizedDelaySec=5min
+Persistent=true
+Unit=fs42-epg-update.service
+
+[Install]
+WantedBy=timers.target
