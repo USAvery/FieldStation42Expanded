@@ -61,3 +61,9 @@ function updateStatus() {
 
 setInterval(updateStatus, 2000);
 updateStatus();
+
+
+/* Keep rapid remote-button taps from triggering browser double-tap zoom. */
+document.querySelectorAll('.btn').forEach(button => {
+  button.addEventListener('dblclick', event => event.preventDefault());
+});
