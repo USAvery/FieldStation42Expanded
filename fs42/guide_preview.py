@@ -6,9 +6,6 @@ import time
 from fs42.display_refresh import CRT_DISPLAY_IDENTIFIER, select_display_mode
 
 
-CRT_PREVIEW_KEY = 'F10'
-NORMAL_PREVIEW_KEY = 'F11'
-
 CRT_PREVIEW = {
     'x': 375,
     'y': 0,
@@ -20,6 +17,16 @@ NORMAL_PREVIEW = {
     'y': 0,
     'width': 795,
     'height': 436,
+}
+
+# labwc bindings installed by install/setup_labwc_guide_preview.sh.
+_PREVIEW_KEYS = {
+    (True, '4:3'): 'F10',
+    (True, '16:9'): 'F11',
+    (True, 'cinema'): 'F12',
+    (False, '4:3'): 'F7',
+    (False, '16:9'): 'F8',
+    (False, 'cinema'): 'F9',
 }
 
 
@@ -57,6 +64,79 @@ def _query_display_selection(logger=None):
         return None
 
     return select_display_mode(result.stdout)
+
+
+def _source_aspect(mpv):
+    try:
+        params = mpv.video_out_params or {}
+    except Exception:
+        params = {}
+
+    aspect = params.get('aspect')
+    if aspect and aspect > 0:
+        return float(aspect)
+
+    width = params.get('dw') or params.get('w')
+    height = params.get('dh') or params.get('h')
+
+    if width and height:
+        return float(width) / float(height)
+
+    return 16.0 / 9.0
+
+
+def _aspect_family(aspect):
+    if aspect < 1.55:
+        return '4:3'
+
+    if aspect < 2.05:
+        return '16:9'
+
+    return 'cinema'
+
+
+def _family_aspect(family):
+    if family == '4:3':
+        return 4.0 / 3.0
+
+    if family == 'cinema':
+        return 2.35
+
+    return 16.0 / 9.0
+
+
+def _fit_geometry(preview, aspect):
+    width = preview['width']
+    height = preview['height']
+    box_aspect = float(width) / float(height)
+
+    if aspect >= box_aspect:
+        fit_width = width
+        fit_height = int(round(width / aspect))
+    else:
+        fit_height = height
+        fit_width = int(round(height * aspect))
+
+    fit_width = max(1, min(width, fit_width))
+    fit_height = max(1, min(height, fit_height))
+
+    x = preview['x'] + int(round((width - fit_width) / 2.0))
+    y = preview['y'] + int(round((height - fit_height) / 2.0))
+
+    return {
+        'x': x,
+        'y': y,
+        'width': fit_width,
+        'height': fit_height,
+        'left_pct': (x - preview['x']) / float(width) * 100.0,
+        'right_pct': (
+            preview['x'] + width - (x + fit_width)
+        ) / float(width) * 100.0,
+        'top_pct': (y - preview['y']) / float(height) * 100.0,
+        'bottom_pct': (
+            preview['y'] + height - (y + fit_height)
+        ) / float(height) * 100.0,
+    }
 
 
 def _trigger_labwc_preview(key_name, logger=None):
@@ -112,8 +192,13 @@ def apply_guide_preview(mpv, logger=None):
 
     description = selection.get('description', '')
     is_crt = CRT_DISPLAY_IDENTIFIER in description
-    key_name = CRT_PREVIEW_KEY if is_crt else NORMAL_PREVIEW_KEY
-    geometry = CRT_PREVIEW if is_crt else NORMAL_PREVIEW
+    preview = CRT_PREVIEW if is_crt else NORMAL_PREVIEW
+
+    source_aspect = _source_aspect(mpv)
+    family = _aspect_family(source_aspect)
+    fit_aspect = _family_aspect(family)
+    geometry = _fit_geometry(preview, fit_aspect)
+    key_name = _PREVIEW_KEYS[(is_crt, family)]
 
     try:
         state = {
@@ -122,6 +207,7 @@ def apply_guide_preview(mpv, logger=None):
             'video_margin_ratio_right': mpv.video_margin_ratio_right,
             'video_margin_ratio_top': mpv.video_margin_ratio_top,
             'video_margin_ratio_bottom': mpv.video_margin_ratio_bottom,
+            'preview_geometry': geometry,
         }
 
         mpv.video_margin_ratio_left = 0.0
@@ -142,8 +228,9 @@ def apply_guide_preview(mpv, logger=None):
 
         if logger:
             logger.info(
-                'Placed MPV window in {} guide preview at {},{} {}x{}'.format(
+                'Placed MPV window in {} {} guide preview at {},{} {}x{}'.format(
                     'CRT' if is_crt else '1080p',
+                    family,
                     geometry['x'],
                     geometry['y'],
                     geometry['width'],
