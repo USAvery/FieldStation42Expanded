@@ -16,6 +16,7 @@ from python_mpv_jsonipc import MPV
 from fs42.guide_tk import guide_channel_runner, GuideCommands
 from fs42.autobump_agent import AutoBumpAgent
 from fs42.display_refresh import match_display_refresh_rate
+from fs42.guide_preview import apply_guide_preview, restore_guide_preview
 
 # Try to import web_render_runner, but handle gracefully if PySide6 (with QtWebEngine)
 # isn't available -- web rendering is an optional feature.
@@ -429,55 +430,25 @@ class StationPlayer:
         return conf
 
     def _apply_guide_video_layout(self):
-        """Shrink the live MPV picture into the 00s guide preview rectangle."""
+        """Move the existing MPV Wayland surface into the guide preview."""
         if self._guide_video_layout is not None:
             return
 
-        try:
-            self._guide_video_layout = {
-                "video_zoom": self.mpv.video_zoom,
-                "video_align_x": self.mpv.video_align_x,
-                "video_align_y": self.mpv.video_align_y,
-                "video_margin_ratio_left": self.mpv.video_margin_ratio_left,
-                "video_margin_ratio_right": self.mpv.video_margin_ratio_right,
-                "video_margin_ratio_top": self.mpv.video_margin_ratio_top,
-                "video_margin_ratio_bottom": self.mpv.video_margin_ratio_bottom,
-            }
-
-            # Box the live video into the guide's upper-right preview rectangle.
-            # mpv preserves the source aspect ratio and centers it inside this
-            # box automatically, so 4:3, 16:9, 2.35:1, etc. all remain centered.
-            #
-            # Preview geometry from the 00s theme:
-            #   left   = 58.6% of screen width
-            #   right  = 0%
-            #   top    = 0%
-            #   bottom = 59.6% of screen height
-            self.mpv.video_zoom = 0.0
-            self.mpv.video_align_x = 0.0
-            self.mpv.video_align_y = 0.0
-            self.mpv.video_margin_ratio_left = 0.586
-            self.mpv.video_margin_ratio_right = 0.0
-            self.mpv.video_margin_ratio_top = 0.0
-            self.mpv.video_margin_ratio_bottom = 0.596
-        except Exception as e:
-            self._l.warning(f"Could not place live channel in guide preview: {e}")
-            self._guide_video_layout = None
+        self._guide_video_layout = apply_guide_preview(
+            self.mpv,
+            logger=self._l,
+        )
 
     def _restore_guide_video_layout(self):
         if self._guide_video_layout is None:
             return
 
         try:
-            self.mpv.video_zoom = self._guide_video_layout["video_zoom"]
-            self.mpv.video_align_x = self._guide_video_layout["video_align_x"]
-            self.mpv.video_align_y = self._guide_video_layout["video_align_y"]
-            self.mpv.video_margin_ratio_left = self._guide_video_layout["video_margin_ratio_left"]
-            self.mpv.video_margin_ratio_right = self._guide_video_layout["video_margin_ratio_right"]
-            self.mpv.video_margin_ratio_top = self._guide_video_layout["video_margin_ratio_top"]
-            self.mpv.video_margin_ratio_bottom = self._guide_video_layout["video_margin_ratio_bottom"]
-        except Exception as e:
-            self._l.warning(f"Could not restore full-screen channel layout: {e}")
+            restore_guide_preview(
+                self.mpv,
+                self._guide_video_layout,
+                logger=self._l,
+            )
         finally:
             self._guide_video_layout = None
 
