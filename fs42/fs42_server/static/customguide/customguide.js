@@ -575,9 +575,12 @@ function updateGridHeader(slots) {
 
 function getProgramCategory(block, station) {
   const meta = block && block.meta ? block.meta : {};
-  if (meta.guide_category) return String(meta.guide_category).toLowerCase();
 
+  // Theme CSS supports only these category class names. External EPG sources
+  // may return arbitrary values such as "Game show", "TV series", etc., so
+  // never use guide_category directly as a DOM class token.
   const text = [
+    meta.guide_category,
     block && block.title,
     meta.title,
     meta.type,
@@ -588,7 +591,7 @@ function getProgramCategory(block, station) {
 
   if (/(sports|football|basketball|baseball|hockey|soccer|golf|tennis|espn|fox sports|nhl|nba|nfl|mlb)/.test(text)) return 'sports';
   if (/(movie|film|feature|cinema)/.test(text)) return 'movie';
-  if (/(kids|children|cartoon|nick|nik|toons|disney|spongebob|zoey|fairly)/.test(text)) return 'kids';
+  if (/(kids|children|cartoon|animation|nick|nik|toons|disney|spongebob|zoey|fairly)/.test(text)) return 'kids';
   return 'default';
 }
 
