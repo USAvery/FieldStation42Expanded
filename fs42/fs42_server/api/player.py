@@ -4,6 +4,7 @@ import subprocess
 import shutil
 import re
 import platform
+import time
 from fs42.station_manager import StationManager
 
 router = APIRouter(prefix="/player", tags=["player"])
@@ -12,6 +13,13 @@ VOLUME_SOCKET = "runtime/volume.socket"
 
 # Percentage the volume changes by on each volume up/down request.
 VOLUME_STEP = 2
+
+# Cached /proc/stat sample used to calculate real CPU utilization between API
+# requests. This avoids presenting the 1-minute Linux load average as a CPU
+# percentage, which can remain high long after CPU demand has fallen.
+_cpu_sample = None
+_cpu_sample_time = 0.0
+_cpu_usage_percent = None
 
 @router.get("/info")
 async def get_info():
@@ -133,10 +141,33 @@ async def _get_memory_info():
         return {"memory": {"error": "unavailable"}}
 
 
+def _read_cpu_sample():
+    """Return total and idle CPU jiffies from /proc/stat."""
+    with open("/proc/stat", "r") as f:
+        fields = f.readline().split()
+
+    if not fields or fields[0] != "cpu":
+        raise ValueError("Aggregate CPU line not found in /proc/stat")
+
+    values = [int(value) for value in fields[1:]]
+    total = sum(values)
+
+    # Linux /proc/stat fields start with:
+    # user nice system idle iowait irq softirq steal ...
+    idle = values[3] if len(values) > 3 else 0
+    if len(values) > 4:
+        idle += values[4]
+
+    return total, idle
+
+
 async def _get_cpu_info():
-    """Get CPU usage information"""
+    """Get real CPU utilization plus Linux load averages."""
+    global _cpu_sample
+    global _cpu_sample_time
+    global _cpu_usage_percent
+
     try:
-        # Get CPU count
         cpu_count = 0
         try:
             with open("/proc/cpuinfo", "r") as f:
@@ -144,36 +175,67 @@ async def _get_cpu_info():
             cpu_count = cpuinfo.count("processor")
         except Exception:
             cpu_count = 1
-        
-        # Get load average (simpler than trying to calculate CPU percentage)
+
+        load_1min = None
+        load_5min = None
+        load_15min = None
+
         try:
             with open("/proc/loadavg", "r") as f:
                 loadavg = f.read().strip().split()
             load_1min = float(loadavg[0])
             load_5min = float(loadavg[1])
             load_15min = float(loadavg[2])
-            
-            # Convert load to rough percentage (load/cores * 100)
-            load_percent = round((load_1min / cpu_count) * 100, 1) if cpu_count > 0 else 0
-            
-            return {
-                "cpu": {
-                    "cores": cpu_count,
-                    "load_1min": load_1min,
-                    "load_5min": load_5min,
-                    "load_15min": load_15min,
-                    "load_percent": load_percent
-                }
-            }
         except Exception:
-            return {
-                "cpu": {
-                    "cores": cpu_count,
-                    "load": "unavailable"
-                }
+            pass
+
+        try:
+            now = time.monotonic()
+            sample = _read_cpu_sample()
+
+            # Avoid recalculating from nearly simultaneous requests. The remote
+            # polls once per second, so 250 ms still gives a responsive reading.
+            if _cpu_sample is None:
+                _cpu_sample = sample
+                _cpu_sample_time = now
+            elif now - _cpu_sample_time >= 0.25:
+                total_delta = sample[0] - _cpu_sample[0]
+                idle_delta = sample[1] - _cpu_sample[1]
+
+                if total_delta > 0:
+                    busy_delta = max(0, total_delta - idle_delta)
+                    _cpu_usage_percent = round(
+                        (busy_delta / total_delta) * 100.0,
+                        1,
+                    )
+
+                _cpu_sample = sample
+                _cpu_sample_time = now
+        except Exception:
+            pass
+
+        # The very first request has no previous /proc/stat sample. Use the
+        # normalized 1-minute load only for that single initial response.
+        if _cpu_usage_percent is None:
+            if load_1min is not None and cpu_count > 0:
+                load_percent = round((load_1min / cpu_count) * 100.0, 1)
+            else:
+                load_percent = 0.0
+        else:
+            load_percent = _cpu_usage_percent
+
+        return {
+            "cpu": {
+                "cores": cpu_count,
+                "load_1min": load_1min,
+                "load_5min": load_5min,
+                "load_15min": load_15min,
+                "load_percent": load_percent,
             }
+        }
     except Exception:
         return {"cpu": {"error": "unavailable"}}
+
 
 @router.get("/status")
 async def get_player_status():
