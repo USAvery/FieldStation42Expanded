@@ -202,9 +202,11 @@ def apply_guide_preview(mpv, logger=None):
             'video_margin_ratio_right': mpv.video_margin_ratio_right,
             'video_margin_ratio_top': mpv.video_margin_ratio_top,
             'video_margin_ratio_bottom': mpv.video_margin_ratio_bottom,
-            'preview_layout': {
-                'bar_x_percent': geometry['bar_x_percent'],
-                'bar_y_percent': geometry['bar_y_percent'],
+            'preview_geometry': {
+                'left_pct': geometry['bar_x_percent'],
+                'right_pct': geometry['bar_x_percent'],
+                'top_pct': geometry['bar_y_percent'],
+                'bottom_pct': geometry['bar_y_percent'],
             },
         }
 
