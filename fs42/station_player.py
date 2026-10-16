@@ -481,8 +481,31 @@ class StationPlayer:
         finally:
             self._guide_video_layout = None
 
+    def _current_video_fps(self):
+        """Return MPV's best available estimate of the current video FPS."""
+        try:
+            fps = self.mpv.container_fps
+        except Exception:
+            fps = None
+
+        if not fps:
+            try:
+                fps = self.mpv.estimated_vf_fps
+            except Exception:
+                fps = None
+
+        return fps
+
     def preload_guide_overlay(self):
         """Start and load the interactive guide once, hidden, for instant opening."""
+        # Never initialize Qt WebEngine at an accidental 4K mode. If MPV has
+        # not parsed a video FPS yet, the display helper still enforces the
+        # resolution policy using a safe default refresh.
+        match_display_refresh_rate(
+            self._current_video_fps(),
+            logger=self._l,
+        )
+
         if self.guide_process and self.guide_process.is_alive():
             return True
 
@@ -505,6 +528,13 @@ class StationPlayer:
         return True
 
     def _open_guide_overlay(self):
+        # Re-apply the policy on every open in case HDMI renegotiated after the
+        # renderer was preloaded (for example when a TV sleeps/wakes).
+        match_display_refresh_rate(
+            self._current_video_fps(),
+            logger=self._l,
+        )
+
         if not self.preload_guide_overlay():
             self._l.warning("Interactive web guide is not configured")
             return False
@@ -1009,20 +1039,10 @@ class StationPlayer:
                     is_stream
                     or content_type in (None, 'feature')
                 ):
-                    fps = None
-
-                    try:
-                        fps = self.mpv.container_fps
-                    except Exception:
-                        pass
-
-                    if not fps:
-                        try:
-                            fps = self.mpv.estimated_vf_fps
-                        except Exception:
-                            pass
-
-                    match_display_refresh_rate(fps, logger=self._l)
+                    match_display_refresh_rate(
+                        self._current_video_fps(),
+                        logger=self._l,
+                    )
 
                 # Show Now Playing overlay for audio feature files
                 self._l.info(f"Media type: {media_type}, Content type: {content_type}")
