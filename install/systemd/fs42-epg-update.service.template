@@ -6,4 +6,11 @@ Wants=network-online.target
 [Service]
 Type=oneshot
 WorkingDirectory=__INSTALL_DIR__
+
+# EPG parsing is background maintenance. Keep it out of the way of realtime
+# playback, guide rendering, and remote-control responsiveness.
+Nice=15
+IOSchedulingClass=idle
+CPUWeight=10
+IOWeight=10
 ExecStart=__INSTALL_DIR__/env/bin/python3 -m fs42.epg_update
