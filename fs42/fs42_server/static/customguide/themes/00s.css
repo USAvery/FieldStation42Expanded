@@ -878,6 +878,13 @@ body {
    In live-preview mode the underlying MPV window never stops. These backgrounds
    must be transparent all the way down to the QWebEngine surface so the actual
    tuned station is visible through the upper-right preview rectangle. */
+html.live-preview-mode {
+  --live-preview-left: 0%;
+  --live-preview-right: 0%;
+  --live-preview-top: 0%;
+  --live-preview-bottom: 0%;
+}
+
 html.live-preview-mode,
 html.live-preview-mode body {
   background: transparent !important;
@@ -894,11 +901,6 @@ html.live-preview-mode .xfinity-00s #top-panel {
 
 html.live-preview-mode .xfinity-00s #video-panel,
 html.live-preview-mode .xfinity-00s #video-panel.live-channel-preview {
-  --live-preview-left: 0%;
-  --live-preview-right: 0%;
-  --live-preview-top: 0%;
-  --live-preview-bottom: 0%;
-
   /*
    * The live MPV surface sits underneath this transparent panel. Paint only
    * the unused letterbox/pillarbox area black so wallpaper can never show
