@@ -194,6 +194,7 @@ class StationPlayer:
                 force_window=True,
                 script_opts="osc-idlescreen=no",
                 hr_seek="yes",
+                hwdec="auto-copy",
             )
 
         self.station_config = station_config
