@@ -143,7 +143,7 @@ class WebRenderApp(QApplication):
         # Set up timer for queue processing
         self.timer = QTimer()
         self.timer.timeout.connect(self.tick)
-        self.timer.start(250)  # Check every 250ms
+        self.timer.start(50)  # Keep guide overlay commands responsive
 
         # Set up page refresh timer if configured
         if user_conf.get("refresh_interval", 0) > 0:
