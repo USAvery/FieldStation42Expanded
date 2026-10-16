@@ -19,14 +19,27 @@ NORMAL_PREVIEW = {
     'height': 436,
 }
 
-# labwc bindings installed by install/setup_labwc_guide_preview.sh.
-_PREVIEW_KEYS = {
-    (True, '4:3'): 'F10',
-    (True, '16:9'): 'F11',
-    (True, 'cinema'): 'F12',
-    (False, '4:3'): 'F7',
-    (False, '16:9'): 'F8',
-    (False, 'cinema'): 'F9',
+# The compositor needs fixed MoveTo coordinates. Pick the closest common
+# display aspect, while the guide overlay paints the exact black letterbox bars.
+ASPECT_PROFILES = (
+    ('4_3', 4.0 / 3.0),
+    ('16_9', 16.0 / 9.0),
+    ('1_85', 1.85),
+    ('2_0', 2.0),
+    ('2_39', 2.39),
+)
+
+PREVIEW_KEYS = {
+    ('crt', '4_3'): 'F10',
+    ('crt', '16_9'): 'F11',
+    ('crt', '1_85'): 'F12',
+    ('crt', '2_0'): 'F13',
+    ('crt', '2_39'): 'F14',
+    ('normal', '4_3'): 'F15',
+    ('normal', '16_9'): 'F16',
+    ('normal', '1_85'): 'F17',
+    ('normal', '2_0'): 'F18',
+    ('normal', '2_39'): 'F19',
 }
 
 
@@ -66,7 +79,7 @@ def _query_display_selection(logger=None):
     return select_display_mode(result.stdout)
 
 
-def _source_aspect(mpv):
+def _video_aspect(mpv):
     try:
         params = mpv.video_out_params or {}
     except Exception:
@@ -85,57 +98,38 @@ def _source_aspect(mpv):
     return 16.0 / 9.0
 
 
-def _aspect_family(aspect):
-    if aspect < 1.55:
-        return '4:3'
-
-    if aspect < 2.05:
-        return '16:9'
-
-    return 'cinema'
+def _closest_aspect_profile(aspect):
+    return min(
+        ASPECT_PROFILES,
+        key=lambda item: abs(item[1] - aspect),
+    )
 
 
-def _family_aspect(family):
-    if family == '4:3':
-        return 4.0 / 3.0
-
-    if family == 'cinema':
-        return 2.35
-
-    return 16.0 / 9.0
-
-
-def _fit_geometry(preview, aspect):
-    width = preview['width']
-    height = preview['height']
-    box_aspect = float(width) / float(height)
+def _fit_inside(box, aspect):
+    box_width = box['width']
+    box_height = box['height']
+    box_aspect = float(box_width) / float(box_height)
 
     if aspect >= box_aspect:
-        fit_width = width
-        fit_height = int(round(width / aspect))
+        width = box_width
+        height = max(1, int(round(float(width) / aspect)))
     else:
-        fit_height = height
-        fit_width = int(round(height * aspect))
+        height = box_height
+        width = max(1, int(round(float(height) * aspect)))
 
-    fit_width = max(1, min(width, fit_width))
-    fit_height = max(1, min(height, fit_height))
+    x = box['x'] + int(round((box_width - width) / 2.0))
+    y = box['y'] + int(round((box_height - height) / 2.0))
 
-    x = preview['x'] + int(round((width - fit_width) / 2.0))
-    y = preview['y'] + int(round((height - fit_height) / 2.0))
+    bar_x = max(0.0, (box_width - width) / (2.0 * box_width) * 100.0)
+    bar_y = max(0.0, (box_height - height) / (2.0 * box_height) * 100.0)
 
     return {
         'x': x,
         'y': y,
-        'width': fit_width,
-        'height': fit_height,
-        'left_pct': (x - preview['x']) / float(width) * 100.0,
-        'right_pct': (
-            preview['x'] + width - (x + fit_width)
-        ) / float(width) * 100.0,
-        'top_pct': (y - preview['y']) / float(height) * 100.0,
-        'bottom_pct': (
-            preview['y'] + height - (y + fit_height)
-        ) / float(height) * 100.0,
+        'width': width,
+        'height': height,
+        'bar_x_percent': bar_x,
+        'bar_y_percent': bar_y,
     }
 
 
@@ -185,29 +179,33 @@ def _trigger_labwc_preview(key_name, logger=None):
 
 
 def apply_guide_preview(mpv, logger=None):
-    """Resize the existing MPV Wayland surface into the guide preview."""
+    """Resize and center the existing MPV Wayland surface in the guide."""
     selection = _query_display_selection(logger=logger)
     if selection is None:
         return None
 
     description = selection.get('description', '')
     is_crt = CRT_DISPLAY_IDENTIFIER in description
-    preview = CRT_PREVIEW if is_crt else NORMAL_PREVIEW
+    display_type = 'crt' if is_crt else 'normal'
+    box = CRT_PREVIEW if is_crt else NORMAL_PREVIEW
 
-    source_aspect = _source_aspect(mpv)
-    family = _aspect_family(source_aspect)
-    fit_aspect = _family_aspect(family)
-    geometry = _fit_geometry(preview, fit_aspect)
-    key_name = _PREVIEW_KEYS[(is_crt, family)]
+    aspect = _video_aspect(mpv)
+    profile_name, profile_aspect = _closest_aspect_profile(aspect)
+    key_name = PREVIEW_KEYS[(display_type, profile_name)]
+    geometry = _fit_inside(box, aspect)
 
     try:
         state = {
             'fullscreen': bool(mpv.fullscreen),
+            'geometry': mpv.geometry,
             'video_margin_ratio_left': mpv.video_margin_ratio_left,
             'video_margin_ratio_right': mpv.video_margin_ratio_right,
             'video_margin_ratio_top': mpv.video_margin_ratio_top,
             'video_margin_ratio_bottom': mpv.video_margin_ratio_bottom,
-            'preview_geometry': geometry,
+            'preview_layout': {
+                'bar_x_percent': geometry['bar_x_percent'],
+                'bar_y_percent': geometry['bar_y_percent'],
+            },
         }
 
         mpv.video_margin_ratio_left = 0.0
@@ -215,10 +213,17 @@ def apply_guide_preview(mpv, logger=None):
         mpv.video_margin_ratio_top = 0.0
         mpv.video_margin_ratio_bottom = 0.0
 
+        # Ask MPV for the exact source-aspect size. Wayland ignores the x/y
+        # portion of client geometry, so labwc supplies the absolute placement.
+        mpv.geometry = '{}x{}'.format(
+            geometry['width'],
+            geometry['height'],
+        )
         mpv.fullscreen = False
         time.sleep(0.05)
 
         if not _trigger_labwc_preview(key_name, logger=logger):
+            mpv.geometry = state['geometry']
             mpv.video_margin_ratio_left = state['video_margin_ratio_left']
             mpv.video_margin_ratio_right = state['video_margin_ratio_right']
             mpv.video_margin_ratio_top = state['video_margin_ratio_top']
@@ -228,9 +233,12 @@ def apply_guide_preview(mpv, logger=None):
 
         if logger:
             logger.info(
-                'Placed MPV window in {} {} guide preview at {},{} {}x{}'.format(
+                'Placed MPV window in {} guide preview: source aspect {:.3f}, '
+                'profile {} ({:.3f}), target {},{} {}x{}'.format(
                     'CRT' if is_crt else '1080p',
-                    family,
+                    aspect,
+                    profile_name,
+                    profile_aspect,
                     geometry['x'],
                     geometry['y'],
                     geometry['width'],
@@ -247,6 +255,7 @@ def apply_guide_preview(mpv, logger=None):
 
         try:
             if 'state' in locals():
+                mpv.geometry = state['geometry']
                 mpv.video_margin_ratio_left = state['video_margin_ratio_left']
                 mpv.video_margin_ratio_right = state['video_margin_ratio_right']
                 mpv.video_margin_ratio_top = state['video_margin_ratio_top']
@@ -266,6 +275,7 @@ def restore_guide_preview(mpv, state, logger=None):
         return
 
     try:
+        mpv.geometry = state['geometry']
         mpv.video_margin_ratio_left = state['video_margin_ratio_left']
         mpv.video_margin_ratio_right = state['video_margin_ratio_right']
         mpv.video_margin_ratio_top = state['video_margin_ratio_top']
