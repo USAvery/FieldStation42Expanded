@@ -1,0 +1,9 @@
+[Unit]
+Description=FieldStation42 EPG Cache Update
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=__INSTALL_DIR__
+ExecStart=__INSTALL_DIR__/env/bin/python3 -m fs42.epg_update
