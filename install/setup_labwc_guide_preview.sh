@@ -42,7 +42,6 @@ start_marker = '<!-- FS42 GUIDE PREVIEW START -->'
 end_marker = '<!-- FS42 GUIDE PREVIEW END -->'
 
 bindings = '''    <!-- FS42 GUIDE PREVIEW START -->
-    <!-- CRT 640x480 -->
     <keybind key="W-F10">
       <action name="ForEach">
         <query identifier="mpv" />
@@ -68,14 +67,32 @@ bindings = '''    <!-- FS42 GUIDE PREVIEW START -->
         <query identifier="mpv" />
         <then>
           <action name="SetDecorations" decorations="none" />
-          <action name="ResizeTo" width="265" height="113" />
-          <action name="MoveTo" x="375" y="40" />
+          <action name="ResizeTo" width="265" height="143" />
+          <action name="MoveTo" x="375" y="26" />
         </then>
       </action>
     </keybind>
-
-    <!-- Normal display 1920x1080 -->
-    <keybind key="W-F7">
+    <keybind key="W-F13">
+      <action name="ForEach">
+        <query identifier="mpv" />
+        <then>
+          <action name="SetDecorations" decorations="none" />
+          <action name="ResizeTo" width="265" height="132" />
+          <action name="MoveTo" x="375" y="31" />
+        </then>
+      </action>
+    </keybind>
+    <keybind key="W-F14">
+      <action name="ForEach">
+        <query identifier="mpv" />
+        <then>
+          <action name="SetDecorations" decorations="none" />
+          <action name="ResizeTo" width="265" height="111" />
+          <action name="MoveTo" x="375" y="42" />
+        </then>
+      </action>
+    </keybind>
+    <keybind key="W-F15">
       <action name="ForEach">
         <query identifier="mpv" />
         <then>
@@ -85,7 +102,7 @@ bindings = '''    <!-- FS42 GUIDE PREVIEW START -->
         </then>
       </action>
     </keybind>
-    <keybind key="W-F8">
+    <keybind key="W-F16">
       <action name="ForEach">
         <query identifier="mpv" />
         <then>
@@ -95,13 +112,33 @@ bindings = '''    <!-- FS42 GUIDE PREVIEW START -->
         </then>
       </action>
     </keybind>
-    <keybind key="W-F9">
+    <keybind key="W-F17">
       <action name="ForEach">
         <query identifier="mpv" />
         <then>
           <action name="SetDecorations" decorations="none" />
-          <action name="ResizeTo" width="795" height="338" />
-          <action name="MoveTo" x="1125" y="49" />
+          <action name="ResizeTo" width="795" height="430" />
+          <action name="MoveTo" x="1125" y="3" />
+        </then>
+      </action>
+    </keybind>
+    <keybind key="W-F18">
+      <action name="ForEach">
+        <query identifier="mpv" />
+        <then>
+          <action name="SetDecorations" decorations="none" />
+          <action name="ResizeTo" width="795" height="398" />
+          <action name="MoveTo" x="1125" y="19" />
+        </then>
+      </action>
+    </keybind>
+    <keybind key="W-F19">
+      <action name="ForEach">
+        <query identifier="mpv" />
+        <then>
+          <action name="SetDecorations" decorations="none" />
+          <action name="ResizeTo" width="795" height="333" />
+          <action name="MoveTo" x="1125" y="52" />
         </then>
       </action>
     </keybind>
