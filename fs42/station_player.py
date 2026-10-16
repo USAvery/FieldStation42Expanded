@@ -335,7 +335,7 @@ class StationPlayer:
             return False
 
         self._l.warning(
-            'DMA-BUF playback failed; restarting MPV with GPU/copy-back fallback'
+            'DMA-BUF playback failed; switching in place to GPU/copy-back fallback'
         )
 
         return self._switch_mpv_output(prefer_dmabuf=False)
@@ -535,7 +535,12 @@ class StationPlayer:
         self._apply_guide_video_layout()
 
         if self.guide_queue:
-            self.guide_queue.put("show_window")
+            message = {'type': 'show_window'}
+            if self._guide_video_layout:
+                message['preview_geometry'] = (
+                    self._guide_video_layout.get('preview_geometry')
+                )
+            self.guide_queue.put(message)
 
         self.guide_visible = True
         network_name = self.station_config.get("network_name", "unknown") if self.station_config else "unknown"
