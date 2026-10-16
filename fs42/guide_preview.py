@@ -133,6 +133,10 @@ def apply_guide_preview(mpv, logger=None):
         time.sleep(0.05)
 
         if not _trigger_labwc_preview(key_name, logger=logger):
+            mpv.video_margin_ratio_left = state['video_margin_ratio_left']
+            mpv.video_margin_ratio_right = state['video_margin_ratio_right']
+            mpv.video_margin_ratio_top = state['video_margin_ratio_top']
+            mpv.video_margin_ratio_bottom = state['video_margin_ratio_bottom']
             mpv.fullscreen = state['fullscreen']
             return None
 
@@ -155,7 +159,14 @@ def apply_guide_preview(mpv, logger=None):
             )
 
         try:
-            mpv.fullscreen = True
+            if 'state' in locals():
+                mpv.video_margin_ratio_left = state['video_margin_ratio_left']
+                mpv.video_margin_ratio_right = state['video_margin_ratio_right']
+                mpv.video_margin_ratio_top = state['video_margin_ratio_top']
+                mpv.video_margin_ratio_bottom = state['video_margin_ratio_bottom']
+                mpv.fullscreen = state['fullscreen']
+            else:
+                mpv.fullscreen = True
         except Exception:
             pass
 
