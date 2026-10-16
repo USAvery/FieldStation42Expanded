@@ -228,7 +228,7 @@ class StationPlayer:
             'keep_open': 'always',
             'background': '#000000',
             'script_opts': 'osc-idlescreen=no',
-            'hr_seek': 'yes',
+            'hr_seek': 'no',
             'video_sync': 'display-resample',
         }
 
@@ -1522,17 +1522,12 @@ class StationPlayer:
                         return PlayerOutcome(PlayerState.FAILED)
                 # Seek now happens inside play_file() before overlay is shown
 
-                # Detect if this video is being clipped (stopping before natural end)
+                # Querying MPV duration immediately after a load can block for
+                # seconds while a network-backed file is still settling. Defer
+                # clipping detection until just before the fade window so the
+                # channel-change input loop becomes responsive immediately.
                 is_clipped = False
-                try:
-                    actual_file_duration = self.mpv.duration
-                    stop_position = total_skip + (entry.duration - initial_skip)
-                    # If stopping before end (with tolerance), we're clipping
-                    is_clipped = stop_position < (actual_file_duration - 0.5)
-                    self._l.info(f"File duration: {actual_file_duration:.2f}s, stop at: {stop_position:.2f}s, clipped: {is_clipped}")
-                except Exception as e:
-                    self._l.info(f"Could not determine if clipped: {e}")
-                    is_clipped = False
+                clip_checked = False
 
                 if entry.duration:
                     self._l.info(f"Monitoring for: {entry.duration - initial_skip}")
@@ -1554,7 +1549,37 @@ class StationPlayer:
                         # Calculate time remaining based on wall clock
                         time_remaining = (target_end_time - datetime.datetime.now()).total_seconds()
 
-                        # Initiate fade-to-black effect when entering fade window (only if clipped)
+                        # Determine clipping shortly before it matters. At this
+                        # point MPV has been playing long enough for duration to
+                        # be available without stalling a channel change.
+                        if (
+                            not clip_checked
+                            and 0 < time_remaining <= FADE_DURATION + 1.0
+                        ):
+                            clip_checked = True
+                            try:
+                                actual_file_duration = self.mpv.duration
+                                stop_position = total_skip + (
+                                    entry.duration - initial_skip
+                                )
+                                is_clipped = (
+                                    stop_position < actual_file_duration - 0.5
+                                )
+                                self._l.info(
+                                    'File duration: {:.2f}s, stop at: {:.2f}s, '
+                                    'clipped: {}'.format(
+                                        actual_file_duration,
+                                        stop_position,
+                                        is_clipped,
+                                    )
+                                )
+                            except Exception as e:
+                                self._l.debug(
+                                    'Could not determine if clipped: {}'.format(e)
+                                )
+                                is_clipped = False
+
+                        # Initiate fade-to-black effect when entering fade window.
                         if 0 < time_remaining <= FADE_DURATION and not fade_active and is_clipped:
                             self._l.info(f"Starting fade with {time_remaining:.2f}s remaining")
 
