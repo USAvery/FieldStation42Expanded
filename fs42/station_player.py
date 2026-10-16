@@ -866,7 +866,20 @@ class StationPlayer:
 
     def play_file(self, file_path, file_duration=None, offset_seconds=None, is_stream=False, title="Unknown", content_type=None, media_type=None):
         try:
-            if os.path.exists(file_path) or is_stream or AutoBumpAgent.is_autobump_url(file_path):
+            is_autobump = AutoBumpAgent.is_autobump_url(file_path)
+            is_catalog_path = str(file_path).startswith('catalog/')
+
+            # Catalog entries were already resolved when the schedule/catalog
+            # was built. Re-statting them here follows NAS symlinks and can add
+            # seconds of cold metadata latency to every channel change.
+            path_available = (
+                is_stream
+                or is_autobump
+                or is_catalog_path
+                or os.path.exists(file_path)
+            )
+
+            if path_available:
                 self._l.debug(f"%%%Attempting to play {file_path}")
                 self.current_playing_file_path = file_path
 
@@ -899,7 +912,7 @@ class StationPlayer:
                 
                                 #now see if this is an autobump
 
-                if AutoBumpAgent.is_autobump_url(file_path):
+                if is_autobump:
                     from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
                     web_url = AutoBumpAgent.extract_url(file_path)
                     remaining = file_duration - (offset_seconds or 0) if file_duration else None
@@ -945,7 +958,6 @@ class StationPlayer:
 
                 # self.mpv.vf = "lavfi=[]"
                 self._l.info(f"playing {file_path}")
-                self.mpv.command("playlist-clear")
 
                 if not is_stream and offset_seconds is not None and offset_seconds > 0:
                     self.mpv.command(
