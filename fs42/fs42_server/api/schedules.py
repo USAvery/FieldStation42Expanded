@@ -1,8 +1,9 @@
 from fastapi import APIRouter, HTTPException, status
-from datetime import datetime
+from datetime import datetime, timedelta
 from fs42.station_manager import StationManager
 from fs42.liquid_api import LiquidAPI
 from fs42.metadata_io import MetadataIO
+from fs42.epg_cache import EpgCache
 
 router = APIRouter(prefix="/schedules", tags=["schedules"])
 
@@ -142,7 +143,22 @@ def get_all_schedules(start: str = None, end: str = None, include_meta: bool = F
     # title still prefers metadata over the filename-parsed title.
     _attach_meta_batch(by_station)
 
-    schedules = {name: _listing_projection(blocks, include_meta) for name, blocks in by_station.items()}
+    schedules = {
+        name: _listing_projection(blocks, include_meta)
+        for name, blocks in by_station.items()
+    }
+
+    # Streaming stations use a prebuilt local SQLite EPG cache. This adds no
+    # network or XML work to guide rendering; the guide still receives one
+    # batched response for the visible window.
+    epg_schedules = EpgCache().get_all_listings(
+        StationManager().stations,
+        sdt,
+        edt,
+        include_meta=include_meta,
+    )
+    schedules.update(epg_schedules)
+
     return {"start": start, "end": end, "schedules": schedules}
 
 
@@ -159,6 +175,23 @@ async def get_schedule(network_name: str, start: str = None, end: str = None, in
             edt = datetime.fromisoformat(end)
         except ValueError:
             return {"error": "Invalid date format. Use ISO format (YYYY-MM-DDTHH:MM:SS) for start and end."}
+
+    if EpgCache.station_enabled(conf):
+        if sdt is None or edt is None:
+            now = datetime.now()
+            sdt = now - timedelta(hours=6)
+            edt = now + timedelta(days=2)
+
+        schedule_blocks = EpgCache().get_station_listings(
+            conf,
+            sdt,
+            edt,
+            include_meta=include_meta,
+        )
+        return {
+            "network_name": network_name,
+            "schedule_blocks": schedule_blocks,
+        }
 
     schedule_blocks = LiquidAPI.get_blocks(conf, sdt, edt)
     if include_meta:
