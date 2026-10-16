@@ -2,6 +2,7 @@ from fastapi import APIRouter
 from fs42.station_manager import StationManager
 from fs42.catalog_api import CatalogAPI
 from fs42.liquid_manager import LiquidManager
+from fs42.epg_cache import EpgCache
 
 router = APIRouter(prefix="/summary", tags=["summary"])
 
@@ -34,7 +35,10 @@ def get_channels():
             "network_long_name": station.get("network_long_name", ""),
             "channel_number": station["channel_number"],
             "hidden": station.get("hidden", False),
-            "has_schedule": station.get("_has_schedule", False),
+            "has_schedule": (
+                station.get("_has_schedule", False)
+                or EpgCache.station_enabled(station)
+            ),
         }
         for station in StationManager().stations
     ]
