@@ -224,7 +224,9 @@ class StationPlayer:
             'input_default_bindings': False,
             'fs': True,
             'idle': True,
-            'force_window': True,
+            'force_window': 'immediate',
+            'keep_open': 'always',
+            'background': '#000000',
             'script_opts': 'osc-idlescreen=no',
             'hr_seek': 'yes',
             'video_sync': 'display-resample',
@@ -262,7 +264,7 @@ class StationPlayer:
         )
 
     def _switch_mpv_output(self, prefer_dmabuf):
-        """Switch the managed MPV process between fast and compatible outputs."""
+        """Switch VO/decoder inside the existing managed MPV process."""
         if not self._start_mpv_managed:
             return False
 
@@ -270,43 +272,61 @@ class StationPlayer:
             return True
 
         target_name = 'DMA-BUF Wayland' if prefer_dmabuf else 'GPU/copy-back'
-        self._l.info('Switching MPV output to {}'.format(target_name))
+        self._l.info(
+            'Switching MPV output in place to {}'.format(target_name)
+        )
 
         try:
-            self.mpv.terminate()
-        except Exception as exc:
-            self._l.debug('Could not cleanly terminate MPV: {}'.format(exc))
+            # VO changes are reliable while MPV is idle. Keeping the same MPV
+            # process avoids channel-change startup cost and desktop flashes.
+            self.mpv.command('stop')
+            time.sleep(0.05)
 
-        try:
-            self.mpv = self._create_mpv(prefer_dmabuf=prefer_dmabuf)
+            if prefer_dmabuf:
+                self.mpv.vo = 'dmabuf-wayland'
+                self.mpv.hwdec = 'auto'
+            else:
+                self.mpv.vo = 'gpu'
+                self.mpv.hwdec = 'auto-copy'
+
+            self._using_dmabuf_wayland = prefer_dmabuf
             return True
         except Exception as exc:
             self._l.error(
-                'Could not switch MPV output to {}: {}'.format(target_name, exc)
+                'Could not switch MPV output in place to {}: {}'.format(
+                    target_name,
+                    exc,
+                )
             )
             return False
 
     @staticmethod
     def _media_prefers_dmabuf(file_path, is_stream, media_type):
-        """Use DMA-BUF for video, but keep still images/audio on the GPU path."""
-        if media_type is not None:
-            return media_type == 'video'
+        """Choose the fast VO only for formats that use Pi hardware decode.
+
+        The local AV1 library is stored primarily as MKV/WebM. Those files
+        cannot use the Pi 4 direct DMA-BUF decoder, so routing them directly to
+        GPU/copy-back avoids a guaranteed failed load and fallback cycle.
+        """
+        if media_type == 'audio':
+            return False
 
         if is_stream:
             return True
 
         extension = os.path.splitext(str(file_path))[1].lower()
+
+        if extension in {'.mkv', '.webm'}:
+            return False
+
+        if media_type is not None:
+            return media_type == 'video'
+
         return extension in {
-            '.avi',
             '.m2ts',
             '.m4v',
-            '.mkv',
-            '.mov',
             '.mp4',
-            '.mpeg',
-            '.mpg',
             '.ts',
-            '.webm',
         }
 
     def _switch_to_mpv_fallback(self):
