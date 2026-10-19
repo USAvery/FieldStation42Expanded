@@ -226,6 +226,7 @@ class StationPlayer:
             'idle': True,
             'force_window': 'immediate',
             'keep_open': 'always',
+            'keep_open_pause': False,
             'background': '#000000',
             'script_opts': 'osc-idlescreen=no',
             'hr_seek': 'no',
@@ -972,6 +973,11 @@ class StationPlayer:
                         file_path,
                         "replace",
                     )
+
+                # A previous keep-open/stop transition must never leave the new
+                # channel paused. This is especially important when changing
+                # between GPU and DMA-BUF outputs in the same MPV process.
+                self.mpv.pause = False
                 
 
                 timeout_seconds = StationManager().server_conf.get("video_seek_timeout", 10)
