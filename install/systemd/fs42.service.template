@@ -11,6 +11,8 @@ ExecStartPre=/bin/bash -c 'if [ ! -f /tmp/fs42-started ]; then sleep 5; touch /t
 ExecStart=__INSTALL_DIR__/env/bin/python3 field_player.py
 Restart=on-failure
 RestartSec=10
+KillMode=mixed
+TimeoutStopSec=10
 StandardOutput=journal
 StandardError=journal
 
