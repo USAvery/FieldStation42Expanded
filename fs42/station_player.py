@@ -1016,7 +1016,18 @@ class StationPlayer:
                 self.mpv.pause = False
                 
 
-                timeout_seconds = StationManager().server_conf.get("video_seek_timeout", 10)
+                timeout_seconds = StationManager().server_conf.get(
+                    "video_seek_timeout",
+                    10,
+                )
+                if is_stream:
+                    timeout_seconds = min(
+                        timeout_seconds,
+                        StationManager().server_conf.get(
+                            "stream_start_timeout",
+                            5,
+                        ),
+                    )
                 start_time = time.time()
 
                 while True:
@@ -1027,7 +1038,7 @@ class StationPlayer:
                             self._l.error(
                                 'Timeout waiting for playback to start on {}'.format(file_path)
                             )
-                            if self._using_dmabuf_wayland:
+                            if self._using_dmabuf_wayland and not is_stream:
                                 return self._retry_playback_with_fallback(
                                     file_path,
                                     file_duration,
@@ -1051,7 +1062,7 @@ class StationPlayer:
                     except Exception as e:
                         if time.time() - start_time > timeout_seconds:
                             self._l.error('Error waiting for playback: {}'.format(e))
-                            if self._using_dmabuf_wayland:
+                            if self._using_dmabuf_wayland and not is_stream:
                                 return self._retry_playback_with_fallback(
                                     file_path,
                                     file_duration,
