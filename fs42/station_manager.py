@@ -57,6 +57,7 @@ class StationManager(object):
                     "server_port": 4242,
                     "title_patterns": [],
                     "video_seek_timeout": 10,
+                    "stream_start_timeout": 5,
                     "follow_static_symlinks": False,
                     "custom_holidays": {},
                 }
@@ -157,6 +158,7 @@ class StationManager(object):
                     "recall_last_channel",
                     "schedule_agent",
                     "video_seek_timeout",
+                    "stream_start_timeout",
                     "overlay_conf",
                     "start_channel",
                     "follow_static_symlinks",
