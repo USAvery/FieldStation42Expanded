@@ -195,6 +195,145 @@ def select_display_mode(wlr_output, fps=None):
     return None
 
 
+def enforce_display_resolution_policy(logger=None):
+    """Enforce only the display resolution policy, preserving refresh cadence.
+
+    This is used before loading a new video. It repairs HDMI/compositor
+    fallbacks to native 4K without unnecessarily changing a valid 1080p/CRT
+    refresh rate. The normal refresh matcher can then select cadence once MPV
+    knows the new video's FPS.
+    """
+    try:
+        result = subprocess.run(
+            ['wlr-randr'],
+            capture_output=True,
+            text=True,
+            timeout=3,
+            env=_wayland_environment(),
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        if logger:
+            logger.debug(
+                'Could not query Wayland display resolution: {}'.format(exc)
+            )
+        return False
+
+    if result.returncode != 0:
+        if logger:
+            logger.debug(
+                'wlr-randr failed while checking display resolution: {}'.format(
+                    result.stderr.strip()
+                )
+            )
+        return False
+
+    outputs = _parse_outputs(result.stdout)
+
+    for output_name, output_data in outputs.items():
+        if not output_data['enabled'] or output_data['current'] is None:
+            continue
+
+        target_resolution, policy = _target_resolution(output_data)
+        if target_resolution is None:
+            return False
+
+        current_width, current_height, current_refresh = output_data['current']
+        target_width, target_height = target_resolution
+
+        if (
+            current_width == target_width
+            and current_height == target_height
+        ):
+            return True
+
+        candidates = [
+            refresh
+            for width, height, refresh in output_data['modes']
+            if (
+                width == target_width
+                and height == target_height
+                and refresh <= MAX_PLAYBACK_REFRESH
+            )
+        ]
+
+        if not candidates:
+            candidates = [
+                refresh
+                for width, height, refresh in output_data['modes']
+                if width == target_width and height == target_height
+            ]
+
+        if not candidates:
+            return False
+
+        # Keep the current refresh as closely as the target resolution allows.
+        # This avoids 50 -> 60 -> 50 churn during an ordinary channel change.
+        target_refresh = min(
+            candidates,
+            key=lambda refresh: abs(refresh - current_refresh),
+        )
+
+        mode = '{}x{}@{:.6f}Hz'.format(
+            target_width,
+            target_height,
+            target_refresh,
+        )
+
+        if logger:
+            logger.info(
+                'Display resolution policy [{}]: {} {}x{}@{:.3f} -> '
+                '{}x{}@{:.3f}'.format(
+                    policy,
+                    output_name,
+                    current_width,
+                    current_height,
+                    current_refresh,
+                    target_width,
+                    target_height,
+                    target_refresh,
+                )
+            )
+
+        try:
+            change = subprocess.run(
+                [
+                    'wlr-randr',
+                    '--output',
+                    output_name,
+                    '--mode',
+                    mode,
+                    '--scale',
+                    '1',
+                ],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                env=_wayland_environment(),
+                check=False,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            if logger:
+                logger.warning(
+                    'Could not enforce display resolution: {}'.format(exc)
+                )
+            return False
+
+        if change.returncode != 0:
+            if logger:
+                logger.warning(
+                    'Could not set display resolution to {}: {}'.format(
+                        mode,
+                        change.stderr.strip(),
+                    )
+                )
+            return False
+
+        return True
+
+    return False
+
+
 def match_display_refresh_rate(fps=None, logger=None):
     """Enforce display resolution policy and match refresh to source FPS."""
     try:
