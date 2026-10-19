@@ -15,7 +15,10 @@ from python_mpv_jsonipc import MPV
 
 from fs42.guide_tk import guide_channel_runner, GuideCommands
 from fs42.autobump_agent import AutoBumpAgent
-from fs42.display_refresh import match_display_refresh_rate
+from fs42.display_refresh import (
+    enforce_display_resolution_policy,
+    match_display_refresh_rate,
+)
 from fs42.guide_preview import apply_guide_preview, restore_guide_preview
 
 # Try to import web_render_runner, but handle gracefully if PySide6 (with QtWebEngine)
@@ -231,6 +234,11 @@ class StationPlayer:
             'script_opts': 'osc-idlescreen=no',
             'hr_seek': 'no',
             'video_sync': 'display-resample',
+            # Linear-TV playback never rewinds into a large back-cache. Keep
+            # initial reads small so deep SMB seeks can produce a frame fast.
+            'demuxer_readahead_secs': 0,
+            'demuxer_max_bytes': 32 * 1024 * 1024,
+            'demuxer_max_back_bytes': 0,
         }
 
         if not self._start_mpv_managed:
@@ -935,6 +943,23 @@ class StationPlayer:
                     is_stream,
                     media_type,
                 )
+                extension = os.path.splitext(str(file_path))[1].lower()
+                is_video_playback = (
+                    is_stream
+                    or media_type == 'video'
+                    or extension in {
+                        '.avi',
+                        '.m2ts',
+                        '.m4v',
+                        '.mkv',
+                        '.mov',
+                        '.mp4',
+                        '.mpeg',
+                        '.mpg',
+                        '.ts',
+                        '.webm',
+                    }
+                )
 
                 # A fallback retry must remain on the compatible GPU path for
                 # this playback attempt. The next video gets another chance to
@@ -944,6 +969,17 @@ class StationPlayer:
                         self._l.warning(
                             'Could not select preferred MPV output; continuing with current output'
                         )
+
+                if is_video_playback:
+                    enforce_display_resolution_policy(logger=self._l)
+
+                # Start live HLS inputs at the newest advertised segment.
+                # Reset the libavformat option for local/non-stream content.
+                self.mpv.command(
+                    'set_property',
+                    'options/demuxer-lavf-o',
+                    {'live_start_index': '-1'} if is_stream else {},
+                )
 
                 if "panscan" in self.station_config:
                     self.mpv.panscan = self.station_config["panscan"]
@@ -1049,7 +1085,7 @@ class StationPlayer:
                             media_type,
                         )
 
-                if prefer_dmabuf and (
+                if is_video_playback and (
                     is_stream
                     or content_type in (None, 'feature')
                 ):
