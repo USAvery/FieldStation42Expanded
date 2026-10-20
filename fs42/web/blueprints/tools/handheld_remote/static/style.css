@@ -1,0 +1,122 @@
+/*
+ * This Source Code Form is subject to the Mozilla Public License, v. 2.0.
+ * See https://mozilla.org/MPL/2.0/.
+ */
+
+/* -------- Remote -------- */
+
+html,
+body {
+    font-family: sans-serif;
+    background: hsl(0, 0%, 6.666667%);
+    color: white;
+    margin: 0;
+    overflow: hidden;
+    touch-action: manipulation;
+}
+
+.btn {
+    /* Prevent mobile browsers from treating rapid button taps as zoom. */
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+    font-size: 1.5em;
+    margin: 5px;
+    padding: 10px 0;
+    width: 100%;
+    border: none;
+    border-radius: 10px;
+    background: hsl(0, 0%, 26.666667%);
+    color: white;
+}
+
+.btn:hover {
+    background: hsl(0, 0%, 40%);
+}
+
+.btn-flex {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    text-align: left;
+}
+
+.btn-flex .arrow {
+    flex: 0 0 auto;
+    margin-left: 8px;
+    font-size: 1.5em;
+}
+
+.btn-flex .label {
+    flex: 1;
+    text-align: center;
+}
+
+.seven-seg {
+    font-family: "Courier New", monospace;
+    font-size: 4em;
+    color: hsl(120, 100%, 50%);
+    background: black;
+    padding: 10px 20px;
+    border-radius: 10px;
+    margin: 10px auto 5px auto;
+    width: 100%;
+    max-width: 300px;
+    text-align: center;
+}
+
+#network-name {
+    color: hsl(0, 0%, 66.666667%);
+    font-size: 1.2em;
+    height: 1.2em;
+    margin-bottom: 5px;
+    margin-top: 5px;
+    text-align: center;
+}
+
+.row {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+    max-width: 300px;
+    margin: 0 auto;
+}
+
+.keypad {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+    max-width: 300px;
+    margin: 10px auto 5px auto;
+}
+
+.keypad .btn {
+    width: calc(33.333% - 10px);
+    margin: 5px;
+    box-sizing: border-box;
+}
+
+#entry {
+    font-size: 2em;
+    margin: 10px;
+    color: hsl(120, 100%, 50%);
+    text-align: center;
+}
+
+/* Added styles for the current title */
+#title {
+    color: hsl(124.918033, 81.333333%, 44.117647%); /* Light gray, adjust as needed */
+    font-size: 1em;
+    text-align: center;
+    margin-top: 15px; /* Space above the title */
+    margin-bottom: 10px; /* Space below the title */
+    padding: 0 10px; /* Horizontal padding */
+    height: 2.4em; /* Approx 2 lines of text, adjust as needed */
+    overflow: hidden; /* Prevents long titles from breaking layout */
+    text-overflow: ellipsis; /* Shows ... for very long titles */
+    white-space: normal; /* Allow text to wrap if needed, though height will limit it */
+    max-width: 300px; /* Match keypad width */
+    margin-left: auto;
+    margin-right: auto;
+}

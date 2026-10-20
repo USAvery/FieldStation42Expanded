@@ -1,0 +1,75 @@
+/*
+ * This Source Code Form is subject to the Mozilla Public License, v. 2.0.
+ * See https://mozilla.org/MPL/2.0/.
+ */
+
+/* -------- Style -------- */
+
+#editor-container {
+    width: 100%;
+    height: 70vh;
+    border: 1px solid hsl(212.307692, 11.926606%, 21.372549%);
+    border-radius: 4px;
+    margin-top: 1em;
+}
+
+#error-panel {
+    display: none;
+    background: hsl(0, 38.095238%, 16.470588%);
+    border: 1px solid hsl(0, 53.846154%, 43.333333%);
+    border-left: 4px solid hsl(0, 53.846154%, 43.333333%);
+    padding: 1em;
+    margin-top: 1em;
+    border-radius: 4px;
+}
+
+#error-panel.visible {
+    display: block;
+}
+
+.error-header {
+    color: hsl(0, 100%, 83.333333%);
+    font-weight: 600;
+    margin-bottom: 0.5em;
+    font-size: 1.1em;
+}
+
+.error-item {
+    color: hsl(0, 100%, 83.333333%);
+    margin: 0.5em 0;
+    padding-left: 1em;
+    cursor: pointer;
+}
+
+.error-item:hover {
+    color: hsl(0, 100%, 90%);
+    text-decoration: underline;
+}
+
+.editor-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1em;
+}
+
+.editor-actions {
+    display: flex;
+    gap: 0.5em;
+    margin-top: 1em;
+}
+
+.success-message {
+    background: hsl(120, 38.095238%, 16.470588%);
+    border: 1px solid hsl(120, 53.846154%, 43.333333%);
+    border-left: 4px solid hsl(120, 53.846154%, 43.333333%);
+    color: hsl(120, 100%, 83.333333%);
+    padding: 1em;
+    margin-top: 1em;
+    border-radius: 4px;
+    display: none;
+}
+
+.success-message.visible {
+    display: block;
+}

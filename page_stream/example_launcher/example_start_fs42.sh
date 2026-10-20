@@ -84,7 +84,7 @@ python3 fs42/change_channel.py > "$LOG_DIR/channel_changer.log" 2>&1 &
 
 echo "[FS42] Launching OSD..."
 : > "$LOG_DIR/osd.log"
-python3 fs42/osd/main.py > "$LOG_DIR/osd.log" 2>&1 &
+python3 -m fs42.tools.osd.main > "$LOG_DIR/osd.log" 2>&1 &
 
 sleep 2
 wmctrl -r "FieldStationOSD" -b add,above || echo "[OSD] Failed to raise window"

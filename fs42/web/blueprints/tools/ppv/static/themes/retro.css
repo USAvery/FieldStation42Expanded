@@ -1,0 +1,32 @@
+/*
+ * This Source Code Form is subject to the Mozilla Public License, v. 2.0.
+ * See https://mozilla.org/MPL/2.0/.
+ */
+
+/* -------- Retro -------- */
+
+/* Retro theme — dark background, magenta/cyan accents, terminal feel */
+:root {
+    --ppv-body-bg: hsl(0, 0%, 3.921569%);
+    --ppv-bg: hsl(240, 33.333333%, 7.647059%);
+    --ppv-side-bg: hsl(240, 33.333333%, 7.647059%);
+    --ppv-image-bg: hsl(0, 0%, 0%);
+    --ppv-banner-bg: hsl(240, 33.333333%, 7.647059%);
+    --ppv-banner-border: hsl(300, 100%, 50%);
+    --ppv-logo-color: hsl(300, 100%, 50%);
+    --ppv-logo-font: "Orbitron", monospace;
+    --ppv-tagline-color: hsl(180, 100%, 50%);
+    --ppv-title-color: hsl(300, 100%, 50%);
+    --ppv-details-color: hsl(180, 100%, 50%);
+    --ppv-description-color: hsl(0, 0%, 80%);
+    --ppv-counter-color: hsl(300, 100%, 50%);
+    --ppv-nav-color: hsl(180, 100%, 50%);
+    --ppv-no-image-color: hsl(300, 100%, 13.333333%);
+    --ppv-loading-bg: hsl(240, 33.333333%, 7.647059%);
+    --ppv-spinner-color: hsl(300, 100%, 50%);
+    --ppv-loading-text-color: hsl(180, 100%, 50%);
+    --ppv-side-width: 220px;
+    --ppv-font: "Roboto", sans-serif;
+    --ppv-mono-font: "Orbitron", monospace;
+    --ppv-bg-opacity: 0.15;
+}

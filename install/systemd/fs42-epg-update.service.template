@@ -13,4 +13,4 @@ Nice=15
 IOSchedulingClass=idle
 CPUWeight=10
 IOWeight=10
-ExecStart=__INSTALL_DIR__/env/bin/python3 -m fs42.epg_update
+ExecStart=__INSTALL_DIR__/env/bin/python3 -m fs42.tools.epg.epg_update

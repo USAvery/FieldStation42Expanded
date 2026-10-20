@@ -3,7 +3,9 @@
 This repo has some changes and additions to FieldStation42.
 It has an interactive guide that resembles ~2005 i-Guide.
 
-TODO: Add diff summary here
+The code is organized into tool packages, with thin launchers in `bin/` and a
+separate web application. See [Project structure](docs/ARCHITECTURE.md) for the
+layout, entry points, and development checks.
 
 # -------- Original FieldStation42 README below --------
 
@@ -49,10 +51,13 @@ bash install.sh
 source env/bin/activate
 
 # Start the web console
-python3 station_42.py
+python3 bin/station42
 ```
 
 Then open a browser and go to `http://localhost:4242` to configure your first channel.
+
+Start playback with `python3 bin/fieldPlayer`. The existing `station_42.py` and
+`field_player.py` commands remain available.
 
 For the full step-by-step walkthrough, see the [Getting Started guide](https://fieldstation42.com/docs/).
 

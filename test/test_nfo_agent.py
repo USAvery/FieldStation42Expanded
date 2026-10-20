@@ -1,10 +1,24 @@
+#!/usr/bin/env python
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+"""
+Manage test nfo agent
+"""
 import pytest
-from fs42.nfo_agent import NFOAgent
+
+from fs42.tools.media import nfo_agent
 
 
-class TestParseNfoString:
+class TestParseNfoString(object):
+    """
+    TestParseNfoString
+    """
 
     def test_musicvideo(self):
+        """
+        Check musicvideo
+        """
         content = """<?xml version='1.0' encoding='utf-8'?>
         <musicvideo>
           <title>No Rain</title>
@@ -13,47 +27,59 @@ class TestParseNfoString:
           <year>1993</year>
           <genre>Alternative Rock</genre>
         </musicvideo>"""
-        meta = NFOAgent.parse_nfo_string(content)
+        meta = nfo_agent.parse_nfo_string(content)
         assert meta == {
-            "type": "music",
-            "title": "No Rain",
-            "artist": "Blind Melon",
-            "album": "Live at the Palace",
-            "year": "1993",
-            "genre": "Alternative Rock",
+            'type': 'music',
+            'title': 'No Rain',
+            'artist': 'Blind Melon',
+            'album': 'Live at the Palace',
+            'year': '1993',
+            'genre': 'Alternative Rock',
         }
 
     def test_musicvideo_year_falls_back_to_premiered(self):
+        """
+        Check musicvideo year falls back to premiered
+        """
         content = """<musicvideo>
           <title>Song</title>
           <artist>Someone</artist>
           <premiered>1988-05-01</premiered>
         </musicvideo>"""
-        meta = NFOAgent.parse_nfo_string(content)
-        assert meta["year"] == "1988"
+        meta = nfo_agent.parse_nfo_string(content)
+        assert meta['year'] == '1988'
 
     def test_movie(self):
+        """
+        Check movie
+        """
         content = """<movie>
           <title>The Thing</title>
           <year>1982</year>
           <plot>A shape-shifting alien.</plot>
           <genre>Horror</genre>
         </movie>"""
-        meta = NFOAgent.parse_nfo_string(content)
+        meta = nfo_agent.parse_nfo_string(content)
         assert meta == {
-            "type": "movie",
-            "title": "The Thing",
-            "year": "1982",
-            "plot": "A shape-shifting alien.",
-            "genre": "Horror",
+            'type': 'movie',
+            'title': 'The Thing',
+            'year': '1982',
+            'plot': 'A shape-shifting alien.',
+            'genre': 'Horror',
         }
 
     def test_movie_plot_falls_back_to_outline(self):
-        content = "<movie><title>X</title><outline>short</outline></movie>"
-        meta = NFOAgent.parse_nfo_string(content)
-        assert meta["plot"] == "short"
+        """
+        Check movie plot falls back to outline
+        """
+        content = '<movie><title>X</title><outline>short</outline></movie>'
+        meta = nfo_agent.parse_nfo_string(content)
+        assert meta['plot'] == 'short'
 
     def test_episodedetails_converts_season_episode_to_int(self):
+        """
+        Check episodedetails converts season episode to int
+        """
         content = """<episodedetails>
           <title>The Constant</title>
           <showtitle>Lost</showtitle>
@@ -62,113 +88,184 @@ class TestParseNfoString:
           <aired>2008-02-28</aired>
           <plot>Desmond.</plot>
         </episodedetails>"""
-        meta = NFOAgent.parse_nfo_string(content)
+        meta = nfo_agent.parse_nfo_string(content)
         assert meta == {
-            "type": "episode",
-            "title": "The Constant",
-            "show_title": "Lost",
-            "season": 4,
-            "episode": 5,
-            "aired": "2008-02-28",
-            "plot": "Desmond.",
+            'type': 'episode',
+            'title': 'The Constant',
+            'show_title': 'Lost',
+            'season': 4,
+            'episode': 5,
+            'aired': '2008-02-28',
+            'plot': 'Desmond.',
         }
 
     def test_tvshow(self):
-        content = "<tvshow><title>Lost</title><year>2004</year></tvshow>"
-        meta = NFOAgent.parse_nfo_string(content)
-        assert meta == {"type": "tvshow", "title": "Lost", "year": "2004"}
+        """
+        Check tvshow
+        """
+        content = '<tvshow><title>Lost</title><year>2004</year></tvshow>'
+        meta = nfo_agent.parse_nfo_string(content)
+        assert meta == {'type': 'tvshow', 'title': 'Lost', 'year': '2004'}
 
     def test_unknown_tag_generic_fallback(self):
-        content = "<artist><title>Blind Melon</title><genre>Rock</genre></artist>"
-        meta = NFOAgent.parse_nfo_string(content)
-        assert meta == {"type": "artist", "title": "Blind Melon", "genre": "Rock"}
+        """
+        Check unknown tag generic fallback
+        """
+        content = '<artist><title>Blind Melon</title><genre>Rock</genre></artist>'
+        meta = nfo_agent.parse_nfo_string(content)
+        assert meta == {'type': 'artist', 'title': 'Blind Melon', 'genre': 'Rock'}
 
     def test_unknown_tag_without_title_is_none(self):
-        content = "<artist><formed>1990</formed></artist>"
-        assert NFOAgent.parse_nfo_string(content) is None
+        """
+        Check unknown tag without title is none
+        """
+        content = '<artist><formed>1990</formed></artist>'
+        assert nfo_agent.parse_nfo_string(content) is None
 
     def test_empty_fields_are_dropped(self):
-        content = "<movie><title>X</title><year></year><plot></plot></movie>"
-        meta = NFOAgent.parse_nfo_string(content)
-        assert meta == {"type": "movie", "title": "X"}
+        """
+        Check empty fields are dropped
+        """
+        content = '<movie><title>X</title><year></year><plot></plot></movie>'
+        meta = nfo_agent.parse_nfo_string(content)
+        assert meta == {'type': 'movie', 'title': 'X'}
 
     def test_plain_text_fallback(self):
+        """
+        Check plain text fallback
+        """
         content = "Blind Melon\nNo Rain\nLive at the Palace\n1993\n"
-        meta = NFOAgent.parse_nfo_string(content)
+        meta = nfo_agent.parse_nfo_string(content)
         assert meta == {
-            "type": "plaintext",
-            "title": "Blind Melon",
-            "lines": ["Blind Melon", "No Rain", "Live at the Palace", "1993"],
+            'type': 'plaintext',
+            'title': 'Blind Melon',
+            'lines': ['Blind Melon', 'No Rain', 'Live at the Palace', '1993'],
         }
 
     def test_plain_text_caps_at_max_lines(self):
+        """
+        Check plain text caps at max lines
+        """
         content = "\n".join(str(i) for i in range(10))
-        meta = NFOAgent.parse_nfo_string(content)
-        assert len(meta["lines"]) == 5
+        meta = nfo_agent.parse_nfo_string(content)
+        assert len(meta['lines']) == 5
 
     def test_empty_content_is_none(self):
-        assert NFOAgent.parse_nfo_string("   \n  \n") is None
+        """
+        Check empty content is none
+        """
+        assert nfo_agent.parse_nfo_string("   \n  \n") is None
 
 
-class TestOverlayLines:
+class TestOverlayLines(object):
+    """
+    TestOverlayLines
+    """
 
     def test_music_order_is_artist_title_album_year(self):
+        """
+        Check music order is artist title album year
+        """
         meta = {
-            "type": "music",
-            "title": "No Rain",
-            "artist": "Blind Melon",
-            "album": "Live at the Palace",
-            "year": "1993",
+            'type': 'music',
+            'title': 'No Rain',
+            'artist': 'Blind Melon',
+            'album': 'Live at the Palace',
+            'year': '1993',
         }
-        assert NFOAgent.overlay_lines(meta) == [
-            "Blind Melon", "No Rain", "Live at the Palace", "1993",
+        assert nfo_agent.overlay_lines(meta) == [
+            'Blind Melon',
+            'No Rain',
+            'Live at the Palace',
+            '1993',
         ]
 
     def test_music_skips_missing_fields(self):
-        meta = {"type": "music", "title": "Solo", "artist": "Nobody"}
-        assert NFOAgent.overlay_lines(meta) == ["Nobody", "Solo"]
+        """
+        Check music skips missing fields
+        """
+        meta = {'type': 'music', 'title': 'Solo', 'artist': 'Nobody'}
+        assert nfo_agent.overlay_lines(meta) == ['Nobody', 'Solo']
 
     def test_plaintext_returns_lines(self):
-        meta = {"type": "plaintext", "lines": ["a", "b", "c"]}
-        assert NFOAgent.overlay_lines(meta) == ["a", "b", "c"]
+        """
+        Check plaintext returns lines
+        """
+        meta = {'type': 'plaintext', 'lines': ['a', 'b', 'c']}
+        assert nfo_agent.overlay_lines(meta) == ['a', 'b', 'c']
 
     def test_movie_is_not_overlay_eligible(self):
-        meta = {"type": "movie", "title": "The Thing", "year": "1982"}
-        assert NFOAgent.overlay_lines(meta) is None
+        """
+        Check movie is not overlay eligible
+        """
+        meta = {'type': 'movie', 'title': 'The Thing', 'year': '1982'}
+        assert nfo_agent.overlay_lines(meta) is None
 
     def test_episode_is_not_overlay_eligible(self):
-        meta = {"type": "episode", "title": "The Constant"}
-        assert NFOAgent.overlay_lines(meta) is None
+        """
+        Check episode is not overlay eligible
+        """
+        meta = {'type': 'episode', 'title': 'The Constant'}
+        assert nfo_agent.overlay_lines(meta) is None
 
     def test_none_is_none(self):
-        assert NFOAgent.overlay_lines(None) is None
+        """
+        Check none is none
+        """
+        assert nfo_agent.overlay_lines(None) is None
 
 
-class TestDisplayFields:
+class TestDisplayFields(object):
+    """
+    TestDisplayFields
+    """
 
     def test_music(self):
-        meta = {"type": "music", "title": "No Rain", "artist": "Blind Melon", "album": "LATP"}
-        assert NFOAgent.display_fields(meta) == {
-            "title": "No Rain", "info": "Blind Melon", "description": "LATP",
+        """
+        Check music
+        """
+        meta = {'type': 'music', 'title': 'No Rain', 'artist': 'Blind Melon', 'album': 'LATP'}
+        assert nfo_agent.display_fields(meta) == {
+            'title': 'No Rain',
+            'info': 'Blind Melon',
+            'description': 'LATP',
         }
 
     def test_movie(self):
-        meta = {"type": "movie", "title": "The Thing", "year": "1982", "plot": "Alien."}
-        assert NFOAgent.display_fields(meta) == {
-            "title": "The Thing", "info": "1982", "description": "Alien.",
+        """
+        Check movie
+        """
+        meta = {'type': 'movie', 'title': 'The Thing', 'year': '1982', 'plot': 'Alien.'}
+        assert nfo_agent.display_fields(meta) == {
+            'title': 'The Thing',
+            'info': '1982',
+            'description': 'Alien.',
         }
 
     def test_episode(self):
-        meta = {"type": "episode", "title": "The Constant", "show_title": "Lost", "plot": "D."}
-        assert NFOAgent.display_fields(meta) == {
-            "title": "The Constant", "info": "Lost", "description": "D.",
+        """
+        Check episode
+        """
+        meta = {'type': 'episode', 'title': 'The Constant', 'show_title': 'Lost', 'plot': 'D.'}
+        assert nfo_agent.display_fields(meta) == {
+            'title': 'The Constant',
+            'info': 'Lost',
+            'description': 'D.',
         }
 
     def test_plaintext(self):
-        meta = {"type": "plaintext", "lines": ["a", "b", "c", "d"]}
-        assert NFOAgent.display_fields(meta) == {
-            "title": "a", "info": "b", "description": "c",
+        """
+        Check plaintext
+        """
+        meta = {'type': 'plaintext', 'lines': ['a', 'b', 'c', 'd']}
+        assert nfo_agent.display_fields(meta) == {
+            'title': 'a',
+            'info': 'b',
+            'description': 'c',
         }
 
     def test_none_is_none(self):
-        assert NFOAgent.display_fields(None) is None
+        """
+        Check none is none
+        """
+        assert nfo_agent.display_fields(None) is None

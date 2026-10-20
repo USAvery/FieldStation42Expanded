@@ -5,7 +5,7 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=__INSTALL_DIR__
-ExecStart=__INSTALL_DIR__/env/bin/python3 fs42/pi/remote_controller.py
+ExecStart=__INSTALL_DIR__/env/bin/python3 -m fs42.tools.remote_control.main
 Restart=on-failure
 RestartSec=10
 StandardOutput=journal

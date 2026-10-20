@@ -1,0 +1,38 @@
+/*
+ * This Source Code Form is subject to the Mozilla Public License, v. 2.0.
+ * See https://mozilla.org/MPL/2.0/.
+ */
+
+/* -------- 80S -------- */
+
+:root {
+    --layout-mode: "list";
+    --music-autoload: true;
+
+    --header-position: top; /* top | bottom */
+    --channel-position: before; /* before | after title */
+
+    --continued-indicator: " (cont)";
+    --offair-text: "Offair";
+
+    --bg-color: hsl(240, 100%, 11.372549%);
+    --row-divider-color: hsl(240, 100%, 33.333333%);
+    --text-color: hsl(0, 0%, 100%);
+    --header-bg: hsl(0, 0%, 0%);
+    --header-text-color: hsl(0, 0%, 100%);
+    --time-heading-color: hsl(60, 100%, 50%);
+    --channel-number-color: hsl(180, 100%, 50%);
+    --channel-name-color: hsl(120, 100%, 50%);
+    --show-title-color: hsl(0, 0%, 100%);
+
+    --font-family: monospace;
+    --font-size: 1.6rem;
+
+    --h-padding: 5%;
+    --v-padding: 4%;
+
+    --scroll-pause: 5s;
+    --scroll-speed: 1.1;
+
+    --music-volume: 0.3;
+}

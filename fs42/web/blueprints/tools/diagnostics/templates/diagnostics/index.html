@@ -1,0 +1,22 @@
+{% extends 'index.html' %}
+{% block head %}
+<meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FieldStation42 - Diagnostics</title>
+    <link rel="stylesheet" href="/static/tools/diagnostics/diagnostics.css">
+{% endblock %}
+
+{% block body_attributes %}{% endblock %}
+{% block content %}
+<div class="container">
+        <div id="slideshow-container">
+            <!-- Slides will be dynamically generated here -->
+        </div>
+    </div>
+
+    <script src="/static/utils/general.js"></script>
+    <script src="/static/utils/routing.js"></script>
+    <script src="/static/tools/diagnostics/diagnostics.js"></script>
+<!-- Embedded JavaScript -->
+<script>app.tools.diagnostics.setup();</script>
+{% endblock %}

@@ -80,7 +80,7 @@ Enable `follow_static_symlinks` to keep themes or guide videos elsewhere on disk
 ```
 
 ```bash
-ln -s ~/my-themes/vaporwave.css fs42/fs42_server/static/themes/vaporwave.css
+ln -s ~/my-themes/vaporwave.css fs42/web/static/themes/vaporwave.css
 ln -s /mnt/media/bumpers/guide_loop.mp4 runtime/guide_videos/guide_loop.mp4
 ```
 

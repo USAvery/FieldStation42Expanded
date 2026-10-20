@@ -8,6 +8,7 @@ textual
 ffmpeg-python
 fastapi
 uvicorn
+jinja2
 PySide6>=6.8
 jsonschema
 requests

@@ -1,0 +1,9 @@
+[style]
+based_on_style = pep8
+column_limit = 115
+indent_width = 4
+continuation_align_style = SPACE
+split_before_named_assigns = false
+dedent_closing_brackets = false
+coalesce_brackets = true
+each_dict_entry_on_separate_line = true

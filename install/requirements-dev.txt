@@ -4,6 +4,12 @@
 #
 #    pip-compile requirements-dev.in
 #
+certifi==2026.10.19
+    # via httpx and httpcore
+httpcore==1.0.9
+    # via httpx
+httpx==0.28.1
+    # via -r requirements-dev.in
 colorama==0.4.6
     # via pytest
 iniconfig==2.1.0

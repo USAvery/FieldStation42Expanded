@@ -186,7 +186,7 @@ I'll likely spend time between phases gathering feedback and refining before mov
 - Server-side validation already implemented
 
 **Deployment:**
-- Static HTML/CSS/JS files in `fs42/fs42_server/static/`
+- Static HTML/CSS/JS files in `fs42/web/static/`
 - Served by FastAPI static file handler
 - Integrates with existing web interface
 

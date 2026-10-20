@@ -1,0 +1,20 @@
+{% extends 'index.html' %}
+{% block head %}
+<meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Station Manager - FieldStation42</title>
+    <link rel="stylesheet" href="https://unpkg.com/purecss@3.0.0/build/pure-min.css">
+    <link rel="stylesheet" href="https://unpkg.com/purecss@3.0.0/build/grids-responsive-min.css">
+    <link rel="stylesheet" id="theme-css" href="/static/themes/default.css">
+    <link rel="stylesheet" href="/static/station_ui.css">
+{% endblock %}
+
+{% block body_attributes %}{% endblock %}
+{% block content %}
+<script src="/static/utils/general.js"></script>
+    <script src="/static/utils/routing.js"></script>
+
+<!-- Embedded JavaScript -->
+<script src="/static/tools/stations/stations.js"></script>
+<script>app.tools.stations.setup();</script>
+{% endblock %}

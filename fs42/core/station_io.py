@@ -1,0 +1,546 @@
+#!/usr/bin/env python
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+"""
+Manage station io
+"""
+import os
+import re
+import glob
+import json
+import shutil
+import logging
+import datetime
+
+from fs42.core import timings
+from fs42.core import config_processor
+from fs42.tools.schedule import schedule_hint
+from fs42.tools.schedule import schedule_hint as schedule_hint_utils
+
+
+class StationIO(object):
+    """
+    StationIO handles all file I/O operations for station configurations
+    This includes reading, writing, and deleting station configuration files.
+    """
+
+    # Defaults for optional station config fields
+    OVERWATCH_DEFAULTS = {
+        'network_type': 'standard',
+        'schedule_increment': 30,
+        'break_strategy': 'standard',
+        'commercial_free': False,
+        'clip_shows': [],
+        'break_duration': 120,
+        'hidden': False,
+        'media_filter': 'video',
+    }
+
+    # Fields that reference files that should exist
+    FILE_CHECKS = ['content_dir', 'sign_off_video', 'off_air_video', 'standby_image', 'be_right_back_media']
+
+    # Network types that don't have catalogs or schedules
+    NO_CATALOG = {'guide', 'streaming', 'web', 'executable'}
+    NO_SCHEDULE = {'guide', 'streaming', 'web', 'executable'}
+
+    def __init__(self):
+        """
+        Initialize the instance
+        """
+        self._l = logging.getLogger('STATIONIO')
+        self.confs_dir = 'confs/'
+        self.main_config_path = 'confs/main_config.json'
+        self.schema_path = 'fs42/station_config_schema.json'
+
+    def load_schema(self):
+        """
+        Load schema
+        """
+        if os.path.exists(self.schema_path):
+            with open(self.schema_path) as f:
+                return json.load(f)
+        return None
+
+    def normalize_filename(self, network_name):
+        """
+        Normalize filename
+        """
+        # Convert to lowercase, replace spaces and special chars with underscores
+        safe_name = re.sub(r'[^\w\s-]', '', network_name.lower())
+        safe_name = re.sub(r'[-\s]+', '_', safe_name)
+        return safe_name.strip('_')
+
+    def get_config_file_path(self, network_name):
+        """
+        Get config file path
+        """
+        filename = self.normalize_filename(network_name)
+        return '{0}{1}.json'.format(self.confs_dir, filename)
+
+    def load_main_config(self):
+        """
+        Load main config
+        """
+
+        if os.path.exists(self.main_config_path):
+            try:
+                with open(self.main_config_path) as f:
+                    return json.load(f)
+            except Exception as e:
+                self._l.error('Error loading main config from {}'.format(self.main_config_path))
+                self._l.exception(e)
+                raise
+        return None
+
+    def load_all_station_configs(self):
+        """
+        Load all station configs
+        """
+
+        cfiles = glob.glob('{}*.json'.format(self.confs_dir))
+        station_configs = []
+
+        for fname in cfiles:
+            # Skip the main config file
+            if os.path.normpath(fname) != os.path.normpath(self.main_config_path):
+                try:
+                    with open(fname) as f:
+                        d = json.load(f)
+                        station_configs.append({'config': d, 'filename': fname})
+                except Exception as e:
+                    self._l.error('Error loading station configuration: {}'.format(fname))
+                    self._l.exception(e)
+                    raise
+
+        return station_configs
+
+    def read_raw_station_config(self, network_name):
+        """
+        Read raw station config
+        """
+
+        file_path = self.find_config_by_network_name(network_name)
+
+        if file_path is None:
+            return False, None, "Station '{}' not found".format(network_name)
+
+        try:
+            with open(file_path) as f:
+                raw_data = json.load(f)
+            return True, raw_data, None
+        except Exception as e:
+            self._l.error('Error reading configuration file: {}'.format(file_path))
+            self._l.exception(e)
+            return False, None, 'Failed to read configuration: {}'.format(str(e))
+
+    def list_raw_station_configs(self):
+        """
+        List raw station configs
+        """
+
+        cfiles = glob.glob('{}*.json'.format(self.confs_dir))
+        raw_configs = []
+
+        for fname in cfiles:
+            # Skip the main config file
+            if os.path.normpath(fname) != os.path.normpath(self.main_config_path):
+                try:
+                    with open(fname) as f:
+                        raw_data = json.load(f)
+                        raw_configs.append(raw_data)
+                except Exception as e:
+                    self._l.error('Error loading station configuration: {}'.format(fname))
+                    self._l.exception(e)
+                    # Continue loading other stations even if one fails
+                    continue
+
+        return raw_configs
+
+    def write_station_config(self, file_path, config_data):
+        """
+        Write station config
+        """
+
+        # Create backup if file exists
+        if os.path.exists(file_path):
+            backup_path = '{}.bak'.format(file_path)
+            try:
+                shutil.copy2(file_path, backup_path)
+                self._l.info('Created backup: {}'.format(backup_path))
+            except Exception as e:
+                self._l.error('Failed to create backup: {}'.format(e))
+                return False, 'Failed to create backup: {}'.format(str(e))
+
+        # Write to temporary file first (atomic write)
+        temp_path = '{}.tmp'.format(file_path)
+        try:
+            with open(temp_path, 'w') as f:
+                json.dump(config_data, f, indent=2)
+
+            # Rename temp file to actual file (atomic on POSIX systems)
+            os.rename(temp_path, file_path)
+            self._l.info('Successfully wrote configuration to {}'.format(file_path))
+
+            return True, 'Configuration file written successfully'
+
+        except Exception as e:
+            self._l.error('Failed to write configuration: {}'.format(e))
+            # Clean up temp file if it exists
+            if os.path.exists(temp_path):
+                try:
+                    os.remove(temp_path)
+                except OSError as cleanup_error:
+                    self._l.warning('Failed to clean up temp file {0}: {1}'.format(temp_path, cleanup_error))
+            return False, 'Failed to write configuration: {}'.format(str(e))
+
+    def delete_station_file(self, file_path):
+        """
+        Delete station file
+        """
+
+        if not os.path.exists(file_path):
+            return False, 'Configuration file not found: {}'.format(file_path)
+
+        # Create backup before deletion
+        backup_path = '{}.bak'.format(file_path)
+        try:
+            shutil.copy2(file_path, backup_path)
+            self._l.info('Created backup before deletion: {}'.format(backup_path))
+        except Exception as e:
+            self._l.warning('Failed to create backup: {}'.format(e))
+
+        # Delete the file
+        try:
+            os.remove(file_path)
+            self._l.info('Deleted configuration file: {}'.format(file_path))
+            return True, 'Configuration file deleted successfully'
+        except Exception as e:
+            self._l.error('Failed to delete configuration: {}'.format(e))
+            return False, 'Failed to delete configuration: {}'.format(str(e))
+
+    def find_config_by_network_name(self, network_name):
+        """
+        Find config by network name
+        """
+
+        for conf_file in glob.glob('{}*.json'.format(self.confs_dir)):
+            if os.path.normpath(conf_file) != os.path.normpath(self.main_config_path):
+                try:
+                    with open(conf_file) as f:
+                        d = json.load(f)
+                        if d.get('station_conf', {}).get('network_name') == network_name:
+                            self._l.info("Found configuration for '{0}' in: {1}".format(network_name, conf_file))
+                            return conf_file
+                except (OSError, json.JSONDecodeError, KeyError) as e:
+                    # Skip files that can't be read, parsed, or don't have expected structure
+                    self._l.debug('Skipping {0} during search: {1}'.format(conf_file, e))
+                    continue
+        return None
+
+    def _process_single_config(self, config_data, filename):
+        """
+        Process single config
+        """
+
+        # Preprocess the configuration
+        config_data['station_conf'] = config_processor.preprocess(config_data['station_conf'])
+
+        station_conf = config_data['station_conf']
+
+        # first thing, check if there are availability rules:
+        active_rules = station_conf.get('active_rules', None)
+        if active_rules:
+            if 'date_range' in active_rules:
+                # then, use scheduling hints and see this station should be available
+                parses = schedule_hint_utils._test_range_pattern(active_rules['date_range'])
+                if parses:
+                    hint = schedule_hint.RangeHint(active_rules['date_range'])
+                    if not hint.hint(datetime.datetime.now()):
+                        # then, the active rule doesn't match, so this station isn't active
+                        self._l.info('Skipping {} since marked inactive'.format(filename))
+                        return None
+                else:
+                    self._l.warning("Active rule date_range doesn't parse as a range {}".format(
+                        active_rules['date_range']))
+            else:
+                self._l.warning('Active rule set, but no date_range hint. Passing.')
+        # Apply defaults for optional fields
+        for key in StationIO.OVERWATCH_DEFAULTS:
+            if key not in station_conf:
+                station_conf[key] = StationIO.OVERWATCH_DEFAULTS[key]
+
+        # Check that referenced files exist
+        for to_check in StationIO.FILE_CHECKS:
+            if to_check in station_conf:
+                if not os.path.exists(station_conf[to_check]):
+                    self._l.error('*' * 60)
+                    self._l.error('Error while checking configuration for {}'.format(filename))
+                    self._l.error('The filepath specified for {0} does not exist: {1}'.format(
+                        to_check, station_conf[to_check]))
+                    self._l.error('*' * 60)
+                    raise FileNotFoundError('Missing file: {}'.format(station_conf[to_check]))
+
+        # Normalize clip shows
+        station_conf['clip_shows'] = self._normalize_clip_shows(station_conf['clip_shows'],
+                                                                station_conf['schedule_increment'], filename)
+        # normalize meta hints and paths
+        if 'meta_hints' in station_conf:
+            for hint in station_conf['meta_hints']:
+                if 'tags' in hint:
+                    output_tags = []
+                    # make it a list of tags if it's a single string
+                    if isinstance(hint['tags'], str):
+                        hint['tags'] = [hint['tags']]
+
+                    for tag in hint['tags']:
+                        if os.path.isabs(tag):
+                            output_tags.append(tag)
+                        else:
+                            #then make it relative to the content_dir
+                            new_tag = os.path.join(station_conf['content_dir'], tag)
+                            output_tags.append(str(new_tag))
+                    hint['tags'] = output_tags
+                else:
+                    raise Exception('No meta_hints tag specified in {}'.format(filename))
+
+                allowed = set(schedule_hint.META_HINT_KEYS) | {'tags', 'exclusive'}
+                unknown = set(hint.keys()) - allowed
+                if unknown:
+                    raise Exception('Unknown meta_hints field(s) {0} in {1} - expected one of: {2}'.format(
+                        sorted(unknown), filename, ', '.join(sorted(allowed))))
+
+        # Add metadata flags
+        station_conf['_has_catalog'] = station_conf['network_type'] not in StationIO.NO_CATALOG
+        station_conf['_has_schedule'] = station_conf['network_type'] not in StationIO.NO_SCHEDULE
+
+        return station_conf
+
+    def _normalize_clip_shows(self, clip_shows, schedule_increment, filename):
+        """
+        Normalize clip shows
+        """
+
+        clip_dict = {}
+
+        for entry in clip_shows:
+            clip_tag = ''
+            requested_duration = 0
+            start_clip = None
+            end_clip = None
+
+            if isinstance(entry, str):
+                # Simple string form - default to 1 hour
+                clip_tag = entry
+                requested_duration = 60
+            else:
+                # Dictionary form - extract tags and duration
+                if 'tags' in entry:
+                    clip_tag = entry['tags']
+                    requested_duration = entry.get('duration', 60)
+                    start_clip = entry.get('start_clip', None)
+                    end_clip = entry.get('end_clip', None)
+                else:
+                    self._l.error('*' * 60)
+                    self._l.error('Error while checking clip show configuration for {}'.format(filename))
+                    self._l.error("Can't determine tag for input {}".format(entry))
+                    self._l.error('*' * 60)
+                    raise ValueError('Invalid clip show entry: {}'.format(entry))
+
+            # Determine fill target based on break strategy
+            # go a little below if there will be commercials
+            fill_target = 0.95 if schedule_increment else 1.0
+
+            # Convert minutes to seconds and apply fill ratio
+            target_seconds = (requested_duration * timings.MIN_1) * fill_target
+            clip_dict[clip_tag] = {
+                'tags': clip_tag,
+                'duration': target_seconds,
+                'total_duration': requested_duration * timings.MIN_1,
+            }
+            if start_clip:
+                clip_dict[clip_tag]['start_clip'] = start_clip
+                clip_dict[clip_tag]['end_clip'] = end_clip
+
+        return clip_dict
+
+    def load_and_process_all_stations(self):
+        """
+        Load and process all stations
+        """
+        raw_configs = self.load_all_station_configs()
+        processed_stations = []
+        skipped = []
+
+        for config_data in raw_configs:
+            fname = config_data['filename']
+            config = config_data['config']
+
+            try:
+                processed_conf = self._process_single_config(config, fname)
+                if processed_conf:
+                    processed_stations.append(processed_conf)
+            except Exception as e:
+                network_name = config.get('station_conf', {}).get('network_name')
+                self._l.error('*' * 60)
+                self._l.error('Skipping station configuration: {}'.format(fname))
+                self._l.error('Station will not be live until this is fixed: {}'.format(e))
+                self._l.error('*' * 60)
+                skipped.append({
+                    'filename': fname,
+                    'network_name': network_name,
+                    'error': str(e),
+                })
+
+        return processed_stations, skipped
+
+    def validate_station_config(self, config_data):
+        """
+        Validate station config
+        """
+
+        errors = []
+
+        # Check that station_conf wrapper exists
+        if 'station_conf' not in config_data:
+            errors.append("Configuration must have a 'station_conf' top-level key")
+            return False, errors
+
+        station_conf = config_data['station_conf']
+
+        # Check required fields
+        if 'network_name' not in station_conf:
+            errors.append("'network_name' is required")
+        if 'channel_number' not in station_conf:
+            errors.append("'channel_number' is required")
+
+        # Validate with JSON schema if available
+        try:
+            import jsonschema
+            schema = self.load_schema()
+            if schema:
+                try:
+                    jsonschema.validate(config_data, schema)
+                except jsonschema.ValidationError as e:
+                    errors.append('Schema validation error: {}'.format(e.message))
+                except Exception as e:
+                    self._l.error('Error during schema validation: {}'.format(e))
+                    errors.append('Schema validation error: {}'.format(str(e)))
+            else:
+                self._l.warning('Could not load station_config_schema.json for validation')
+        except ImportError:
+            # jsonschema not installed - return error with installation instructions
+            error_msg = ("The 'jsonschema' library is required for station configuration validation. "
+                         "Please install it by running the installer or: pip install jsonschema")
+            self._l.error(error_msg)
+            errors.append(error_msg)
+
+        # Warn about missing files (don't fail, just warn)
+        for to_check in StationIO.FILE_CHECKS:
+            if to_check in station_conf:
+                if not os.path.exists(station_conf[to_check]):
+                    warning = "File not found: {0} (referenced in '{1}')".format(station_conf[to_check], to_check)
+                    self._l.warning(warning)
+                    # Don't add to errors, just log warning
+
+        if errors:
+            return False, errors
+        return True, []
+
+    def save_station_config(self, network_name, config_data, is_update=False):
+        """
+        Save station config
+        """
+
+        # Validate the configuration
+        is_valid, errors = self.validate_station_config(config_data)
+        if not is_valid:
+            error_msg = '; '.join(errors)
+            self._l.error("Validation failed for station '{0}': {1}".format(network_name, error_msg))
+            return False, 'Validation failed: {}'.format(error_msg), None
+
+        station_conf = config_data['station_conf']
+
+        # Check uniqueness
+        exclude_name = network_name if is_update else None
+        is_unique, uniqueness_error = self._check_uniqueness(station_conf['channel_number'],
+                                                             station_conf['network_name'],
+                                                             exclude_name=exclude_name)
+        if not is_unique:
+            return False, uniqueness_error, None
+
+        # Get file path - for updates, find the actual file on disk rather than
+        # deriving the name, so we write back to the same file regardless of
+        # whether the filename matches the network_name inside the config.
+        old_file_path = None
+        if is_update:
+            actual_path = self.find_config_by_network_name(network_name)
+            file_path = actual_path if actual_path else self.get_config_file_path(network_name)
+
+            # Check if we're also renaming the network_name
+            if network_name != station_conf['network_name']:
+                old_file_path = file_path
+                file_path = self.get_config_file_path(station_conf['network_name'])
+        else:
+            file_path = self.get_config_file_path(network_name)
+
+        # Write the configuration
+        success, message = self.write_station_config(file_path, config_data)
+
+        if not success:
+            return False, message, None
+
+        # If this was a rename, delete the old file
+        if old_file_path and old_file_path != file_path and os.path.exists(old_file_path):
+            os.remove(old_file_path)
+            self._l.info('Removed old configuration file: {}'.format(old_file_path))
+
+        return True, 'Station configuration saved successfully', file_path
+
+    def remove_station_config(self, network_name):
+        """
+        Remove station config
+        """
+
+        file_path = self.find_config_by_network_name(network_name)
+
+        if file_path is None:
+            msg = "Station '{}' not found".format(network_name)
+            self._l.warning(msg)
+            return False, msg
+
+        # Delete the file
+        success, message = self.delete_station_file(file_path)
+
+        if not success:
+            return False, message
+
+        return True, "Station '{}' deleted successfully".format(network_name)
+
+    def _check_uniqueness(self, channel_number, network_name, exclude_name=None):
+        """
+        Check uniqueness
+        """
+
+        existing_stations = [raw.get('station_conf', {}) for raw in self.list_raw_station_configs()]
+
+        # Check channel number uniqueness
+        for station in existing_stations:
+            if exclude_name and station.get('network_name') == exclude_name:
+                continue
+            if station.get('channel_number') == channel_number:
+                msg = "Channel number {0} is already used by station '{1}'".format(
+                    channel_number, station.get('network_name'))
+                self._l.warning(msg)
+                return False, msg
+
+        # Check network name uniqueness
+        for station in existing_stations:
+            if exclude_name and station.get('network_name') == exclude_name:
+                continue
+            if station.get('network_name') == network_name:
+                msg = "Network name '{}' already exists".format(network_name)
+                self._l.warning(msg)
+                return False, msg
+
+        return True, None

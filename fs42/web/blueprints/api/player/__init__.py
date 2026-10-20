@@ -1,0 +1,766 @@
+#!/usr/bin/env python
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+"""
+Expose the package interface
+"""
+import re
+import json
+import time
+import shutil
+import platform
+import subprocess
+
+from fastapi import Request
+from fastapi import APIRouter
+from fastapi import HTTPException
+
+from fs42.core import logger as project_logger
+from fs42.core.station_manager import StationManager
+from fs42.web.blueprints.api.player._constants import VOLUME_STEP
+from fs42.web.blueprints.api.player._constants import VOLUME_SOCKET
+
+_logger = project_logger.setup('fs42.web.blueprints.api.player.__init__')
+
+router = APIRouter(prefix='/player', tags=['player'])
+
+# Cached /proc/stat sample used to calculate real CPU utilization between API
+# requests. This avoids presenting the 1-minute Linux load average as a CPU
+# percentage, which can remain high long after CPU demand has fallen.
+
+
+@router.get('/info')
+async def get_info(request: Request):
+    """
+    Get system information including CPU temp, memory usage, and CPU usage
+    """
+    info = {}
+
+    # Get CPU temperature
+    temp_info = await _get_cpu_temperature()
+    info.update(temp_info)
+
+    # Get memory information
+    memory_info = await _get_memory_info()
+    info.update(memory_info)
+
+    # Get CPU usage
+    cpu_info = await _get_cpu_info(request)
+    info.update(cpu_info)
+
+    # Get system information
+    try:
+        info['system'] = {
+            'platform': platform.system(),
+            'architecture': platform.machine(),
+            'hostname': platform.node()
+        }
+    except Exception:
+        info['system'] = {'error': 'unavailable'}
+
+    return info
+
+
+async def _get_cpu_temperature():
+    """
+    Get CPU temperature using various methods depending on the system
+    """
+
+    # Method 1: Raspberry Pi vcgencmd (original method)
+    if shutil.which('vcgencmd'):
+        try:
+            result = subprocess.check_output(['vcgencmd', 'measure_temp'], text=True)
+            # output in form: temp=49.4'C
+            temp_c = float(result.split('=')[1].split("'")[0])
+            temp_f = round((temp_c * 1.8) + 32)
+            return {'temperature_c': round(temp_c, 1), 'temperature_f': temp_f, 'temp_source': 'vcgencmd'}
+        except Exception:
+            pass
+
+    # Method 2: Linux thermal zones (most modern Linux systems)
+    try:
+        with open('/sys/class/thermal/thermal_zone0/temp', 'r') as f:
+            temp_millicelsius = int(f.read().strip())
+            temp_c = temp_millicelsius / 1000.0
+            temp_f = round((temp_c * 1.8) + 32)
+            return {'temperature_c': round(temp_c, 1), 'temperature_f': temp_f, 'temp_source': 'thermal_zone'}
+    except Exception:
+        pass
+
+    # Method 3: Using lm-sensors (if available)
+    if shutil.which('sensors'):
+        try:
+            result = subprocess.check_output(['sensors'], text=True)
+            # Look for CPU temperature in sensors output
+            for line in result.split('\n'):
+                if 'Core 0' in line or 'CPU' in line or 'temp1' in line:
+                    match = re.search(r'([+-]?\d+\.?\d*)\s*°C', line)
+                    if match:
+                        temp_c = float(match.group(1))
+                        temp_f = round((temp_c * 1.8) + 32)
+                        return {
+                            'temperature_c': round(temp_c, 1),
+                            'temperature_f': temp_f,
+                            'temp_source': 'sensors'
+                        }
+        except Exception:
+            pass
+
+    return {'temperature': 'unavailable'}
+
+
+async def _get_memory_info():
+    """
+    Get memory information from /proc/meminfo
+    """
+    try:
+        with open('/proc/meminfo', 'r') as f:
+            meminfo = f.read()
+
+        # Parse meminfo
+        mem_total = 0
+        mem_available = 0
+        mem_free = 0
+
+        for line in meminfo.split('\n'):
+            if 'MemTotal:' in line:
+                mem_total = int(line.split()[1]) * 1024  # Convert from KB to bytes
+            elif 'MemAvailable:' in line:
+                mem_available = int(line.split()[1]) * 1024
+            elif 'MemFree:' in line:
+                mem_free = int(line.split()[1]) * 1024
+
+        # Use MemAvailable if available, otherwise fall back to MemFree
+        available = mem_available if mem_available > 0 else mem_free
+        used = mem_total - available
+        used_percent = round((used / mem_total) * 100, 1) if mem_total > 0 else 0
+
+        return {
+            'memory': {
+                'total_gb': round(mem_total / (1024**3), 1),
+                'available_gb': round(available / (1024**3), 1),
+                'used_gb': round(used / (1024**3), 1),
+                'used_percent': used_percent
+            }
+        }
+    except Exception:
+        return {'memory': {'error': 'unavailable'}}
+
+
+def _read_cpu_sample():
+    """
+    Return total and idle CPU jiffies from /proc/stat
+    """
+    with open('/proc/stat', 'r') as f:
+        fields = f.readline().split()
+
+    if not fields or fields[0] != 'cpu':
+        raise ValueError('Aggregate CPU line not found in /proc/stat')
+
+    values = [int(value) for value in fields[1:]]
+    total = sum(values)
+
+    # Linux /proc/stat fields start with:
+    # user nice system idle iowait irq softirq steal ...
+    idle = values[3] if len(values) > 3 else 0
+    if len(values) > 4:
+        idle += values[4]
+
+    return total, idle
+
+
+async def _get_cpu_info(request):
+    """
+    Get real CPU utilization plus Linux load averages
+    """
+
+    try:
+        cpu_count = 0
+        try:
+            with open('/proc/cpuinfo', 'r') as f:
+                cpuinfo = f.read()
+            cpu_count = cpuinfo.count('processor')
+        except Exception:
+            cpu_count = 1
+
+        load_1min = None
+        load_5min = None
+        load_15min = None
+
+        try:
+            with open('/proc/loadavg', 'r') as f:
+                loadavg = f.read().strip().split()
+            load_1min = float(loadavg[0])
+            load_5min = float(loadavg[1])
+            load_15min = float(loadavg[2])
+        except Exception:
+            pass
+
+        try:
+            now = time.monotonic()
+            sample = _read_cpu_sample()
+
+            # Avoid recalculating from nearly simultaneous requests. The remote
+            # polls once per second, so 250 ms still gives a responsive reading.
+            if request.app.state.web.cpu_sample is None:
+                request.app.state.web.cpu_sample = sample
+                request.app.state.web.cpu_sample_time = now
+            elif now - request.app.state.web.cpu_sample_time >= 0.25:
+                total_delta = sample[0] - request.app.state.web.cpu_sample[0]
+                idle_delta = sample[1] - request.app.state.web.cpu_sample[1]
+
+                if total_delta > 0:
+                    busy_delta = max(0, total_delta - idle_delta)
+                    request.app.state.web.cpu_usage_percent = round(
+                        (busy_delta / total_delta) * 100.0,
+                        1,
+                    )
+
+                request.app.state.web.cpu_sample = sample
+                request.app.state.web.cpu_sample_time = now
+        except Exception:
+            pass
+
+        # The very first request has no previous /proc/stat sample. Use the
+        # normalized 1-minute load only for that single initial response.
+        if request.app.state.web.cpu_usage_percent is None:
+            if load_1min is not None and cpu_count > 0:
+                load_percent = round((load_1min / cpu_count) * 100.0, 1)
+            else:
+                load_percent = 0.0
+        else:
+            load_percent = request.app.state.web.cpu_usage_percent
+
+        return {
+            'cpu': {
+                'cores': cpu_count,
+                'load_1min': load_1min,
+                'load_5min': load_5min,
+                'load_15min': load_15min,
+                'load_percent': load_percent,
+            }
+        }
+    except Exception:
+        return {'cpu': {'error': 'unavailable'}}
+
+
+@router.get('/status')
+async def get_player_status():
+    """
+    Get player status
+    """
+    status_socket = StationManager().server_conf['status_socket']
+    if status_socket:
+        try:
+            with open(status_socket, 'r') as f:
+                status_str = f.read().strip()
+            return json.loads(status_str)
+        except FileNotFoundError:
+            return {'error': 'Status socket file not found.'}
+    else:
+        return {'error': 'Status socket is not configured.'}
+
+
+@router.get('/status/queue_connected')
+async def get_connected(request: Request):
+    """
+    Get connected
+    """
+    command_queue = request.app.state.player_command_queue
+    if command_queue:
+        return {'queue_connected': True}
+    else:
+        return {'queue_connected': False}
+
+
+@router.get('/channels/{channel}')
+async def player_channel(channel: str):
+    """
+    Player channel
+    """
+    command = {'command': 'direct', 'channel': -1}
+    if channel.isnumeric():
+        command['channel'] = int(channel)
+    elif channel == 'up':
+        command['command'] = 'up'
+    elif channel == 'down':
+        command['command'] = 'down'
+    else:
+        return {'error': "Invalid channel command. Use a number, 'up', or 'down'."}
+
+    cs = StationManager().server_conf['channel_socket']
+    with open(cs, 'w') as f:
+        f.write(json.dumps(command))
+    return {'command': command}
+
+
+@router.post('/channels/guide')
+async def show_guide(request: Request):
+    """
+    Show guide
+    """
+    command_queue = request.app.state.player_command_queue
+    command_queue.put({'command': 'guide'})
+    return {'status': 'ok'}
+
+
+@router.get('/commands/stop')
+@router.post('/commands/stop')
+async def player_stop(request: Request):
+    """
+    Player stop
+    """
+    command_queue = request.app.state.player_command_queue
+    command_queue.put({'command': 'exit'})
+    return {'status': 'stopped'}
+
+
+async def _queue_mpv_command(request, action):
+    """
+    Queue mpv command
+    """
+    command_queue = request.app.state.player_command_queue
+    if not command_queue:
+        raise HTTPException(status_code=503, detail='Player command queue is not connected.')
+
+    command_queue.put({'command': 'mpv_command', 'action': action})
+    return {'status': 'ok', 'command': 'mpv_command', 'action': action}
+
+
+@router.get('/mpv/toggle-subtitles')
+@router.post('/mpv/toggle-subtitles')
+async def mpv_toggle_subtitles(request: Request):
+    """
+    Toggle subtitle visibility for the active mpv player
+    """
+    return await _queue_mpv_command(request, 'toggle_subtitles')
+
+
+@router.get('/mpv/cycle-subtitles')
+@router.post('/mpv/cycle-subtitles')
+async def mpv_cycle_subtitles(request: Request):
+    """
+    Cycle through available subtitle tracks for the active mpv player
+    """
+    return await _queue_mpv_command(request, 'cycle_subtitles')
+
+
+@router.get('/mpv/cycle-audio')
+@router.post('/mpv/cycle-audio')
+async def mpv_cycle_audio(request: Request):
+    """
+    Cycle through available audio tracks for the active mpv player
+    """
+    return await _queue_mpv_command(request, 'cycle_audio')
+
+
+@router.post('/parental/digit/{digit}')
+async def parental_digit(request: Request, digit: str):
+    """
+    Parental digit
+    """
+    if not digit.isdigit() or len(digit) != 1:
+        raise HTTPException(status_code=400, detail='Digit must be a single number.')
+
+    command_queue = request.app.state.player_command_queue
+    if not command_queue:
+        raise HTTPException(status_code=503, detail='Player command queue is not connected.')
+
+    command_queue.put({'command': 'parental_digit', 'digit': digit})
+    return {'handled': True}
+
+
+@router.post('/parental/clear')
+async def parental_clear(request: Request):
+    """
+    Parental clear
+    """
+    command_queue = request.app.state.player_command_queue
+    if not command_queue:
+        raise HTTPException(status_code=503, detail='Player command queue is not connected.')
+
+    command_queue.put({'command': 'parental_clear'})
+    return {'handled': True}
+
+
+@router.post('/ticker')
+async def show_ticker(request: Request):
+    """
+    Show ticker
+    """
+    data = await request.json()
+    command_queue = request.app.state.player_command_queue
+    command_queue.put({
+        'command': 'ticker',
+        'message': data.get('message', ''),
+        'header': data.get('header', 'FS42'),
+        'style': data.get('style', 'fieldstation'),
+        'iterations': data.get('iterations', 2)
+    })
+    return {'status': 'success'}
+
+
+@router.get('/volume/up')
+@router.post('/volume/up')
+async def volume_up():
+    """
+    Increase volume by VOLUME_STEP percent
+    """
+    return await _control_volume('up')
+
+
+@router.get('/volume/down')
+@router.post('/volume/down')
+async def volume_down():
+    """
+    Decrease volume by VOLUME_STEP percent
+    """
+    return await _control_volume('down')
+
+
+@router.get('/volume/mute')
+@router.post('/volume/mute')
+async def volume_mute():
+    """
+    Toggle mute on/off
+    """
+    return await _control_volume('mute')
+
+
+async def _control_volume(action):
+    """
+    Control volume using the most appropriate Linux audio system
+    """
+
+    # Check what audio systems are available
+    amixer_available = shutil.which('amixer') is not None
+    pactl_available = shutil.which('pactl') is not None
+    wpctl_available = shutil.which('wpctl') is not None
+
+    # Try different audio systems in order of preference
+    # For WSL, prefer PulseAudio over ALSA since ALSA usually fails
+
+    response = None
+
+    if pactl_available:
+        try:
+            response = await _volume_pulseaudio(action)
+        except Exception as e:
+            _logger.error('pactl failed: {}'.format(e))
+
+    if amixer_available and response is None:
+        try:
+            response = await _volume_amixer(action)
+        except Exception as e:
+            _logger.error('amixer failed (expected in WSL): {}'.format(e))
+
+    if wpctl_available and response is None:
+        try:
+            response = await _volume_wireplumber(action)
+        except Exception as e:
+            _logger.error('wpctl failed: {}'.format(e))
+
+    if not response:
+        raise HTTPException(
+            status_code=500,
+            detail='No supported audio system found or all failed. Available: amixer={0}, pactl={1}, wpctl={2}'.
+            format(amixer_available, pactl_available, wpctl_available))
+
+    as_str = json.dumps(response)
+    with open(VOLUME_SOCKET, 'w') as fp:
+        fp.write(as_str)
+
+    return response
+
+
+async def _volume_amixer(action):
+    """
+    Control volume using ALSA amixer (most common on Raspberry Pi)
+    """
+    mixer = 'Master'
+
+    try:
+        if action == 'up':
+            # Check current volume before increasing
+            get_status = subprocess.run(['amixer', 'sget', mixer], capture_output=True, text=True, check=True)
+            current_vol_match = re.search(r'\[(\d+)%\]', get_status.stdout)
+            current_vol = int(current_vol_match.group(1)) if current_vol_match else 0
+
+            # Cap at 100%
+            if current_vol >= 100:
+                return {
+                    'action': action,
+                    'method': 'amixer',
+                    'status': 'capped',
+                    'message': 'Volume already at maximum (100%)',
+                    'volume': '100%'
+                }
+            elif current_vol > 100 - VOLUME_STEP:
+                # Set to exactly 100% if we're close
+                cmd = ['amixer', 'sset', mixer, '100%']
+                message = 'Volume set to maximum (100%)'
+            else:
+                cmd = ['amixer', 'sset', mixer, '{}%+'.format(VOLUME_STEP)]
+                message = 'Volume increased by {}%'.format(VOLUME_STEP)
+        elif action == 'down':
+            cmd = ['amixer', 'sset', mixer, '{}%-'.format(VOLUME_STEP)]
+            message = 'Volume decreased by {}%'.format(VOLUME_STEP)
+        elif action == 'mute':
+            # For mute, we need to check current state and toggle
+            # First get current mute status
+            get_status = subprocess.run(['amixer', 'sget', mixer], capture_output=True, text=True, check=True)
+            # Check if currently muted - look for [off] in output
+            is_muted = '[off]' in get_status.stdout
+
+            # Toggle: if muted, unmute; if unmuted, mute
+            mute_action = 'unmute' if is_muted else 'mute'
+            cmd = ['amixer', 'sset', mixer, mute_action]
+            message = 'Mute {}'.format('off' if is_muted else 'on')
+        else:
+            raise ValueError('Invalid action: {}'.format(action))
+
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        # Try to extract volume level from amixer output
+        volume_level = _extract_amixer_volume(result.stdout)
+        return {
+            'action': action,
+            'method': 'amixer',
+            'status': 'success',
+            'message': message,
+            'volume': volume_level
+        }
+
+    except subprocess.CalledProcessError:
+        # If Master doesn't work, try PCM
+        try:
+            mixer = 'PCM'
+            if action == 'up':
+                # Check current volume before increasing
+                get_status = subprocess.run(['amixer', 'sget', mixer], capture_output=True, text=True, check=True)
+                current_vol_match = re.search(r'\[(\d+)%\]', get_status.stdout)
+                current_vol = int(current_vol_match.group(1)) if current_vol_match else 0
+
+                # Cap at 100%
+                if current_vol >= 100:
+                    return {
+                        'action': action,
+                        'method': 'amixer',
+                        'status': 'capped',
+                        'message': 'Volume already at maximum (100%)',
+                        'volume': '100%'
+                    }
+                elif current_vol > 100 - VOLUME_STEP:
+                    # Set to exactly 100% if we're close
+                    cmd = ['amixer', 'sset', mixer, '100%']
+                    message = 'Volume set to maximum (100%)'
+                else:
+                    cmd = ['amixer', 'sset', mixer, '{}%+'.format(VOLUME_STEP)]
+                    message = 'Volume increased by {}%'.format(VOLUME_STEP)
+            elif action == 'down':
+                cmd = ['amixer', 'sset', mixer, '{}%-'.format(VOLUME_STEP)]
+                message = 'Volume decreased by {}%'.format(VOLUME_STEP)
+            elif action == 'mute':
+                # For mute with PCM, check current state and toggle
+                get_status = subprocess.run(['amixer', 'sget', mixer], capture_output=True, text=True, check=True)
+                is_muted = '[off]' in get_status.stdout
+                mute_action = 'unmute' if is_muted else 'mute'
+                cmd = ['amixer', 'sset', mixer, mute_action]
+                message = 'Mute {}'.format('off' if is_muted else 'on')
+
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            volume_level = _extract_amixer_volume(result.stdout)
+            return {
+                'action': action,
+                'method': 'amixer',
+                'status': 'success',
+                'message': '{} (PCM)'.format(message),
+                'volume': volume_level
+            }
+        except subprocess.CalledProcessError as e:
+            raise HTTPException(status_code=500, detail='ALSA amixer failed: {}'.format(e.stderr))
+
+
+async def _volume_pulseaudio(action):
+    """
+    Control volume using PulseAudio pactl
+    """
+    try:
+        if action == 'up':
+            # Check current volume before increasing
+            current_volume_str = await _get_pulseaudio_volume()
+            current_vol_match = re.search(r'(\d+)%', current_volume_str)
+            current_vol = int(current_vol_match.group(1)) if current_vol_match else 0
+
+            # Cap at 100% (PulseAudio uses 65536 as 100%)
+            if current_vol >= 100:
+                return {
+                    'action': action,
+                    'method': 'pulseaudio',
+                    'status': 'capped',
+                    'message': 'Volume already at maximum (100%)',
+                    'volume': '100%'
+                }
+            elif current_vol > 100 - VOLUME_STEP:
+                # Set to exactly 100%
+                cmd = ['pactl', 'set-sink-volume', '@DEFAULT_SINK@', '100%']
+                message = 'Volume set to maximum (100%)'
+            else:
+                cmd = ['pactl', 'set-sink-volume', '@DEFAULT_SINK@', '+{}%'.format(VOLUME_STEP)]
+                message = 'Volume increased by {}%'.format(VOLUME_STEP)
+        elif action == 'down':
+            cmd = ['pactl', 'set-sink-volume', '@DEFAULT_SINK@', '-{}%'.format(VOLUME_STEP)]
+            message = 'Volume decreased by {}%'.format(VOLUME_STEP)
+        elif action == 'mute':
+            cmd = ['pactl', 'set-sink-mute', '@DEFAULT_SINK@', 'toggle']
+            message = 'Mute toggled'
+        else:
+            raise ValueError('Invalid action: {}'.format(action))
+
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+
+        # Get current volume and mute status after the change
+        if action == 'mute':
+            volume_level = await _get_pulseaudio_mute_status()
+        else:
+            volume_level = await _get_pulseaudio_volume()
+
+        return {
+            'action': action,
+            'method': 'pulseaudio',
+            'status': 'success',
+            'message': message,
+            'volume': volume_level
+        }
+
+    except subprocess.CalledProcessError as e:
+        raise HTTPException(status_code=500, detail='PulseAudio pactl failed: {}'.format(e.stderr))
+
+
+async def _volume_wireplumber(action):
+    """
+    Control volume using WirePlumber wpctl (newer PipeWire systems)
+    """
+    try:
+        if action == 'up':
+            # wpctl has a built-in limit option
+            # Using --limit=1.0 caps volume at 100%
+            cmd = ['wpctl', 'set-volume', '@DEFAULT_AUDIO_SINK@', '{}+'.format(VOLUME_STEP / 100), '--limit=1.0']
+            message = 'Volume increased by {}%'.format(VOLUME_STEP)
+        elif action == 'down':
+            cmd = ['wpctl', 'set-volume', '@DEFAULT_AUDIO_SINK@', '{}-'.format(VOLUME_STEP / 100)]
+            message = 'Volume decreased by {}%'.format(VOLUME_STEP)
+        elif action == 'mute':
+            cmd = ['wpctl', 'set-mute', '@DEFAULT_AUDIO_SINK@', 'toggle']
+            message = 'Mute toggled'
+        else:
+            raise ValueError('Invalid action: {}'.format(action))
+
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+
+        # Try to get current volume from wpctl
+        volume = await _get_wireplumber_volume()
+
+        return {
+            'action': action,
+            'method': 'wireplumber',
+            'status': 'success',
+            'message': message,
+            'volume': volume
+        }
+
+    except subprocess.CalledProcessError as e:
+        raise HTTPException(status_code=500, detail='WirePlumber wpctl failed: {}'.format(e.stderr))
+
+
+def _extract_amixer_volume(output):
+    """
+    Extract volume percentage and mute status from amixer output
+    """
+    try:
+        # Look for pattern like [75%] in the amixer output
+        match = re.search(r'\[(\d+)%\]', output)
+        volume = match.group(1) if match else '??'
+
+        # Check if muted - look for [off] in output
+        is_muted = '[off]' in output
+
+        if is_muted:
+            return 'MUTED ({}%)'.format(volume)
+        else:
+            return '{}%'.format(volume)
+    except:
+        return 'unknown'
+
+
+async def _get_pulseaudio_volume():
+    """
+    Get current volume from PulseAudio
+    """
+    try:
+        result = subprocess.run(['pactl', 'get-sink-volume', '@DEFAULT_SINK@'], capture_output=True, text=True,
+                                check=True)
+
+        # PulseAudio output looks like: Volume: front-left: 65536 /  100% / 0.00 dB,   front-right: 65536 /  100% / 0.00 dB
+        match = re.search(r'(\d+)%', result.stdout)
+        if match:
+            return '{}%'.format(match.group(1))
+        return 'unknown'
+    except:
+        return 'unknown'
+
+
+async def _get_pulseaudio_mute_status():
+    """
+    Get current mute status and volume from PulseAudio
+    """
+    try:
+        # Check mute status
+        mute_result = subprocess.run(['pactl', 'get-sink-mute', '@DEFAULT_SINK@'], capture_output=True, text=True,
+                                     check=True)
+
+        # Get volume
+        volume_result = subprocess.run(['pactl', 'get-sink-volume', '@DEFAULT_SINK@'], capture_output=True,
+                                       text=True, check=True)
+
+        # Parse mute status - output is like "Mute: yes" or "Mute: no"
+        is_muted = 'yes' in mute_result.stdout.lower()
+
+        # Parse volume
+        volume_match = re.search(r'(\d+)%', volume_result.stdout)
+        volume = volume_match.group(1) if volume_match else '??'
+
+        if is_muted:
+            return 'MUTED ({}%)'.format(volume)
+        else:
+            return '{}%'.format(volume)
+
+    except:
+        return 'MUTE'
+
+
+async def _get_wireplumber_volume():
+    """
+    Get current volume from WirePlumber
+    """
+    try:
+        result = subprocess.run(['wpctl', 'get-volume', '@DEFAULT_AUDIO_SINK@'], capture_output=True, text=True,
+                                check=True)
+
+        # wpctl output looks like: "Volume: 0.75" or "Volume: 0.75 [MUTED]"
+        # Convert decimal to percentage
+        match = re.search(r'Volume:\s+([\d.]+)', result.stdout)
+        if match:
+            volume_decimal = float(match.group(1))
+            volume_percent = int(volume_decimal * 100)
+
+            # Check if muted
+            is_muted = '[MUTED]' in result.stdout
+
+            if is_muted:
+                return 'MUTED ({}%)'.format(volume_percent)
+            else:
+                return '{}%'.format(volume_percent)
+        return 'unknown'
+    except:
+        return 'unknown'

@@ -1,0 +1,13 @@
+<!doctype html>
+{# This Source Code Form is subject to the Mozilla Public License, v. 2.0.
+   See https://mozilla.org/MPL/2.0/. #}
+<html lang="en">
+    <head>
+        <!-- Page Assets -->
+        {% block head %}{% endblock %}
+    </head>
+    <body{% block body_attributes %}{% endblock %}>
+        <!-- Page Content -->
+        {% block content %}{% endblock %}
+    </body>
+</html>

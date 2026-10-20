@@ -1,0 +1,23 @@
+{% extends 'index.html' %}
+{% block head %}
+<meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Station - FieldStation42</title>
+    <link rel="stylesheet" href="https://unpkg.com/purecss@3.0.0/build/pure-min.css">
+    <link rel="stylesheet" id="theme-css" href="/static/themes/default.css">
+    <link rel="stylesheet" href="/static/station_ui.css">
+
+<link rel="stylesheet" href="/static/tools/station_editor/style.css">
+{% endblock %}
+
+{% block body_attributes %}{% endblock %}
+{% block content %}
+<script src="/static/utils/general.js"></script>
+    <script src="/static/utils/routing.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.44.0/min/vs/loader.js"></script>
+
+
+<!-- Embedded JavaScript -->
+<script src="/static/tools/station_editor/station_editor.js"></script>
+<script>app.tools.station_editor.setup();</script>
+{% endblock %}

@@ -1,0 +1,13 @@
+/*
+ * This Source Code Form is subject to the Mozilla Public License, v. 2.0.
+ * See https://mozilla.org/MPL/2.0/.
+ */
+
+/* -------- Style -------- */
+
+/* Treat rapid taps as remote-control input, not browser zoom gestures. */
+.remote-btn {
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+}

@@ -583,6 +583,6 @@ python3 validate_configs.py
 
 - `confs/examples/` - Example configuration files
 - `station_config_schema.json` - JSON Schema for validation
-- `fs42/config_processor.py` - Configuration preprocessing logic
-- `fs42/slot_reader.py` - Schedule slot reading logic
-- `fs42/station_manager.py` - Station loading and initialization
+- `fs42/core/config_processor.py` - Configuration preprocessing logic
+- `fs42/tools/schedule/slot_reader.py` - Schedule slot reading logic
+- `fs42/core/station_manager.py` - Station loading and initialization

@@ -6,8 +6,8 @@ __pycache__/
 # my specific stuff
 *.bin
 *.bak
-runtime/
-catalog/
+/runtime/
+/catalog/
 env/
 local/
 *.kdev4*
@@ -15,7 +15,7 @@ local/
 *confs/*.json
 *confs/mine
 osd/osd.json
-fs42/guide_render/static/90s.html
+fs42/tools/guide/static/90s.html
 .idea/
 *confs/
 # C extensions
@@ -26,7 +26,7 @@ fs42/guide_render/static/90s.html
 
 # Distribution / packaging
 .Python
-build/
+/build/
 develop-eggs/
 dist/
 downloads/

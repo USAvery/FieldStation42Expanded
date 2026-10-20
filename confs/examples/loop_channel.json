@@ -1,7 +1,9 @@
-{"station_conf" : {
-    "network_name" : "Loop",
-    "network_type" : "loop",
-    "channel_number": 2,
-    "content_dir" : "catalog/loop",
-    "network_long_name": "My Looping Channel"
-}}
+{
+    "station_conf": {
+        "network_name": "Loop",
+        "network_type": "loop",
+        "channel_number": 2,
+        "content_dir": "catalog/loop",
+        "network_long_name": "My Looping Channel"
+    }
+}

@@ -1,0 +1,33 @@
+/*
+ * This Source Code Form is subject to the Mozilla Public License, v. 2.0.
+ * See https://mozilla.org/MPL/2.0/.
+ */
+
+/* -------- Style -------- */
+
+/* Full-screen iframe for Guide */
+#guide-frame {
+    width: 100%;
+    height: calc(100vh - 60px); /* Account for menu bar */
+    border: none;
+    display: block;
+}
+
+/* Hide the main content area padding for full-screen experience */
+.pure-g {
+    margin: 0 auto;
+    padding: 0;
+    max-width: none;
+    width: 100%;
+}
+
+.pure-u-1 {
+    padding: 0;
+    width: 100%;
+}
+
+/* Hide all scrollbars for clean full-screen experience */
+body,
+html {
+    overflow: hidden;
+}

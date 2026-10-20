@@ -1,0 +1,32 @@
+/*
+ * This Source Code Form is subject to the Mozilla Public License, v. 2.0.
+ * See https://mozilla.org/MPL/2.0/.
+ */
+
+/* -------- Modern -------- */
+
+/* Modern theme — deep blue, Orbitron font, yellow accents (default look) */
+:root {
+    --ppv-body-bg: hsl(216, 50%, 11.764706%);
+    --ppv-bg: hsl(240, 100%, 40.196078%);
+    --ppv-side-bg: hsl(240, 100%, 40.196078%);
+    --ppv-image-bg: hsl(240, 100%, 40.196078%);
+    --ppv-banner-bg: hsl(240, 100%, 27.254902%);
+    --ppv-banner-border: hsl(0, 0%, 50.196078%);
+    --ppv-logo-color: hsl(60, 100%, 50%);
+    --ppv-logo-font: "Orbitron", monospace;
+    --ppv-tagline-color: hsl(0, 0%, 100%);
+    --ppv-title-color: hsl(60, 100%, 50%);
+    --ppv-details-color: hsl(0, 0%, 100%);
+    --ppv-description-color: hsl(0, 0%, 100%);
+    --ppv-counter-color: hsl(60, 100%, 50%);
+    --ppv-nav-color: hsl(0, 0%, 100%);
+    --ppv-no-image-color: hsl(218.028169, 69.607843%, 40%);
+    --ppv-loading-bg: hsl(240, 100%, 40.196078%);
+    --ppv-spinner-color: hsl(60, 100%, 50%);
+    --ppv-loading-text-color: hsl(0, 0%, 100%);
+    --ppv-side-width: 220px;
+    --ppv-font: "Roboto", sans-serif;
+    --ppv-mono-font: "Orbitron", monospace;
+    --ppv-bg-opacity: 0.2;
+}

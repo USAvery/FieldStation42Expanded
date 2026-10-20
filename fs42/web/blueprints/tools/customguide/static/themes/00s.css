@@ -1,0 +1,951 @@
+/*
+ * This Source Code Form is subject to the Mozilla Public License, v. 2.0.
+ * See https://mozilla.org/MPL/2.0/.
+ */
+
+/* -------- 00S -------- */
+
+:root {
+    /* Early-2000s Comcast/Xfinity guide reconstruction based on the supplied reference. */
+    --layout-mode: "grid";
+    --music-autoload: false;
+
+    /*
+  --guide-width: min(100vw, 133.333333vh);
+  --guide-height: min(100vh, 75vw);
+  */
+    --guide-width: min(100vw);
+    --guide-height: min(100vh, 75vw);
+
+    --gh-100: calc(var(--guide-height)/100);
+
+    --header-position: bottom;
+    --channel-position: before;
+    --continued-indicator: " ▶";
+    --offair-text: "No Info";
+    --header-text: "TV Listings";
+
+    --bg-color: hsl(215.25, 63.492063%, 24.705882%);
+    --text-color: hsl(0, 0%, 100%);
+    --header-bg: hsl(215.25, 63.492063%, 24.705882%);
+    --header-text-color: hsl(0, 0%, 100%);
+
+    --time-heading-color: hsl(0, 0%, 100%);
+    --channel-number-color: hsl(0, 0%, 6.666667%);
+    --channel-name-color: hsl(0, 0%, 6.666667%);
+    --show-title-color: hsl(0, 0%, 100%);
+    --row-divider-color: hsl(217.5, 61.538462%, 5.098039%);
+
+    --top-panel-height: 40.4%;
+    --video-side: right;
+    --video-width: 41.4%;
+    --video-aspect-ratio: auto;
+    --video-panel-bg: hsl(216, 62.962963%, 26.470588%);
+    --text-panel-bg: hsl(212.783505, 49.74359%, 38.235294%);
+    --text-panel-color: hsl(0, 0%, 100%);
+    --text-panel-title-color: hsl(56.7, 100%, 60.784314%);
+
+    --grid-header-bg: hsl(215.25, 63.492063%, 24.705882%);
+    --time-slot-bg: transparent;
+    --time-slot-radius: 0;
+
+    /* 238px of a 1196px-wide reference image. */
+    --grid-time-slot-width: calc(var(--guide-width) * 0.243);
+    --grid-channel-width: calc(var(--guide-width) * 0.203);
+    --grid-channel-stub-width: calc(var(--guide-width) * 0.198);
+    --grid-channel-bg: hsl(207.826087, 50.364964%, 73.137255%);
+    --channel-pill-radius: 0;
+    --channel-pill-margin-v: 0;
+    --channel-pill-margin-h: 0;
+    --channel-block-border: transparent;
+    --channel-block-shadow: transparent;
+
+    --program-block-radius: 0;
+    --program-block-bg: hsl(215.05618, 55.974843%, 31.176471%);
+    --program-block-even-bg: hsl(215.05618, 55.974843%, 31.176471%);
+    --program-block-border: transparent;
+    --program-block-even-border: transparent;
+    --program-block-shadow: transparent;
+    --program-current-bg: hsl(215.05618, 55.974843%, 31.176471%);
+    --program-current-border: transparent;
+    --program-current-color: hsl(0, 0%, 100%);
+
+    --font-family: Arial, Helvetica, sans-serif;
+    --font-size: min(2.15vw, 2.87vh);
+    --h-padding: 0;
+    --v-padding: 0;
+
+    --scroll-pause: 4s;
+    --scroll-speed: 0.55;
+
+    --music-volume: 0.4;
+    --video-volume: 0.8;
+
+    --guide-selection-border: transparent;
+    --guide-selection-color: hsl(0, 0%, 6.666667%);
+    --guide-selection-channel-bg: hsl(207.826087, 50.364964%, 73.137255%);
+}
+
+/* Keep the reconstruction in the same 4:3 frame as the reference image. */
+html,
+body {
+    width: 100%;
+    height: 100%;
+    background: hsl(0, 0%, 0%);
+}
+
+body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#guide-wrapper {
+    width: var(--guide-width);
+    height: var(--guide-height);
+    max-width: 100vw;
+    max-height: 100vh;
+
+    overflow: hidden;
+    background: hsl(215.25, 63.492063%, 24.705882%);
+}
+
+/* The grid page itself is split into the 40.4% top panel, 50.5% grid, and 9.1% promo footer. */
+#guide-listings.grid-mode.xfinity-00s {
+    width: 100%;
+    height: 100%;
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: hsl(215.25, 63.492063%, 24.705882%);
+}
+
+/* ===== TOP INFORMATION / VIDEO AREA ===== */
+
+.xfinity-00s #top-panel {
+    flex: 0 0 40.4%;
+    width: 100%;
+    height: 40.4%;
+    display: flex;
+    flex-direction: row;
+    background: hsl(216, 62.962963%, 26.470588%);
+    border-bottom: min(0.3vw, 0.4vh) solid hsl(218.571429, 53.846154%, 5.098039%);
+}
+
+.xfinity-00s #text-panel.xfinity-info-panel {
+    order: 0;
+    flex: 0 0 58.6%;
+    width: 58.6%;
+    height: 100%;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: stretch;
+    text-align: left;
+    gap: 0;
+    overflow: hidden;
+    color: hsl(0, 0%, 100%);
+    background: hsl(212.783505, 49.74359%, 38.235294%);
+}
+
+.xfinity-00s #video-panel {
+    order: 1;
+    flex: 0 0 41.4%;
+    width: 41.4%;
+    height: 100%;
+    aspect-ratio: auto;
+    border-left: 0.59vh solid hsl(216.923077, 37.142857%, 6.862745%);
+    background: hsl(216, 62.962963%, 26.470588%);
+    overflow: hidden;
+}
+
+.xfinity-00s #video-panel video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+}
+
+.xfinity-00s #video-panel.video-unavailable {
+    background:
+        radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.08), transparent 38%),
+        linear-gradient(
+            180deg,
+            hsl(213.473684, 59.006211%, 31.568627%) 0%,
+            hsl(215.342466, 62.393162%, 22.941176%) 100%
+        );
+}
+
+/* Dark-blue Comcast/Xfinity branding strip. */
+.xfinity-brand-strip {
+    position: relative;
+    flex: 0 0 44.8%;
+    width: 100%;
+    overflow: hidden;
+    background: hsl(217.6, 59.055118%, 24.901961%);
+    border-bottom: min(0.24vw, 0.32vh) solid hsl(216.923077, 41.935484%, 18.235294%);
+}
+
+/* Comcast Logo */
+.comcast-logo {
+    position: absolute;
+    left: 12.3%;
+    top: 35.2%;
+    width: calc(var(--guide-height) * 0.29);
+    color: hsl(218.4, 17.985612%, 72.745098%);
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: min(5.55vw, 7.4vh);
+    font-weight: 300;
+    line-height: 1;
+    letter-spacing: -0.065em;
+    text-shadow: 0 min(0.12vw, 0.16vh) min(0.1vw, 0.13vh) rgba(0, 0, 0, 0.2);
+}
+
+.comcast-logo img {
+    width: 100%;
+    height: 100%;
+
+    /* Keep aspect ratio */
+    object-fit: cover;
+}
+
+/* "TV Listings" Title Envelope and Clock */
+.xfinity-listings-block {
+    position: absolute;
+    left: 54.5%;
+    top: 44%;
+    color: hsl(0, 0%, 100%);
+    font-weight: 250;
+    letter-spacing: 0.06em;
+    text-shadow: 0.03em 0.08em 0 hsl(0, 0%, 0%);
+    white-space: nowrap;
+}
+
+.xfinity-listings-title {
+    color: hsl(57.142857, 91.304348%, 77.45098%);
+    /* font-size: min(4.28vw, 3.75vh); */
+    font-size: calc(var(--guide-height) * 0.0375);
+    line-height: 1;
+}
+
+.xfinity-clock-line {
+    justify-content: flex-end;
+    margin-top: 0.1em;
+    display: flex;
+    align-items: center;
+    gap: 0.3em;
+    font-size: min(2.85vw, 3.8vh);
+    line-height: 1;
+}
+
+.xfinity-clock-line #clock {
+    font-size: 1.05em;
+}
+
+/* Envelope */
+.xfinity-envelope {
+    position: relative;
+    display: inline-block;
+    width: 1.25em;
+    height: 0.72em;
+    background: hsl(0, 0%, 100%);
+    border: min(0.1vw, 0.13vh) solid hsl(0, 0%, 1.960784%);
+    box-shadow: min(0.08vw, 0.11vh) min(0.08vw, 0.11vh) 0 hsl(0, 0%, 0%);
+    overflow: hidden;
+}
+
+.xfinity-envelope::before,
+.xfinity-envelope::after {
+    content: "";
+    position: absolute;
+    top: -0.04em;
+    width: 0.948em;
+    height: 0.28em;
+    border-bottom: 0.1em solid hsl(0, 0%, 0%);
+}
+
+.xfinity-envelope::before {
+    left: -0.18em;
+    transform: rotate(35deg);
+}
+
+.xfinity-envelope::after {
+    right: -0.18em;
+    transform: rotate(-35deg);
+}
+
+/* TV Guide Logo */
+.tv-guide-badge {
+    position: absolute;
+    right: 2.4%;
+    top: 39%;
+    width: 16.1%;
+    height: 55%;
+    display: flex;
+}
+
+.tv-guide img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover; /* Keeps aspect ratio, crops if necessary */
+}
+
+/* Selected program details under the brand strip. */
+.xfinity-program-details {
+    flex: 1;
+    min-height: 0;
+    padding: 1.4% 3.1% 1.2% 12.8%;
+    background: linear-gradient(
+        180deg,
+        hsl(235.714286, 9.090909%, 30.196078%) 0%,
+        hsl(210, 58.536585%, 32.156863%) 5%,
+        hsl(215.696203, 32.244898%, 48.039216%) 50%,
+        hsl(216.428571, 44.210526%, 62.745098%) 95%,
+        hsl(215.294118, 35.172414%, 28.431373%) 100%
+    );
+    color: hsl(0, 0%, 100%);
+    text-shadow:
+        min(0.16vw, 0.21vh) min(0.16vw, 0.21vh) 0 hsl(0, 0%, 0%),
+        0 0 min(0.1vw, 0.13vh) hsl(0, 0%, 0%);
+    overflow: hidden;
+}
+
+.xfinity-program-heading,
+.xfinity-program-subrow {
+    display: flex;
+    width: 100%;
+    align-items: flex-start;
+}
+
+#selected-program-title {
+    flex: 1;
+    min-width: 0;
+    padding-right: 0.5em;
+    color: hsl(57.142857, 91.304348%, 77.45098%);
+    font-size: min(2.87vw, 3.83vh);
+    font-weight: 800;
+    line-height: 1.02;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#selected-channel-label {
+    flex: 0 0 24%;
+    text-align: right;
+    font-size: min(2.87vw, 3.83vh);
+    font-weight: 800;
+    line-height: 1.02;
+    white-space: nowrap;
+}
+
+.xfinity-program-subrow {
+    margin-top: 0.18em;
+    min-height: 1.15em;
+}
+
+#selected-program-time {
+    flex: 1;
+    font-size: min(2.62vw, 3.49vh);
+    font-weight: 800;
+    line-height: 1;
+}
+
+#selected-program-icons {
+    flex: 0 0 24%;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 0.24em;
+    padding-right: 0.02em;
+    font-size: min(1.75vw, 2.33vh);
+    font-weight: 800;
+    line-height: 1;
+    text-shadow: none;
+}
+
+#selected-program-rating {
+    min-width: 1.65em;
+    height: 1.25em;
+    padding: 0 0.16em;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: hsl(0, 0%, 6.666667%);
+    background: hsl(0, 0%, 100%);
+    border: min(0.1vw, 0.13vh) solid hsl(0, 0%, 6.666667%);
+    border-radius: 0.2em;
+    font-size: 0.78em;
+}
+
+.xfinity-lock-icon {
+    position: relative;
+    width: 1.18em;
+    height: 1.18em;
+    display: inline-block;
+    background: hsl(0, 0%, 100%);
+    border: min(0.1vw, 0.13vh) solid hsl(0, 0%, 6.666667%);
+    border-radius: 0.08em;
+}
+
+.xfinity-lock-icon::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 13%;
+    width: 44%;
+    height: 42%;
+    transform: translateX(-50%);
+    border: min(0.1vw, 0.13vh) solid hsl(0, 0%, 6.666667%);
+    border-bottom: 0;
+    border-radius: 50% 50% 0 0;
+}
+
+.xfinity-lock-icon::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: 15%;
+    width: 14%;
+    height: 28%;
+    transform: translateX(-50%);
+    background: hsl(0, 0%, 6.666667%);
+    border-radius: 50% 50% 0 0;
+}
+
+#selected-program-description {
+    margin-top: 0.18em;
+    max-width: 100%;
+    font-size: min(2.48vw, 3.31vh);
+    font-weight: 800;
+    line-height: 1.1;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+}
+
+/* ===== TIME HEADER ===== */
+
+.xfinity-00s #grid-wrapper {
+    flex: 0 0 50.5%;
+    height: 50.5%;
+    min-height: 0;
+    overflow: hidden;
+    background: hsl(215.25, 63.492063%, 24.705882%);
+}
+
+.xfinity-00s #grid-header {
+    position: relative;
+    flex: 0 0 16.86%;
+    height: 16.86%;
+    overflow: hidden;
+    background: hsl(216.551724, 63.50365%, 26.862745%);
+    border-top: min(0.23vw, 0.31vh) solid hsl(217.5, 44.444444%, 3.529412%);
+    border-bottom: calc(var(--guide-height) * 0.00587) solid hsl(217.5, 44.444444%, 3.529412%);
+    box-shadow: none;
+}
+
+.xfinity-00s .grid-channel-stub {
+    position: relative;
+    flex: 0 0 var(--grid-channel-stub-width);
+    width: var(--grid-channel-stub-width);
+    height: 100%;
+    justify-content: flex-start;
+    background: hsl(216.551724, 63.50365%, 26.862745%);
+    box-shadow: none;
+    overflow: visible;
+}
+
+.xfinity-00s .grid-channel-stub::after {
+    content: "";
+    position: absolute;
+    right: calc(var(--gh-100) * 0.0963);
+    top: 16%;
+    height: 50%;
+    width: 1.4%;
+    background-color: hsl(216.393443, 100%, 11.960784%);
+}
+
+/* Clock Icon */
+.clock-icon {
+    position: relative;
+    top: -6%;
+    left: calc(var(--grid-channel-width) + var(--guide-width) * 0.01);
+    height: 66%;
+    filter: drop-shadow(calc(var(--gh-100) * 0.44) calc(var(--gh-100) * 0.147) hsl(0, 0%, 0%));
+    overflow: hidden;
+}
+
+.clock-icon img {
+    width: 100%;
+    height: 100%;
+
+    /* Keep aspect ratio */
+    object-fit: cover;
+}
+
+.xfinity-today {
+    position: absolute;
+    left: 38%;
+    top: 50%;
+    transform: translateY(-50%);
+    color: hsl(0, 0%, 100%);
+    font-size: min(2.72vw, 3.63vh);
+    font-weight: 700;
+    white-space: nowrap;
+    text-shadow: min(0.14vw, 0.19vh) min(0.14vw, 0.19vh) 0 hsl(0, 0%, 0%);
+}
+
+.xfinity-prev-arrow {
+    position: absolute;
+    right: 4.5%;
+    top: 16%;
+    width: 0;
+    height: 0;
+    border-top: calc(var(--gh-100) * 1.9069) solid transparent;
+    border-bottom: calc(var(--gh-100) * 1.9069) solid transparent;
+    border-right: calc(var(--gh-100) * 1.9069) solid hsl(0, 0%, 100%);
+    filter: drop-shadow(calc(var(--gh-100) * 0.44) calc(var(--gh-100) * 0.147) hsl(0, 0%, 0%));
+}
+
+.xfinity-list-glyph {
+    position: absolute;
+    left: 105.5%;
+    top: 50%;
+    width: min(4.5vw, 6vh);
+    height: min(3.15vw, 4.2vh);
+    transform: translateY(-50%);
+}
+
+.xfinity-list-glyph i {
+    position: absolute;
+    left: 0;
+    width: 54%;
+    height: min(0.28vw, 0.37vh);
+    background: hsl(0, 0%, 100%);
+    border-radius: 0.2em;
+    box-shadow: min(0.1vw, 0.13vh) min(0.1vw, 0.13vh) 0 hsl(0, 0%, 0%);
+}
+
+.xfinity-list-glyph i:nth-child(1) {
+    top: 5%;
+}
+.xfinity-list-glyph i:nth-child(2) {
+    top: 36%;
+}
+.xfinity-list-glyph i:nth-child(3) {
+    top: 67%;
+}
+
+.xfinity-list-glyph::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    top: 22%;
+    width: 38%;
+    height: 56%;
+    border: min(0.3vw, 0.4vh) solid hsl(0, 0%, 100%);
+    border-radius: 50%;
+    box-shadow: min(0.1vw, 0.13vh) min(0.1vw, 0.13vh) 0 hsl(0, 0%, 0%);
+}
+
+.xfinity-00s .grid-time-slot {
+    flex: 0 0 var(--grid-time-slot-width);
+    width: var(--grid-time-slot-width);
+    height: 100%;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: hsl(0, 0%, 100%);
+    background: transparent;
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
+    font-size: min(2.76vw, 3.68vh);
+    font-weight: 700;
+    text-shadow: min(0.14vw, 0.19vh) min(0.14vw, 0.19vh) 0 hsl(0, 0%, 0%);
+    overflow: visible;
+    position: relative;
+}
+
+.xfinity-00s .grid-time-slot::before {
+    content: "";
+    position: absolute;
+    left: calc(var(--gh-100) * 0.0963);
+    top: 16%;
+    height: 50%;
+    width: 1.4%;
+    background-color: hsl(219.310345, 46.031746%, 50.588235%);
+}
+
+.xfinity-00s .grid-time-slot::after {
+    content: "";
+    position: absolute;
+    right: calc(var(--gh-100) * 0.0963);
+    top: 16%;
+    height: 50%;
+    width: 1.4%;
+    background-color: hsl(216.393443, 100%, 11.960784%);
+}
+
+/* Next Arrow */
+.xfinity-00s #grid-header::after {
+    content: "";
+    position: absolute;
+    right: 4.4%;
+    top: 16%;
+    width: 0;
+    height: 0;
+    border-top: calc(var(--gh-100) * 1.9069) solid transparent;
+    border-bottom: calc(var(--gh-100) * 1.9069) solid transparent;
+    border-left: calc(var(--gh-100) * 1.9069) solid hsl(0, 0%, 100%);
+    filter: drop-shadow(calc(var(--gh-100) * 0.44) calc(var(--gh-100) * 0.147) hsl(0, 0%, 0%));
+    pointer-events: none;
+}
+
+/* ===== PROGRAM GRID ===== */
+
+.xfinity-00s #grid-listings {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    position: relative;
+    background: hsl(215.25, 63.492063%, 24.705882%);
+}
+
+.xfinity-00s #grid-scroll-strip {
+    width: 100%;
+    left: 0;
+    right: auto;
+}
+
+.xfinity-00s .grid-row {
+    width: 100%;
+    height: min(8.47vh, 6.35vw);
+    display: flex;
+    flex-direction: row;
+    overflow: hidden;
+    background: hsl(214.615385, 10.23622%, 50.196078%) !important;
+    border-bottom: min(0.42vw, 0.37vh) solid hsl(216, 55.555556%, 7.058824%);
+    box-shadow: none;
+}
+
+.xfinity-00s .grid-channel {
+    flex: 0 0 var(--grid-channel-width);
+    width: var(--grid-channel-width);
+    height: 100%;
+    margin: 0;
+    padding: 0 min(0.8vw, 1.07vh);
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 0.26em;
+    background: hsl(207.826087, 50.364964%, 73.137255%);
+    border-radius: 0;
+    border-right: calc(var(--guide-height) * 0.00587) solid hsl(213.75, 50%, 6.27451%);
+    box-shadow: inset calc(var(--guide-height) * -0.00587) 0 0 0 hsl(180, 100%, 98.235294%);
+    overflow: hidden;
+}
+
+.xfinity-00s .grid-channel .channel-number,
+.xfinity-00s .grid-channel .channel-name {
+    width: auto;
+    min-width: 0;
+    padding: 0;
+    color: hsl(0, 0%, 4.705882%);
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: min(2.58vw, 3.44vh);
+    font-weight: 800;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+    text-overflow: clip;
+    overflow: visible;
+    text-shadow: none;
+}
+
+.xfinity-00s .grid-programs {
+    /* Four generated half-hour slots occupy 97.2% of the whole guide width.
+     Because the row clips after the visible 80.2%, this exposes about 3.3 slots,
+     matching the reference's partial fourth column on the right. */
+    flex: 0 0 97.2%;
+    width: 97.2%;
+    height: 100%;
+    position: relative;
+    overflow: visible;
+}
+
+.xfinity-00s .grid-program-block {
+    top: 0;
+    height: 100%;
+    padding: 0 min(1vw, 1.33vh);
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    border-radius: 0;
+    border-right: min(0.3vw, 0.4vh) solid hsl(214.615385, 10.23622%, 50.196078%);
+    background: hsl(215.05618, 55.974843%, 31.176471%) !important;
+    box-shadow: none !important;
+    color: hsl(0, 0%, 100%);
+    cursor: default;
+}
+
+.xfinity-00s .grid-program-block .program-title {
+    width: 100%;
+    color: hsl(0, 0%, 100%);
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: min(2.6vw, 3.47vh);
+    font-weight: 800;
+    line-height: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow:
+        min(0.15vw, 0.2vh) min(0.15vw, 0.2vh) 0 hsl(0, 0%, 0%),
+        0 0 min(0.08vw, 0.11vh) hsl(0, 0%, 0%);
+}
+
+.xfinity-00s .grid-program-block .program-desc {
+    display: none;
+}
+
+/* Guide-category colors seen in the reference: blue/default, green/sports,
+   purple/movie, and light blue/kids. */
+.xfinity-00s .grid-program-block.program-category-default,
+.xfinity-00s .grid-program-block.current.program-category-default {
+    background: hsl(215.05618, 55.974843%, 31.176471%) !important;
+}
+
+.xfinity-00s .grid-program-block.program-category-sports,
+.xfinity-00s .grid-program-block.current.program-category-sports {
+    background: hsl(144.672897, 81.679389%, 25.686275%) !important;
+}
+
+.xfinity-00s .grid-program-block.program-category-movie,
+.xfinity-00s .grid-program-block.current.program-category-movie {
+    background: hsl(270.344828, 45.549738%, 37.45098%) !important;
+}
+
+.xfinity-00s .grid-program-block.program-category-kids,
+.xfinity-00s .grid-program-block.current.program-category-kids {
+    background: hsl(206.153846, 47.560976%, 67.843137%) !important;
+}
+
+/* Interactive selection: pale yellow with black text, like the SpongeBob cell. */
+.xfinity-00s .grid-program-block.guide-selected,
+.xfinity-00s .grid-program-block.current.guide-selected {
+    z-index: 5;
+    background: hsl(54.827586, 100%, 77.254902%) !important;
+    outline: none !important;
+    border-right-color: hsl(69.473684, 7.509881%, 49.607843%);
+    color: hsl(0, 0%, 6.666667%);
+}
+
+.xfinity-00s .grid-program-block.guide-selected .program-title,
+.xfinity-00s .grid-program-block.current.guide-selected .program-title {
+    color: hsl(0, 0%, 6.666667%) !important;
+    text-shadow: none !important;
+}
+
+.xfinity-00s .grid-row.guide-selected-row .grid-channel {
+    background: hsl(207.826087, 50.364964%, 73.137255%) !important;
+    outline: none !important;
+    color: hsl(0, 0%, 6.666667%) !important;
+}
+
+/* ===== BOTTOM PARENTAL-CONTROLS PROMO ===== */
+
+#guide-promo {
+    flex: 0 0 9.1%;
+    height: 9.1%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(
+        180deg,
+        hsl(210, 54.285714%, 72.54902%) 0%,
+        hsl(213.103448, 34.661355%, 50.784314%) 46%,
+        hsl(214.390244, 65.079365%, 24.705882%) 100%
+    );
+    border-top: min(0.22vw, 0.29vh) solid hsl(210.769231, 62.903226%, 24.313725%);
+    overflow: hidden;
+}
+
+.promo-card {
+    width: 53.5%;
+    height: 74%;
+    display: flex;
+    align-items: stretch;
+    overflow: hidden;
+    background: transparent;
+    box-shadow: 0 min(0.12vw, 0.16vh) min(0.25vw, 0.33vh) rgba(0, 0, 0, 0.28);
+}
+
+.promo-lock-panel {
+    position: relative;
+    flex: 0 0 14%;
+    background: hsl(353.804348, 76.033058%, 47.45098%);
+}
+
+.promo-lock-shackle {
+    position: absolute;
+    left: 50%;
+    top: 13%;
+    width: 37%;
+    height: 39%;
+    transform: translateX(-50%);
+    border: min(0.42vw, 0.56vh) solid hsl(0, 0%, 100%);
+    border-bottom: 0;
+    border-radius: 50% 50% 0 0;
+}
+
+.promo-lock-body {
+    position: absolute;
+    left: 50%;
+    bottom: 12%;
+    width: 49%;
+    height: 47%;
+    transform: translateX(-50%);
+    background: hsl(0, 0%, 100%);
+    border-radius: min(0.12vw, 0.16vh);
+}
+
+.promo-lock-body i {
+    position: absolute;
+    left: 50%;
+    top: 28%;
+    width: 14%;
+    height: 40%;
+    transform: translateX(-50%);
+    background: hsl(353.804348, 76.033058%, 47.45098%);
+    border-radius: 50% 50% 0 0;
+}
+
+.promo-copy {
+    flex: 1;
+    padding-left: 2.3%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    color: hsl(0, 0%, 23.529412%);
+    font-size: min(1.52vw, 2.03vh);
+    font-weight: 700;
+    line-height: 1.05;
+    white-space: nowrap;
+}
+
+.promo-copy strong {
+    color: hsl(356.778523, 67.420814%, 43.333333%);
+    font-style: italic;
+    letter-spacing: 0.04em;
+}
+
+.promo-button {
+    align-self: center;
+    margin-right: 1.7%;
+    padding: 0.48em 0.62em;
+    color: hsl(0, 0%, 100%);
+    background: linear-gradient(
+        180deg,
+        hsl(355.95092, 65.991903%, 51.568627%) 0%,
+        hsl(354.693878, 81.21547%, 35.490196%) 100%
+    );
+    border: min(0.1vw, 0.13vh) solid hsl(354.146341, 75.460123%, 31.960784%);
+    border-radius: 1.2em;
+    font-size: min(1.42vw, 1.89vh);
+    font-weight: 800;
+    white-space: nowrap;
+    box-shadow: inset 0 min(0.1vw, 0.13vh) min(0.08vw, 0.11vh) rgba(255, 255, 255, 0.32);
+}
+
+.promo-button span {
+    font-size: 1.35em;
+    line-height: 0;
+    vertical-align: -0.08em;
+}
+
+/* Tune/status toast. */
+#guide-action-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 11%;
+    z-index: 1000;
+    transform: translate(-50%, min(0.75vw, 1vh));
+    padding: 0.45em 0.9em;
+    border-radius: 0.35em;
+    background: rgba(0, 0, 0, 0.86);
+    color: hsl(0, 0%, 100%);
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: min(1.55vw, 2.07vh);
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    opacity: 0;
+    pointer-events: none;
+    transition:
+        opacity 120ms linear,
+        transform 120ms linear;
+}
+
+#guide-action-toast.visible {
+    opacity: 1;
+    transform: translate(-50%, 0);
+}
+
+#guide-action-toast.error {
+    background: hsl(354.146341, 79.354839%, 30.392157%);
+}
+
+/* ===== LIVE CHANNEL PREVIEW OVERLAY =====
+   In live-preview mode the underlying MPV window never stops. These backgrounds
+   must be transparent all the way down to the QWebEngine surface so the actual
+   tuned station is visible through the upper-right preview rectangle. */
+html.live-preview-mode {
+    --live-preview-left: 0%;
+    --live-preview-right: 0%;
+    --live-preview-top: 0%;
+    --live-preview-bottom: 0%;
+}
+
+html.live-preview-mode,
+html.live-preview-mode body {
+    background: transparent !important;
+}
+
+html.live-preview-mode #guide-wrapper,
+html.live-preview-mode #guide-listings.grid-mode.xfinity-00s {
+    background: transparent !important;
+}
+
+html.live-preview-mode .xfinity-00s #top-panel {
+    background: transparent !important;
+}
+
+html.live-preview-mode .xfinity-00s #video-panel,
+html.live-preview-mode .xfinity-00s #video-panel.live-channel-preview {
+    /*
+   * The live MPV surface sits underneath this transparent panel. Paint only
+   * the unused letterbox/pillarbox area black so wallpaper can never show
+   * around aspect-ratio-correct preview video.
+   */
+    background:
+        linear-gradient(hsl(0, 0%, 0%), hsl(0, 0%, 0%)) top left / 100% var(--live-preview-top) no-repeat,
+        linear-gradient(hsl(0, 0%, 0%), hsl(0, 0%, 0%)) bottom left / 100% var(--live-preview-bottom) no-repeat,
+        linear-gradient(hsl(0, 0%, 0%), hsl(0, 0%, 0%)) left var(--live-preview-top) / var(--live-preview-left)
+            calc(100% - var(--live-preview-top) - var(--live-preview-bottom)) no-repeat,
+        linear-gradient(hsl(0, 0%, 0%), hsl(0, 0%, 0%)) right var(--live-preview-top) / var(--live-preview-right)
+            calc(100% - var(--live-preview-top) - var(--live-preview-bottom)) no-repeat !important;
+}
+
+html.live-preview-mode .xfinity-00s #video-panel.live-channel-preview::before,
+html.live-preview-mode .xfinity-00s #video-panel.live-channel-preview::after {
+    display: none !important;
+}
+
+html.live-preview-mode .xfinity-00s #video-panel.live-channel-preview video {
+    display: none !important;
+}
