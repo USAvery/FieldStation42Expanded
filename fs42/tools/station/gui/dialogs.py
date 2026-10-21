@@ -3,7 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage dialogs
+Provide terminal-interface dialogs for progress, errors, station selection, and quit confirmation.
 """
 from textual.widgets import Label
 from textual.widgets import Button
@@ -25,7 +25,7 @@ class LoadingScreen(ModalScreen):
 
     def compose(self):
         """
-        Compose
+        Create the progress message and animated loading indicator
         """
         yield Vertical(
             Label('Working on it...', id='question'),
@@ -35,7 +35,7 @@ class LoadingScreen(ModalScreen):
 
     def set_message(self, message):
         """
-        Set message
+        Replace the progress dialog's displayed message
         """
         self.query_one(Label).update(message)
 
@@ -49,7 +49,7 @@ class QuitScreen(ModalScreen):
 
     def compose(self):
         """
-        Compose
+        Create the quit-confirmation message and cancel or exit buttons
         """
         yield Grid(
             Label('Are you sure you want to quit?', id='question'),
@@ -60,7 +60,7 @@ class QuitScreen(ModalScreen):
 
     def on_button_pressed(self, event):
         """
-        On button pressed
+        Exit the administration app when confirmed, otherwise dismiss the quit dialog
         """
         if event.button.id == 'quit':
             self.app.exit()
@@ -77,7 +77,7 @@ class GeneralErr(ModalScreen):
 
     def compose(self):
         """
-        Compose
+        Create an error message dialog with an acknowledgment button
         """
         yield Vertical(
             Label(self.message, id='question'),
@@ -87,14 +87,14 @@ class GeneralErr(ModalScreen):
 
     def __init__(self, message):
         """
-        Initialize the instance
+        Store the error message shown by this modal dialog
         """
         self.message = message
         super(GeneralErr, self).__init__()
 
     def on_button_pressed(self, event):
         """
-        On button pressed
+        Dismiss the error dialog after acknowledgment
         """
         self.app.pop_screen()
 
@@ -108,7 +108,7 @@ class SelectStationErr(ModalScreen):
 
     def compose(self):
         """
-        Compose
+        Create a reminder that an operation requires selecting a station first
         """
         yield Vertical(
             Label('Please select a station first', id='question'),
@@ -118,7 +118,7 @@ class SelectStationErr(ModalScreen):
 
     def on_button_pressed(self, event):
         """
-        On button pressed
+        Dismiss the missing-station warning
         """
         self.app.pop_screen()
 
@@ -132,7 +132,7 @@ class SelectStationScreen(ModalScreen[str]):
 
     def compose(self):
         """
-        Compose
+        Create a station chooser with confirm and cancel buttons
         """
         self.options = []
         index = 0
@@ -151,7 +151,7 @@ class SelectStationScreen(ModalScreen[str]):
 
     def on_button_pressed(self, event):
         """
-        On button pressed
+        Close the chooser with the selected network name, or None when canceled or empty
         """
         if event.button.id == 'cmd_go':
             val = self.select_station.value

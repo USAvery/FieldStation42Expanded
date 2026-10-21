@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage commands
+Exchange commands and status with the player through runtime files for the standalone remote,
+returning channel and program information after a command.
 """
 import os
 import json
@@ -19,7 +20,7 @@ _logger = project_logger.setup('fs42.tools.field_player.remote_commands')
 
 def read_status():
     """
-    Read status
+    Read the player's channel, network, and title for the remote, using channel -1 on failure
     """
     try:
         with open(STATUS_SOCKET_PATH, 'r') as fifo:

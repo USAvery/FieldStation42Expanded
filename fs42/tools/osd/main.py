@@ -10,12 +10,12 @@ import sys
 from PySide6.QtWidgets import QApplication
 
 from fs42.tools.osd.osd import OsdWindow
-from fs42.tools.osd.osd import load_objects
+from fs42.tools.osd._api import load_objects
 
 
 def main():
     """
-    Main
+    Create the configured OSD elements and run the persistent Qt display event loop
     """
     app = QApplication(sys.argv)
     objects = load_objects()

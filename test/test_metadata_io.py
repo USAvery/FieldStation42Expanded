@@ -3,14 +3,15 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage test metadata io
+Verify legacy audio metadata is normalized without changing already-normalized records or mutating
+caller data.
 """
 from fs42.tools.media import metadata_io
 
 
 class TestNormalize(object):
     """
-    TestNormalize
+    Verify legacy metadata normalization preserves current fields and supplies missing defaults
     """
 
     def test_legacy_audio_row_gets_year_and_type(self):

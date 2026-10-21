@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage test custom title patterns
+Verify custom title patterns are loaded from server configuration and malformed patterns are
+rejected without discarding valid ones.
 """
 from unittest.mock import patch
 
@@ -28,7 +29,7 @@ class TestCustomTitlePatternsLoading(object):
 
     def _make_manager(self, config_data):
         """
-        Make manager
+        Load supplied global settings into a station manager without reading station files
         """
         with patch.object(StationIO, 'load_main_config', return_value=config_data):
             with patch('fs42.core.station_io.glob.glob', return_value=[]):

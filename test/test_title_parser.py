@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage test title parser
+Verify filename-to-title normalization across episode formats, movie numbering, separators,
+capitalization, and custom pattern precedence.
 """
 import pytest
 
@@ -12,7 +13,7 @@ from fs42.tools.media import title_parser
 
 class TestTitleParser(object):
     """
-    TestTitleParser
+    Verify media filenames normalize to readable titles without losing expected acronyms
     """
 
     def test_title_parser_no_title(self):

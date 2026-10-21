@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage hint agent
+Filter candidate media against time-dependent metadata hints. Apply folder restrictions and
+exclusive matches when choosing content for a scheduling slot.
 """
 from fs42.core import paths
 from fs42.tools.schedule import schedule_hint
@@ -11,7 +12,12 @@ from fs42.tools.schedule import schedule_hint
 
 def filter_candidate_entries(when, candidates, meta_hints):
     """
-    Filter candidate entries
+    Filter media using time-dependent metadata rules and prefer exclusive matches
+
+    :param when:       (datetime) proposed broadcast time to evaluate against hints
+    :param candidates: (lst<CatalogEntry>) media eligible before metadata filtering
+    :param meta_hints: (list) folder-scoped time restrictions and exclusive-selection settings
+    :return:           (lst<CatalogEntry>) candidates remaining after metadata and exclusivity checks
     """
 
     # let's think about what we're doing here:
@@ -57,7 +63,7 @@ def filter_candidate_entries(when, candidates, meta_hints):
 
 def _entry_passes(candidate_hint, when):
     """
-    Entry passes
+    Check whether every recognized time restriction in a metadata hint permits the broadcast time
     """
     for key, klass in schedule_hint.META_HINT_KEYS.items():
         if key in candidate_hint:
@@ -68,7 +74,11 @@ def _entry_passes(candidate_hint, when):
 
 def split_meta_hints(candidates, meta_hints):
     """
-    Split meta hints
+    Partition media by applicable folder metadata and cache those matches on each entry
+
+    :param candidates: (lst<CatalogEntry>) media whose paths should be matched
+    :param meta_hints: (list) folder-scoped metadata rule dictionaries
+    :return:           (tuple) candidate-and-rule records followed by entries without matching metadata
     """
     has_meta = []
     no_meta = []
@@ -93,7 +103,7 @@ def split_meta_hints(candidates, meta_hints):
 
 def _get_meta_hint(candidate, meta_hints):
     """
-    Get meta hint
+    Collect metadata rules whose tag directories contain the candidate's media path
     """
     meta = None
     for meta_hint in meta_hints:
@@ -108,7 +118,7 @@ def _get_meta_hint(candidate, meta_hints):
 
 def _is_under(dir_path, file_path):
     """
-    Is under
+    Check lexical path containment using whole directory components
     """
     return paths.get_relative_path(file_path, dir_path) is not None
 

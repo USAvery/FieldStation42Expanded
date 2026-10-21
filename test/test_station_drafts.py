@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage test station drafts
+Verify incomplete station drafts stay out of live playback while still reserving names and channel
+numbers, and that failed reloads preserve active stations.
 """
 import json
 from unittest.mock import patch
@@ -17,7 +18,7 @@ from fs42.core.station_manager import StationConfigError
 
 def _write_station(confs_dir, filename, station_conf):
     """
-    Write station
+    Write a wrapped station configuration into the temporary configuration directory
     """
     path = confs_dir / filename
     path.write_text(json.dumps({'station_conf': station_conf}))
@@ -71,7 +72,7 @@ class TestDraftConfigsAreSkipped(object):
 
     def setup_method(self):
         """
-        Setup method
+        Reset shared station state before testing inactive draft configurations
         """
         StationManager._StationManager__we_are_all_one = {}
         StationManager._initialized = False
@@ -79,7 +80,7 @@ class TestDraftConfigsAreSkipped(object):
 
     def _make_manager(self, confs_dir):
         """
-        Make manager
+        Load a station manager through the temporary configuration-directory fixture
         """
         station_io = _station_io_for(confs_dir)
         with patch('fs42.core.station_manager.StationIO', return_value=station_io):
@@ -190,7 +191,7 @@ class TestUniquenessUsesDisk(object):
 
     def setup_method(self):
         """
-        Setup method
+        Reset shared station state before checking conflicts against saved station files
         """
         StationManager._StationManager__we_are_all_one = {}
         StationManager._initialized = False

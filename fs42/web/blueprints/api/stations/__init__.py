@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Expose the package interface
+Validate HTTP requests to list, create, update, and delete station configuration files and return
+structured station responses.
 """
 from typing import Any
 from typing import Dict
@@ -26,7 +27,7 @@ router = APIRouter(prefix='/stations', tags=['stations'])
 # Pydantic Models
 class StationConfigRequest(BaseModel):
     """
-    StationConfigRequest
+    Accept a wrapped station configuration for create and update requests
     """
     station_conf: Dict[str, Any] = Field(
         ...,
@@ -34,7 +35,7 @@ class StationConfigRequest(BaseModel):
 
     class Config(object):
         """
-        Config
+        Provide a station configuration example for the generated API schema
         """
         json_schema_extra = {
             'example': {
@@ -50,7 +51,7 @@ class StationConfigRequest(BaseModel):
 
 class StationConfigResponse(BaseModel):
     """
-    StationConfigResponse
+    Describe a station-file operation's result and optional saved station details
     """
     success: bool
     message: str
@@ -61,7 +62,7 @@ class StationConfigResponse(BaseModel):
 
 class StationListResponse(BaseModel):
     """
-    StationListResponse
+    Return saved station documents together with their count
     """
     count: int
     stations: List[Dict[str, Any]]
@@ -69,7 +70,7 @@ class StationListResponse(BaseModel):
 
 class ErrorResponse(BaseModel):
     """
-    ErrorResponse
+    Describe an unsuccessful station operation with optional diagnostic detail
     """
     success: bool = False
     error: str
@@ -82,7 +83,9 @@ class ErrorResponse(BaseModel):
 @router.get('', response_model=StationListResponse)
 async def list_stations():
     """
-    List stations
+    List saved station documents and annotate configurations excluded from the active registry
+
+    :response: (jsn) station count and raw documents with draft reasons where applicable
     """
     station_io = StationIO()
     raw_stations = station_io.list_raw_station_configs()
@@ -107,7 +110,10 @@ async def list_stations():
 @router.get('/{network_name}')
 async def get_station_config(network_name: str):
     """
-    Get station config
+    Read a station's raw saved configuration for editing
+
+    :param network_name: (str) exact stored network name
+    :response:           (jsn) station name and unexpanded configuration document
     """
 
     station_io = StationIO()
@@ -122,7 +128,10 @@ async def get_station_config(network_name: str):
 @router.post('', response_model=StationConfigResponse, status_code=status.HTTP_201_CREATED)
 async def create_station(config: StationConfigRequest):
     """
-    Create station
+    Validate and save a new station, then refresh station and schedule state
+
+    :param config: (StationConfigRequest) new wrapped station settings
+    :response:     (jsn) creation result and saved file details
     """
 
     station_manager = StationManager()
@@ -164,7 +173,11 @@ async def create_station(config: StationConfigRequest):
 @router.put('/{network_name}', response_model=StationConfigResponse)
 async def update_station(network_name: str, config: StationConfigRequest):
     """
-    Update station
+    Replace an existing station configuration, supporting renames and channel changes
+
+    :param network_name: (str) existing stored network name
+    :param config:       (StationConfigRequest) replacement wrapped station settings
+    :response:           (jsn) update result and saved file details
     """
     station_manager = StationManager()
 
@@ -200,7 +213,10 @@ async def update_station(network_name: str, config: StationConfigRequest):
 @router.delete('/{network_name}', response_model=StationConfigResponse)
 async def delete_station(network_name: str):
     """
-    Delete station
+    Delete a station's saved configuration and refresh active station and schedule state
+
+    :param network_name: (str) stored network name to remove
+    :response:           (jsn) deletion result and removed network name
     """
 
     station_manager = StationManager()

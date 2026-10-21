@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage liquid blocks
+Represent program, clip, web, off-air, loop, and commercial-reel blocks and expand them into timed
+playback plans.
 """
 import random
 import os.path
@@ -18,7 +19,12 @@ from fs42.tools.schedule.block_plan import BlockPlanEntry
 
 def clip_break_points(break_points, max_breaks, content_duration):
     """
-    Clip break points
+    Merge content segments to limit the number of break positions
+
+    :param break_points:     (list) detected black-frame or chapter boundaries
+    :param max_breaks:       (int) maximum number of content segments to retain
+    :param content_duration: (float) complete feature duration in seconds
+    :return:                 (list) chapter_start and chapter_end dictionaries covering the selected segments
     """
     # ensure start ordering
     break_points = media_processor.calc_black_segments(break_points, content_duration)
@@ -71,12 +77,19 @@ def clip_break_points(break_points, max_breaks, content_duration):
 
 class LiquidBlock(object):
     """
-    LiquidBlock
+    Represent a scheduled program and construct its feature-and-break playback plan
     """
 
     def __init__(self, content, start_time, end_time, title=None, break_strategy='standard', break_info=None):
         """
-        Initialize the instance
+        Store scheduled content, broadcast boundaries, and per-slot break settings
+
+        :param content:        (CatalogEntry) feature media; subclasses may supply a list of clips
+        :param start_time:     (datetime) scheduled broadcast start
+        :param end_time:       (datetime) scheduled broadcast end
+        :param title:          (str) guide title, or None to use the media title
+        :param break_strategy: (str) placement rule for inserted breaks
+        :param break_info:     (dict) opening and closing bumps and directory overrides, or None
         """
         self.content = content
         # the requested starting time
@@ -109,7 +122,7 @@ class LiquidBlock(object):
 
     def __str__(self):
         """
-        Get the display text
+        Format the program's broadcast interval, title, and source filename
         """
         content = os.path.basename(self.content.path)
         return '{0} - {1} - {2} - {3}'.format(self.start_time.strftime('%m/%d %H:%M'),
@@ -117,25 +130,30 @@ class LiquidBlock(object):
 
     def content_duration(self):
         """
-        Content duration
+        Return the feature's original playback length in seconds
         """
         return self.content.duration
 
     def playback_duration(self):
         """
-        Playback duration
+        Return the scheduled interval's timedelta seconds component
         """
         return (self.end_time - self.start_time).seconds
 
     def buffer_duration(self):
         """
-        Buffer duration
+        Calculate the scheduled seconds remaining after the feature's duration
         """
         return self.playback_duration() - self.content_duration()
 
     def make_plan(self, catalog):
         """
-        Make plan
+        Split the feature at chapter or black-frame boundaries and insert break media
+
+        Use catalog selection to fill spare time and store the resulting playback plan
+        on this block. Reject a scheduled interval materially shorter than its content.
+
+        :param catalog: (ShowCatalog) station catalog supplying commercials and bumpers
         """
         # first, collect any reels (commercials and bumps) we might need to buffer to the requested duration
         diff = self.playback_duration() - self.content_duration()
@@ -244,12 +262,19 @@ class LiquidBlock(object):
 
 class LiquidClipBlock(LiquidBlock):
     """
-    LiquidClipBlock
+    Represent a clip compilation with breaks inserted between its constituent clips
     """
 
     def __init__(self, content, start_time, end_time, title=None, break_strategy='standard', break_info=None):
         """
-        Initialize the instance
+        Require a list of clips and initialize the scheduled compilation
+
+        :param content:        (lst<CatalogEntry>) clips in playback order
+        :param start_time:     (datetime) scheduled start
+        :param end_time:       (datetime) scheduled end
+        :param title:          (str) compilation title for the guide
+        :param break_strategy: (str) placement rule for inserted breaks
+        :param break_info:     (dict) per-slot break and bumper overrides, or None
         """
         if type(content) is list:
             super(LiquidClipBlock, self).__init__(content, start_time, end_time, title, break_strategy, break_info)
@@ -259,14 +284,14 @@ class LiquidClipBlock(LiquidBlock):
 
     def __str__(self):
         """
-        Get the display text
+        Format the compilation's broadcast interval and guide title
         """
         return '{0} - {1} - {2}'.format(self.start_time.strftime('%m/%d %H:%M'), self.end_time.strftime('%H:%M'),
                                         self.title)
 
     def content_duration(self):
         """
-        Content duration
+        Sum the original playback durations of every clip in the compilation
         """
         dur = 0
         for clip in self.content:
@@ -275,7 +300,9 @@ class LiquidClipBlock(LiquidBlock):
 
     def make_plan(self, catalog):
         """
-        Make plan
+        Fill the compilation's spare time with breaks and interleave them with its clips
+
+        :param catalog: (ShowCatalog) station catalog supplying commercials and bumpers
         """
         self.plan = []
         # first, collect any reels (commercials and bumps) we might need to buffer to the requested duration
@@ -322,18 +349,25 @@ class LiquidClipBlock(LiquidBlock):
 
 class LiquidWebBlock(LiquidBlock):
     """
-    LiquidWebBlock
+    Represent browser-rendered content as a single scheduled playback segment
     """
 
     def __init__(self, content, start_time, end_time, title=None, break_strategy='standard', break_info=None):
         """
-        Initialize the instance
+        Initialize a scheduled browser segment using the common program-block settings
+
+        :param content:        (CatalogEntry) browser URL and its configured duration
+        :param start_time:     (datetime) scheduled start
+        :param end_time:       (datetime) scheduled end
+        :param title:          (str) guide title, or None for the entry title
+        :param break_strategy: (str) inherited setting; no breaks are inserted by this block
+        :param break_info:     (dict) inherited break settings, or None
         """
         super(LiquidWebBlock, self).__init__(content, start_time, end_time, title, break_strategy, break_info)
 
     def make_plan(self, catalog):
         """
-        Make plan
+        Store one playback entry for the browser content without inserting breaks
         """
         _c = self.content
         self.plan = [
@@ -343,20 +377,28 @@ class LiquidWebBlock(LiquidBlock):
 
 class LiquidOffAirBlock(LiquidBlock):
     """
-    LiquidOffAirBlock
+    Fill an off-air interval with an optional sign-off followed by looping standby media
     """
 
     def __init__(self, content, start_time, end_time, title=None, break_strategy='standard', break_info=None,
                  sign_off=None):
         """
-        Initialize the instance
+        Initialize an off-air interval and its optional opening sign-off
+
+        :param content:        (CatalogEntry) standby media to repeat
+        :param start_time:     (datetime) off-air interval start
+        :param end_time:       (datetime) time normal programming resumes
+        :param title:          (str) guide title, or None for the entry title
+        :param break_strategy: (str) inherited break placement setting
+        :param break_info:     (dict) inherited break settings, or None
+        :param sign_off:       (CatalogEntry) optional media to play once before the standby loop
         """
         super(LiquidOffAirBlock, self).__init__(content, start_time, end_time, title, break_strategy, break_info)
         self.sign_off = sign_off
 
     def make_plan(self, catalog):
         """
-        Make plan
+        Repeat off-air media after the sign-off and trim the final segment to the scheduled end
         """
         self.plan = []
         current_mark = self.start_time
@@ -383,27 +425,38 @@ class LiquidOffAirBlock(LiquidBlock):
 
 class LiquidLoopBlock(LiquidBlock):
     """
-    LiquidLoopBlock
+    Fill a scheduled interval by cycling through a collection of media entries
     """
 
     def __init__(self, content, start_time, end_time, title=None, break_strategy='standard', break_info=None,
                  shuffle=False):
         """
-        Initialize the instance
+        Initialize looping content and its repeat-cycle shuffle option
+
+        :param content:        (lst<CatalogEntry>) media collection to cycle through
+        :param start_time:     (datetime) loop interval start
+        :param end_time:       (datetime) loop interval end
+        :param title:          (str) guide title for the looping interval
+        :param break_strategy: (str) inherited break placement setting
+        :param break_info:     (dict) inherited break settings, or None
+        :param shuffle:        (bool) whether to reshuffle after each complete cycle
         """
         super(LiquidLoopBlock, self).__init__(content, start_time, end_time, title, break_strategy, break_info)
         self.shuffle = shuffle
 
     def __str__(self):
         """
-        Get the display text
+        Format the loop interval and guide title for a schedule listing
         """
         return '{0} - {1} - {2} - LOOP'.format(self.start_time.strftime('%m/%d %H:%M'),
                                                self.end_time.strftime('%H:%M'), self.title)
 
     def make_plan(self, catalog):
         """
-        Make plan
+        Shuffle the initial media order and repeat clips until the interval is filled
+
+        Optionally reshuffle each subsequent cycle and trim the last segment to the
+        scheduled end. Store the resulting entries on this block.
         """
         if not self.content:
             raise ValueError('LiquidLoopBlock requires content')
@@ -437,12 +490,16 @@ class LiquidLoopBlock(LiquidBlock):
 
 class ReelBlock(object):
     """
-    ReelBlock
+    Group an opening bumper, filler media, and closing bumper into one break
     """
 
     def __init__(self, start_bump=None, comms=[], end_bump=None):
         """
-        Initialize the instance
+        Store the media components of a commercial break
+
+        :param start_bump: (CatalogEntry) optional opening bumper
+        :param comms:      (lst<CatalogEntry>) commercials or other filler in playback order
+        :param end_bump:   (CatalogEntry) optional closing bumper
         """
         self.start_bump = start_bump
         self.comms = comms
@@ -450,14 +507,14 @@ class ReelBlock(object):
 
     def __str__(self):
         """
-        Get the display text
+        Format the break's total duration and filler-entry count
         """
         return 'ReelBlock: {0} {1}'.format(self.duration, len(self.comms))
 
     @property
     def duration(self):
         """
-        Duration
+        Sum the bumpers and filler durations in seconds
         """
         dur = 0
         if self.start_bump is not None:
@@ -470,7 +527,7 @@ class ReelBlock(object):
 
     def make_plan(self):
         """
-        Make plan
+        Convert break components into ordered playback segments with bump and commercial tags
         """
         entries = []
         if self.start_bump is not None:

@@ -23,7 +23,7 @@ class StationConfigError(Exception):
 
 def _schedule_error_message(e):
     """
-    Schedule error message
+    Turn a missing schedule key into a readable error, retaining other exception text
     """
 
     if isinstance(e, KeyError):
@@ -33,7 +33,7 @@ def _schedule_error_message(e):
 
 class StationManager(object):
     """
-    StationManager
+    Share global settings and the active station registry across manager instances
     """
     # the borg singleton pattern
     __we_are_all_one = {}
@@ -49,7 +49,7 @@ class StationManager(object):
     # NOTE: This is the borg singleton pattern - __we_are_all_one
     def __new__(cls, *args, **kwargs):
         """
-        Create the shared instance
+        Create a manager whose attributes share the common station registry state
         """
         obj = super(StationManager, cls).__new__(cls, *args, **kwargs)
         obj.__dict__ = cls.__we_are_all_one
@@ -57,7 +57,7 @@ class StationManager(object):
 
     def __init__(self):
         """
-        Initialize the instance
+        Load global settings and active stations once, then validate the guide configuration
         """
         self.__dict__ = self.__we_are_all_one
         if not self._initialized:
@@ -97,7 +97,7 @@ class StationManager(object):
 
     def station_by_name(self, name):
         """
-        Station by name
+        Look up an active station by its network name, returning None when absent
         """
         if name in self._name_index:
             return self._name_index[name]
@@ -105,7 +105,7 @@ class StationManager(object):
 
     def station_by_channel(self, channel_number):
         """
-        Station by channel
+        Look up an active station by channel number, returning None when absent
         """
         if channel_number in self._number_index:
             return self._number_index[channel_number]
@@ -113,7 +113,7 @@ class StationManager(object):
 
     def index_from_channel(self, channel):
         """
-        Index from channel
+        Find a channel's zero-based position in the active station list, or return None
         """
         index = 0
         for station in self.stations:
@@ -124,19 +124,19 @@ class StationManager(object):
 
     def get_day_parts(self):
         """
-        Get day parts
+        Return the configured day-part names and their allowed hours
         """
         return self.server_conf['day_parts']
 
     def get_custom_holidays(self):
         """
-        Get custom holidays
+        Return the configured custom holiday definitions used by scheduling hints
         """
         return self.server_conf['custom_holidays']
 
     def _validate_custom_holiday_names(self):
         """
-        Validate custom holiday names
+        Reject custom holiday names that would also match a built-in scheduling hint
         """
         # a holiday name is matched against folder names and marathon hints as a
         # bare string, so one that also reads as a built-in hint either stacks with
@@ -159,7 +159,10 @@ class StationManager(object):
 
     def load_main_config(self):
         """
-        Load main config
+        Merge global configuration overrides into defaults and validate scheduling settings
+
+        Compile-check title patterns, expand day-part hours, and reject holiday name
+        collisions. Wrap configuration-loading failures in StationConfigError.
         """
         _l = logging.getLogger('STATIONMANAGER')
         d = self.station_io.load_main_config()
@@ -263,7 +266,10 @@ class StationManager(object):
 
     def load_json_stations(self):
         """
-        Load json stations
+        Reload usable stations, normalize standard schedules, and rebuild channel lookups
+
+        Keep invalid station details in skipped_stations for diagnostics and sort the
+        active registry by channel number.
         """
         _l = logging.getLogger('STATIONMANAGER')
 
@@ -324,7 +330,12 @@ class StationManager(object):
 
     def write_station_config(self, network_name, config_data, is_update=False):
         """
-        Write station config
+        Save a station configuration and refresh the active registry after a successful write
+
+        :param network_name: (str) current network name used to locate an existing station
+        :param config_data:  (dict) complete station document to validate and save
+        :param is_update:    (bool) whether this replaces an existing station
+        :return:             (tuple) success flag, status message, and written path or None
         """
 
         # Let StationIO handle validation, uniqueness checks, and file writing
@@ -338,7 +349,10 @@ class StationManager(object):
 
     def delete_station_config(self, network_name):
         """
-        Delete station config
+        Delete a saved station and refresh the active registry if deletion succeeds
+
+        :param network_name: (str) stored network name of the station to remove
+        :return:             (tuple) success flag and status or error message
         """
 
         # Let StationIO handle existence checks and file deletion
@@ -352,7 +366,7 @@ class StationManager(object):
 
     def _reload_stations(self):
         """
-        Reload stations
+        Reload station files and rebuild the shared name and channel indexes
         """
 
         _l = logging.getLogger('STATIONMANAGER')

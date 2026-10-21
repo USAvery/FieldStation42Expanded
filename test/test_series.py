@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage test series
+Retain commented examples for the retired SeriesIndex interface. This module currently defines no
+executable tests.
 """
 # import pytest
 # from fs42.series import SeriesIndex

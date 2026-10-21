@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Expose the package interface
+List available console stylesheets and their browser URLs, respecting the server's static-symlink
+setting.
 """
 import os
 
@@ -17,7 +18,11 @@ router = APIRouter(prefix='/about')
 
 def _is_servable(theme_dir, file):
     """
-    Is servable
+    Check whether a theme file exists and satisfies the configured static-link policy
+
+    :param theme_dir: (str) directory containing the requested theme
+    :param file:      (str) candidate filename inside the theme directory
+    :return:          (bool) whether the resolved file is allowed to be served
     """
 
     full_path = os.path.join(theme_dir, file)

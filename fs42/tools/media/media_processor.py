@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage media processor
+Discover audio and video files, extract durations and metadata, attach folder-derived scheduling
+hints, and detect black-frame breaks and chapters.
 """
 import os
 import sys
@@ -74,7 +75,7 @@ supported_formats = VIDEO_FORMATS + AUDIO_FORMATS
 
 def get_media_type(file_path):
     """
-    Get media type
+    Classify recognized audio extensions as audio and all other filenames as video
     """
     ext = os.path.splitext(file_path)[1].lower().lstrip('.')
     if ext in AUDIO_FORMATS:
@@ -101,7 +102,10 @@ def extract_metadata(file_path, media_type):
 
 def extract_audio_metadata(file_path):
     """
-    Extract audio metadata
+    Read music tags with mutagen and use the filename when no title tag is available
+
+    :param file_path: (str) audio filename to inspect
+    :return:          (dict) available music metadata, or an empty mapping if reading is unsupported
     """
     if mutagen is None:
         logging.getLogger('MEDIA').warning('mutagen library not available, skipping audio metadata extraction')
@@ -154,7 +158,14 @@ def extract_audio_metadata(file_path):
 
 def process_one(fname, tag, hints, fluid=None, content_type='feature'):
     """
-    Process one
+    Probe a media file and build a catalog entry only when its duration is positive
+
+    :param fname:        (str) media path to inspect
+    :param tag:          (str) catalog selection tag to assign
+    :param hints:        (list) scheduling restrictions inherited from media folders
+    :param fluid:        (FluidBuilder) optional metadata cache used before probing the file
+    :param content_type: (str) playback category such as feature, commercial, or bump
+    :return:             (CatalogEntry) usable media entry, or None when processing fails
     """
     _l = logging.getLogger('MEDIA')
     _l.debug('--process_one is working on {}'.format(fname))
@@ -206,7 +217,14 @@ def process_one(fname, tag, hints, fluid=None, content_type='feature'):
 
 def _process_media(file_list, tag, hints=[], fluid=None, content_type='feature'):
     """
-    Process media
+    Create catalog entries for a collection of files and log media that cannot be processed
+
+    :param file_list:    (list) media paths to inspect
+    :param tag:          (str) shared catalog selection tag
+    :param hints:        (list) scheduling restrictions attached to each entry
+    :param fluid:        (FluidBuilder) optional metadata cache
+    :param content_type: (str) playback category assigned to the entries
+    :return:             (lst<CatalogEntry>) successfully processed media
     """
     _l = logging.getLogger('MEDIA')
     _l.debug('_process_media starting processing for tag={0} on {1} files'.format(tag, len(file_list)))
@@ -275,7 +293,11 @@ def _get_duration(file_name):
 
 def _find_media(path, media_filter='video'):
     """
-    Find media
+    List supported media directly inside a directory using the requested format filter
+
+    :param path:         (str) directory to scan without recursion
+    :param media_filter: (str) audio, video, or another value for all supported formats
+    :return:             (lst<str>) matching media paths
     """
     logging.getLogger('MEDIA').debug('_find_media scanning for media in {0} with filter={1}'.format(
         path, media_filter))
@@ -302,7 +324,11 @@ def _find_media(path, media_filter='video'):
 
 def rich_find_media(path, media_filter='video'):
     """
-    Rich find media
+    Discover media recursively and collect resolved paths, byte sizes, and modification times
+
+    :param path:         (str) root directory to scan
+    :param media_filter: (str) audio, video, or another value for all supported formats
+    :return:             (lst<FileRepoEntry>) filesystem records ready for cache comparison
     """
     file_list = _rfind_media(path, media_filter)
     found_list = []
@@ -320,7 +346,11 @@ def rich_find_media(path, media_filter='video'):
 
 def _rfind_media(path, media_filter='video'):
     """
-    Rfind media
+    Discover supported media recursively, following links and excluding hidden files and folders
+
+    :param path:         (str) root directory to walk
+    :param media_filter: (str) audio, video, or another value for all supported formats
+    :return:             (lst<str>) discovered media paths
     """
     logging.getLogger('MEDIA').debug('_rfind_media scanning for media in {0} with filter={1}'.format(
         path, media_filter))
@@ -357,7 +387,12 @@ def _rfind_media(path, media_filter='video'):
 
 def _process_hints(path, tag, bumpdir=False):
     """
-    Process hints
+    Interpret a folder's name as scheduling restrictions and optional bumper placement
+
+    :param path:    (str) directory whose final component contains hint text
+    :param tag:     (str) retained catalog-tag argument; not used in hint matching
+    :param bumpdir: (bool) whether to recognize pre-break and post-break placement hints
+    :return:        (list) every recognized hint represented by the folder name
     """
     base = os.path.basename(path)
     hints = []
@@ -418,7 +453,12 @@ def _test_candidate_hints(hint_list, when):
 
 def _by_position(bumps, pre_tag, post_tag):
     """
-    By position
+    Partition bumper entries into opening, filler, and closing groups and retag positioned entries
+
+    :param bumps:    (list) catalog entries carrying optional BumpHint values
+    :param pre_tag:  (str) replacement tag for opening bumpers
+    :param post_tag: (str) replacement tag for closing bumpers
+    :return:         (tuple) opening, filler, and closing entry lists
     """
     pre = []
     fill = []
@@ -444,7 +484,14 @@ def _by_position(bumps, pre_tag, post_tag):
 
 def calc_black_segments(break_points, content_duration):
     """
-    Calc black segments
+    Complete ordered break boundaries with segment durations and missing endpoints
+
+    Add a leading segment when the first boundary starts after zero. Existing
+    boundary dictionaries are updated in place within the returned sorted list.
+
+    :param break_points:     (list) dictionaries containing chapter_start and optional chapter_end
+    :param content_duration: (float) full media length in seconds
+    :return:                 (list) ordered segments with durations measured in seconds
     """
     # ensure start ordering
     break_points = sorted(break_points, key=lambda k: k['chapter_start'])
@@ -474,19 +521,26 @@ def calc_black_segments(break_points, content_duration):
 
 def black_detect(fname, base_duration, black_min_duration=0.1, black_pixel_tresh=0.1, black_ratio_thresh=0.95):
     """
-    Black detect
+    Run FFmpeg black-frame detection and derive potential commercial-break segments
+
+    :param fname:              (str) video file to analyze
+    :param base_duration:      (float) full video length in seconds
+    :param black_min_duration: (float) minimum black interval in seconds
+    :param black_pixel_tresh:  (float) FFmpeg pixel-luminance threshold for classifying black
+    :param black_ratio_thresh: (float) required fraction of black pixels per frame
+    :return:                   (list) detected segment boundaries and durations, or None when detection fails
     """
 
     def min_segment(break_points):
         """
-        Min segment
+        Find the shortest duration among detected content segments
         """
         spx = sorted(break_points, key=lambda x: x['segment_duration'])
         return spx[0]['segment_duration']
 
     def remove_min(break_points):
         """
-        Remove min
+        Return segments sorted by duration with the shortest segment removed
         """
         spx = sorted(break_points, key=lambda x: x['segment_duration'])
         del spx[0]
@@ -573,7 +627,11 @@ def black_detect(fname, base_duration, black_min_duration=0.1, black_pixel_tresh
 
 def chapter_detect(fname, base_duration):
     """
-    Chapter detect
+    Probe embedded chapters and derive content-segment durations for break insertion
+
+    :param fname:         (str) video file to inspect with ffprobe
+    :param base_duration: (float) full media length in seconds; videos under five minutes are skipped
+    :return:              (list) chapter boundary dictionaries, or None when no usable chapters are found
     """
     import subprocess
     import json

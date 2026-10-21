@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage title parser
+Extract readable program titles from filenames using custom and built-in patterns, then normalize
+separators and capitalization.
 """
 import os
 import re
@@ -13,7 +14,7 @@ from fs42.tools.media._constants import DEFAULT_UPPERCASE_WORDS
 
 def _apply_case(word, upper_words):
     """
-    Apply case
+    Preserve designated acronyms in uppercase and capitalize other title words
     """
     if word.upper() in upper_words:
         return word.upper()
@@ -22,7 +23,12 @@ def _apply_case(word, upper_words):
 
 def parse_title(in_str, custom_patterns=None, uppercase_words=None):
     """
-    Parse title
+    Extract a readable program title from a media filename using custom and built-in patterns
+
+    :param in_str:          (str) media path or filename to normalize
+    :param custom_patterns: (list) optional regex and capture-group pairs tried before defaults
+    :param uppercase_words: (list) additional words to preserve as uppercase acronyms
+    :return:                (str) cleaned title with separators removed and word casing normalized
     """
     if not in_str:
         return ''  # Consider defaulting to No Information or No Data to match TV Guides

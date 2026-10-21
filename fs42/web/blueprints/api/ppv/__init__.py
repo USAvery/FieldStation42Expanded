@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Expose the package interface
+Expose pay-per-view media listings, metadata, and artwork, and forward file-playback and key
+commands to the player.
 """
 import os
 import logging
@@ -60,7 +61,7 @@ class PPVContentListResponse(BaseModel):
 
 class ErrorResponse(BaseModel):
     """
-    ErrorResponse
+    Describe a failed pay-per-view API operation
     """
     success: bool = False
     error: str

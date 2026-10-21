@@ -32,7 +32,7 @@ def test_source_root_has_only_responsibility_packages():
 
 @pytest.mark.parametrize('module', [
     'fs42.tools.osd.main',
-    'fs42.tools.osd.logo_display',
+    'fs42.tools.osd.display.logo_display',
     'fs42.tools.overlay.now_playing',
     'fs42.tools.overlay.parental_controls',
     'fs42.tools.overlay.ticker',

@@ -3,7 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage constants
+Define the volume-status file and adjustment step used by the player-control endpoints.
 """
 
 VOLUME_SOCKET = 'runtime/volume.socket'

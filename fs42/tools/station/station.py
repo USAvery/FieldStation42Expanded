@@ -47,10 +47,16 @@ class Station(object):
 
     @property
     def success_messages(self):
+        """
+        Return a copy of the successful-operation messages
+        """
         return list(self._success_messages)
 
     @property
     def failure_messages(self):
+        """
+        Return a copy of the failed-operation messages
+        """
         return list(self._failure_messages)
 
     def _check_args(self):

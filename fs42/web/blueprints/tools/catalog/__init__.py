@@ -3,7 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Expose the package interface
+Serve the catalog-management page for viewing media entries and requesting catalog builds.
 """
 from fastapi import Request
 from fastapi import APIRouter

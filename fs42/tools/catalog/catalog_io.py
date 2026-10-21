@@ -21,12 +21,12 @@ _logger = project_logger.setup('fs42.tools.catalog.catalog_io')
 
 class CatalogIO(object):
     """
-    CatalogIO
+    Persist and query station media catalogs in the configured SQLite database
     """
 
     def __init__(self):
         """
-        Initialize the instance
+        Select the configured catalog database and create or upgrade its table
         """
         self.db_path = StationManager().server_conf['db_path']
         self._l = logging.getLogger('CATIO')
@@ -35,7 +35,9 @@ class CatalogIO(object):
     @contextmanager
     def _get_connection(self):
         """
-        Get connection
+        Yield a SQLite connection, commit successful work, and roll back exceptions
+
+        Close the connection on every exit from the context manager.
         """
         connection = sqlite3.connect(self.db_path)
         try:
@@ -49,8 +51,7 @@ class CatalogIO(object):
 
     def _init_catalog_table(self):
         """
-        Creates a database table to hold CatalogEntry records
-        Each record is associated with a station (text string).
+        Create the catalog table and add missing columns required by newer media records
         """
         with self._get_connection() as connection:
             cursor = connection.cursor()
@@ -120,7 +121,7 @@ class CatalogIO(object):
 
     def entry_by_id(self, entry_id):
         """
-        Entry by id
+        Read one catalog row by database ID, returning None when it does not exist
         """
         with self._get_connection() as connection:
             cursor = connection.cursor()
@@ -139,8 +140,7 @@ class CatalogIO(object):
 
     def entries_by_ids(self, entry_ids):
         """
-        Batch lookup of catalog entries by IDs
-        Returns a dictionary mapping entry_id -> CatalogEntry for found entries.
+        Read catalog rows in one query and map found database IDs to restored entries
         """
         if not entry_ids:
             return {}
@@ -166,7 +166,10 @@ class CatalogIO(object):
 
     def put_catalog_entries(self, station_name, catalog_entries):
         """
-        Put catalog entries
+        Insert or replace a station's media records, serializing scheduling hints
+
+        :param station_name:    (str) network name owning the entries
+        :param catalog_entries: (list) CatalogEntry instances to persist; other values are skipped
         """
         with self._get_connection() as connection:
             cursor = connection.cursor()
@@ -208,7 +211,7 @@ class CatalogIO(object):
 
     def get_catalog_entries(self, station_name):
         """
-        Get catalog entries
+        Return all entries for a station ordered by tag and title
         """
         with self._get_connection() as connection:
             cursor = connection.cursor()
@@ -234,7 +237,11 @@ class CatalogIO(object):
 
     def search_catalog_entries(self, station_name, query):
         """
-        Search catalog entries
+        Search a station's title, tag, and path columns with a substring SQL LIKE pattern
+
+        :param station_name: (str) network name restricting the search
+        :param query:        (str) search text; SQL LIKE wildcards remain active
+        :return:             (lst<CatalogEntry>) matching entries ordered by tag and title
         """
         with self._get_connection() as connection:
             cursor = connection.cursor()
@@ -255,7 +262,7 @@ class CatalogIO(object):
 
     def delete_all_entries_for_station(self, station_name):
         """
-        Delete all entries for station
+        Remove every catalog database row belonging to the specified network
         """
         with self._get_connection() as connection:
             cursor = connection.cursor()
@@ -265,7 +272,7 @@ class CatalogIO(object):
 
     def get_entry_by_path(self, station_name, path):
         """
-        Get entry by path
+        Read a station's first exact-path catalog match, or return None
         """
         with self._get_connection() as connection:
             cursor = connection.cursor()
@@ -285,7 +292,7 @@ class CatalogIO(object):
 
     def get_by_tag(self, station_name, tag):
         """
-        Get by tag
+        Read all catalog entries matching both the network name and content tag
         """
         with self._get_connection() as connection:
             cursor = connection.cursor()
@@ -305,7 +312,7 @@ class CatalogIO(object):
 
     def update_entry_count(self, station_name, path, new_count):
         """
-        Update entry count
+        Replace the stored play count and update timestamp for a station's media path
         """
         with self._get_connection() as connection:
             cursor = connection.cursor()
@@ -321,7 +328,10 @@ class CatalogIO(object):
     # make a function to batch increment counts for multiple entries
     def batch_increment_counts(self, station_name, entries):
         """
-        Batch increment counts
+        Increment stored counts for the supplied station media entries in one transaction
+
+        :param station_name: (str) network name owning the catalog rows
+        :param entries:      (list) CatalogEntry instances whose paths should each gain one count
         """
         with self._get_connection() as connection:
             cursor = connection.cursor()
@@ -340,7 +350,12 @@ class CatalogIO(object):
 
     def find_best_candidates(self, station_name, tag, max_duration):
         """
-        Find best candidates
+        Read tagged media within a duration limit, prioritizing the least-used entries
+
+        :param station_name: (str) network name restricting the query
+        :param tag:          (str) exact content tag to match
+        :param max_duration: (float) maximum playback length in seconds
+        :return:             (lst<CatalogEntry>) entries of at least one second ordered by count then title
         """
         with self._get_connection() as connection:
             cursor = connection.cursor()

@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage constants
+Define web asset locations, page registrations and legacy mount aliases, and TMDB service and cache
+settings.
 """
 import os
 

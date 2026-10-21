@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage now playing
+Show audio metadata in a separate Qt now-playing window. Keep the window running until the player
+terminates or replaces its process.
 """
 import os
 import sys
@@ -28,12 +29,15 @@ _logger = project_logger.setup('fs42.tools.overlay.now_playing')
 
 class SingleApplication(QApplication):
     """
-    SingleApplication
+    Track an existing overlay process through a temporary PID file
     """
 
     def __init__(self, argv, key):
         """
-        Initialize the instance
+        Check a keyed PID file and claim it when no live process is recorded
+
+        :param argv: (list) command-line arguments forwarded to QApplication
+        :param key:  (str) identifier used to name the temporary lock file
         """
         super(SingleApplication, self).__init__(argv)
 
@@ -72,13 +76,13 @@ class SingleApplication(QApplication):
 
     def is_running(self):
         """
-        Is running
+        Report whether initialization found another live process holding the overlay lock
         """
         return self._running
 
     def __del__(self):
         """
-        Del
+        Remove this application's PID file when it owns the overlay lock
         """
         # Clean up lock file on exit
         if hasattr(self, 'lock_file') and not self._running:
@@ -90,12 +94,16 @@ class SingleApplication(QApplication):
 
 class NowPlayingWindow(QWidget):
     """
-    NowPlayingWindow
+    Show title, artist, and album metadata in a persistent transparent overlay
     """
 
     def __init__(self, file_path, db_path, parent=None):
         """
-        Initialize the instance
+        Load media metadata and size the now-playing panel for the primary screen
+
+        :param file_path: (str) playing media path used for metadata lookup
+        :param db_path:   (str) metadata database filename
+        :param parent:    (QWidget) optional Qt parent window
         """
         super(NowPlayingWindow, self).__init__(parent)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
@@ -170,7 +178,9 @@ class NowPlayingWindow(QWidget):
 
     def paintEvent(self, event):
         """
-        PaintEvent
+        Paint the now-playing metadata over a shaded panel near the lower screen edge
+
+        :param event: (QPaintEvent) Qt repaint notification
         """
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
@@ -266,7 +276,7 @@ class NowPlayingWindow(QWidget):
 
 def signal_handler(sig, frame):
     """
-    Signal handler
+    Request a clean Qt event-loop exit when the overlay receives an interrupt signal
     """
     _logger.info("\nShutting down now playing overlay...")
     QApplication.quit()
@@ -296,7 +306,7 @@ def run_now_playing(file_path, db_path):
 
     def now_playing_process():
         """
-        Now playing process
+        Run the now-playing Qt application inside the spawned overlay process
         """
         run_now_playing_app(file_path, db_path)
 

@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage catalog screen
+Display station catalog statistics in the terminal interface and run selected or full catalog
+rebuilds with progress feedback.
 """
 from textual import work
 from textual.app import Screen
@@ -22,13 +23,13 @@ from fs42.tools.station.gui.dialogs import SelectStationErr
 
 class CatalogScreen(Screen):
     """
-    CatalogScreen
+    Present catalog inspection and rebuild controls in the terminal administration interface
     """
     CSS_PATH = 'catalog_screen.tcss'
 
     def compose(self):
         """
-        Compose
+        Create the station selector, catalog action buttons, and results table
         """
         yield Header('Welcome to Station42')
         self.dt = DataTable()
@@ -55,7 +56,7 @@ class CatalogScreen(Screen):
 
     async def on_button_pressed(self, event):
         """
-        On button pressed
+        Dispatch catalog view, selected rebuild, all-station rebuild, and back actions
         """
         match event.button.id:
             case 'view_selected':
@@ -102,7 +103,7 @@ class CatalogScreen(Screen):
 
     def on_mount(self):
         """
-        On mount
+        Set the catalog screen title and table size, then populate station statistics
         """
         self.title = 'FieldStation42'
         self.sub_title = 'Control Panel'
@@ -112,27 +113,27 @@ class CatalogScreen(Screen):
 
     def on_screen_resume(self):
         """
-        On screen resume
+        Refresh catalog statistics when returning to this screen
         """
         self.populate_stats()
 
     def rebuild_done(self):
         """
-        Rebuild done
+        Dismiss the rebuild progress dialog and refresh catalog statistics
         """
         self.app.pop_screen()
         self.populate_stats()
 
     def update_loading_message(self, message):
         """
-        Update loading message
+        Replace the text shown in the active catalog progress dialog
         """
         self.app.query_one(LoadingScreen).set_message(message)
 
     @work(exclusive=True, thread=True)
     def rebuild_thread(self, network_name):
         """
-        Rebuild thread
+        Rebuild the selected station's catalog in a worker and notify the interface on completion
         """
         station = StationManager().station_by_name(network_name)
         if station['network_type'] != 'guide' and station['network_type'] != 'streaming':
@@ -142,7 +143,7 @@ class CatalogScreen(Screen):
     @work(exclusive=True, thread=True)
     def rebuild_all_thread(self):
         """
-        Rebuild all thread
+        Rebuild every non-guide, non-streaming station catalog in a worker thread
         """
         for station in StationManager().stations:
             # self.app.call_from_thread(self.update_loading_message, msg)
@@ -153,7 +154,7 @@ class CatalogScreen(Screen):
 
     def populate_stats(self):
         """
-        Populate stats
+        Replace the table with configured stations' catalog tag and media counts
         """
         self.dt.clear(True)
         self.dt.add_columns('Network', 'Channel', 'Type', 'Tags', 'Videos')

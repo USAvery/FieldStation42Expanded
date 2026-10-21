@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage web render
+Render a station URL in a Qt WebEngine window, retry failed loads, and respond to queue messages
+controlling window visibility and shutdown.
 """
 import signal
 
@@ -25,12 +26,14 @@ _logger = project_logger.setup('fs42.tools.web_channel.web_render')
 
 class WebRender(QMainWindow):
     """
-    WebRender
+    Display channel web content in Qt WebEngine with media autoplay and load retries
     """
 
     def __init__(self, transparent=False):
         """
-        Initialize the instance
+        Configure the embedded browser's background, autoplay settings, and retry state
+
+        :param transparent: (bool) whether the browser window should allow underlying video to show through
         """
         super(WebRender, self).__init__()
         self.transparent = transparent
@@ -74,7 +77,7 @@ class WebRender(QMainWindow):
 
     def navigate(self, URL):
         """
-        Navigate
+        Load a channel URL and reset its retry counter
         """
         # Initialize retry tracking for new URL
         self.current_url = URL
@@ -95,7 +98,9 @@ class WebRender(QMainWindow):
 
     def _on_load_finished(self, success):
         """
-        On load finished
+        Enable page media after a successful load or schedule retries after a failed load
+
+        :param success: (bool) Qt WebEngine's page-load result
         """
         if success:
             _logger.info('WebRender successfully loaded: {}'.format(self.current_url))
@@ -143,12 +148,15 @@ class WebRender(QMainWindow):
 
 class WebRenderApp(QApplication):
     """
-    WebRenderApp
+    Control a channel browser window through player messages and optional timed refreshes
     """
 
     def __init__(self, user_conf, queue=None):
         """
-        Initialize the instance
+        Create the browser window and timers from channel display settings
+
+        :param user_conf: (dict) page geometry, transparency, persistence, and refresh options
+        :param queue:     (Queue) optional player messages for window and guide interaction
         """
         super(WebRenderApp, self).__init__([])
 
@@ -196,7 +204,7 @@ class WebRenderApp(QApplication):
 
     def show_window(self):
         """
-        Show window
+        Show and focus the browser window and notify page scripts that the guide is visible
         """
         if self.windowed:
             self.window.show()
@@ -213,14 +221,14 @@ class WebRenderApp(QApplication):
 
     def hide_window(self):
         """
-        Hide window
+        Hide the browser window and notify page scripts that the guide is hidden
         """
         self.window.hide()
         self.window.browser.page().runJavaScript("window.dispatchEvent(new CustomEvent('fs42-guide-hide'));")
 
     def shutdown_window(self):
         """
-        Shutdown window
+        Stop browser timers, close the window, and exit the Qt application
         """
         self.timer.stop()
         if hasattr(self, 'refresh_timer'):
@@ -230,7 +238,7 @@ class WebRenderApp(QApplication):
 
     def tick(self):
         """
-        Tick
+        Handle a queued browser-control message, including guide geometry, visibility, and input
         """
         if self.queue and self.queue.qsize() > 0:
             msg = self.queue.get_nowait()
@@ -293,13 +301,16 @@ class WebRenderApp(QApplication):
 
 def web_render_runner(user_conf, queue):
     """
-    Web render runner
+    Configure the browser child process and run the channel's Qt event loop
+
+    :param user_conf: (dict) channel URL and browser window settings
+    :param queue:     (Queue) incoming control messages from the player
     """
 
     # Set up signal handler for web process - just exit cleanly
     def web_sigint_handler(sig, frame):
         """
-        Web sigint handler
+        Exit the browser child process when it receives an interrupt signal
         """
         _logger.info('WebRender process received SIGINT, exiting...')
         import sys
@@ -320,7 +331,7 @@ def web_render_runner(user_conf, queue):
     # Navigate to URL after a short delay to ensure Qt is fully initialized
     def delayed_navigate():
         """
-        Delayed navigate
+        Load the configured page after Qt initialization, falling back to the diagnostics page
         """
         url = user_conf.get('web_url', 'http://localhost:4242/static/diagnostics.html')
         if 'url' in user_conf:

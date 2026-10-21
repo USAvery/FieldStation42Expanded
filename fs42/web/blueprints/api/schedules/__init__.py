@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Expose the package interface
+Expose station schedules and time-window searches as HTTP responses, attaching media metadata and
+cached streaming-guide listings when requested.
 """
 from datetime import datetime
 from datetime import timedelta
@@ -47,7 +48,10 @@ def _attach_meta(blocks):
 @router.get('/search_all')
 async def search_all_schedules(query: str = None):
     """
-    Search all schedules
+    Search saved programming across stations or list all schedules when no query is supplied
+
+    :param query: (str) optional schedule search text
+    :response:    (jsn) matching blocks grouped by network, with any query errors
     """
     if not query:
         # If no query, get all blocks from all stations
@@ -89,7 +93,11 @@ async def search_all_schedules(query: str = None):
 @router.get('/search/{network_name}')
 async def search_schedule(network_name: str, query: str = None):
     """
-    Search schedule
+    Search one station's programming or list its entire saved schedule
+
+    :param network_name: (str) active station name
+    :param query:        (str) optional schedule search text
+    :response:           (jsn) network, query, and matching schedule blocks
     """
     conf = StationManager().station_by_name(network_name)
     if conf is None:
@@ -110,7 +118,7 @@ def _attach_meta_batch(by_station):
 
     def single_content_path(block):
         """
-        Single content path
+        Return the media path for a single-item program block, excluding clip collections
         """
         content = getattr(block, 'content', None)
         if content is None or isinstance(content, list):
@@ -137,7 +145,11 @@ def _attach_meta_batch(by_station):
 
 def _listing_projection(blocks, include_meta):
     """
-    Listing projection
+    Reduce schedule blocks to guide listings with metadata-derived titles
+
+    :param blocks:       (list) loaded programming blocks with optional attached metadata
+    :param include_meta: (bool) whether to retain metadata in each listing
+    :return:             (list) title and ISO start/end dictionaries
     """
     # only get the stuff we need
     listings = []
@@ -158,7 +170,12 @@ def _listing_projection(blocks, include_meta):
 @router.get('/all')
 def get_all_schedules(start: str = None, end: str = None, include_meta: bool = False):
     """
-    Get all schedules
+    Combine local schedules and cached external EPG listings for a requested time window
+
+    :param start:        (str) required ISO-format window start
+    :param end:          (str) required ISO-format window end
+    :param include_meta: (bool) whether listings should include cached program metadata
+    :response:           (jsn) listings indexed by network, or a date-input error
     """
 
     if not start or not end:
@@ -195,7 +212,13 @@ def get_all_schedules(start: str = None, end: str = None, include_meta: bool = F
 @router.get('/{network_name}')
 async def get_schedule(network_name: str, start: str = None, end: str = None, include_meta: bool = False):
     """
-    Get schedule
+    Read a station's saved programming or mapped external EPG listings
+
+    :param network_name: (str) active station name
+    :param start:        (str) optional ISO-format window start, used with end
+    :param end:          (str) optional ISO-format window end, used with start
+    :param include_meta: (bool) whether to attach cached program metadata
+    :response:           (jsn) station schedule blocks or cached EPG listings
     """
     conf = StationManager().station_by_name(network_name)
     if conf is None:

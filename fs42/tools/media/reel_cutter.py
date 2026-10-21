@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage reel cutter
+Assemble playback plans that interleave program segments with commercial reels and station bumps,
+using break strategies and optional detected cut points.
 """
 from fs42.tools.media import media_processor
 from fs42.tools.schedule.block_plan import BlockPlanEntry
@@ -12,7 +13,17 @@ from fs42.tools.schedule.block_plan import BlockPlanEntry
 def cut_reels_into_base(base_clip, reel_blocks, base_offset, base_duration, break_strategy, start_bump, end_bump,
                         break_points=None):
     """
-    Cut reels into base
+    Interleave a feature's playable segments with commercial breaks and explicit bumpers
+
+    :param base_clip:      (CatalogEntry) original feature media
+    :param reel_blocks:    (list) break blocks to insert
+    :param base_offset:    (float) initial seek offset into the feature in seconds
+    :param base_duration:  (float) feature duration to play in seconds
+    :param break_strategy: (str) placement mode such as standard, center, or end
+    :param start_bump:     (dict) optional opening bump path and duration
+    :param end_bump:       (dict) optional closing bump path and duration
+    :param break_points:   (list) optional chapter or black-frame boundaries
+    :return:               (lst<BlockPlanEntry>) complete playback plan in display order
     """
     entries = []
     break_count = 0
@@ -99,7 +110,14 @@ def cut_reels_into_base(base_clip, reel_blocks, base_offset, base_duration, brea
 
 def cut_reels_into_clips(clips, reel_blocks, break_stategy, start_bump, end_bump):
     """
-    Cut reels into clips
+    Interleave whole clips with break blocks according to the configured placement strategy
+
+    :param clips:         (lst<CatalogEntry>) compilation clips in playback order
+    :param reel_blocks:   (list) commercial breaks to insert
+    :param break_stategy: (str) placement mode such as standard, center, or end
+    :param start_bump:    (dict) optional opening bump path and duration
+    :param end_bump:      (dict) optional closing bump path and duration
+    :return:              (lst<BlockPlanEntry>) complete compilation playback plan
     """
     entries = []
 

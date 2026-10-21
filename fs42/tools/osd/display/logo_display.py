@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage logo display
+Select and draw station or program logos, including animated and time-dependent variants. Use player
+status to suppress logos during breaks and restart their display timing when programs resume.
 """
 import os
 import glob
@@ -11,56 +12,38 @@ import json
 import random
 import datetime
 
-from pydantic import BaseModel
 from PySide6.QtGui import QImage
 from PySide6.QtCore import QRectF
 from PySide6.QtGui import QPixmap
 
 from fs42.core import paths
 from fs42.core import logger as project_logger
-from fs42.tools.osd._constants import SOCKET_FILE
-
-_logger = project_logger.setup('fs42.tools.osd.logo_display')
+from fs42.core.station_manager import StationManager
 
 from fs42.tools.osd.osd_layout import HAlignment
 from fs42.tools.osd.osd_layout import VAlignment
-from fs42.core.station_manager import StationManager
+from fs42.tools.osd._constants import ContentType
+from fs42.tools.osd.osd_layout import calc_margin_px
 from fs42.tools.osd.osd_layout import frac_to_size_px
-from fs42.tools.osd.osd_layout import resolve_top_left
-from fs42.tools.osd.osd_layout import frac_to_margin_px
-from fs42.tools.osd.content_classifier import ContentType
-from fs42.tools.osd.content_classifier import classify_current_content
+from fs42.tools.osd.display.display import BaseDisplay
+from fs42.tools.osd.osd_layout import calc_draw_position
 
 
-class LogoDisplayConfig(BaseModel):
+_logger = project_logger.setup('fs42.tools.osd.display.logo_display')
+
+
+class LogoDisplay(BaseDisplay):
     """
-    LogoDisplayConfig
-    """
-    halign: HAlignment = HAlignment.RIGHT
-    valign: VAlignment = VAlignment.TOP
-    width: float = 0.112
-    height: float = 0.15
-    x_margin: float = 0.05
-    y_margin: float = 0.05
-    logo_mapping: dict[str, str] = {}
-    default_logo: str | None = None
-    always_show: bool = False
-    display_time: float = 5.0
-    default_show_logo: bool = True
-    default_logo_permanent: bool = False
-    default_logo_alpha: float = 1.0
-
-
-class LogoDisplay(object):
-    """
-    LogoDisplay
+    Select and render station or program logos while feature content is playing
     """
 
     def __init__(self, config):
         """
-        Initialize the instance
+        Initialize logo selection and animation state, then read the current channel
+
+        :param config: (LogoDisplayConfig) fallback image, layout, and visibility settings
         """
-        self.config = config
+        super(LogoDisplay, self).__init__(config)
         self.station_manager = StationManager()
 
         self.current_logo_frames = []
@@ -88,7 +71,10 @@ class LogoDisplay(object):
 
     def get_available_logos(self, dir_path):
         """
-        Get available logos
+        List supported image files directly inside a logo directory
+
+        :param dir_path: (str) directory to scan without descending into subdirectories
+        :return:         (lst<str>) PNG, JPEG, GIF, and BMP paths with lower- or uppercase extensions
         """
         extensions = ['*.png', '*.jpg', '*.jpeg', '*.gif', '*.bmp']
         found = []
@@ -99,7 +85,7 @@ class LogoDisplay(object):
 
     def load_main_config(self):
         """
-        Load main_config.json from confs/
+        Read and cache global settings, using an empty dictionary if loading fails
         """
         if self.main_config is not None:
             return self.main_config
@@ -121,27 +107,20 @@ class LogoDisplay(object):
 
     def find_content_logo_dir(self, base_dir, station_data):
         """
-        Find a tag-based logo directory
+        Find a program-specific logo directory from the playing file or current schedule tag
 
-        Preferred behavior:
-          1. Derive the tag from the currently playing file path:
-             content_dir/<tag>/<file>
-             example:
-               catalog/MTV/daria/episode.mp4
-               -> logo_dir/daria/
+        Prefer the first directory beneath content_dir in the playing file's path. If
+        that fails, use the current schedule slot's first tag. Try both sanitized and
+        original tag names when locating a directory.
 
-          2. Fall back to the station schedule's current slot tag:
-             "monday": {
-                 "20": { "tags": ["beavisandbutthead", "daria"] }
-             }
-
-        This keeps old schedule-based behavior available, while allowing
-        logo changes to follow the actual currently playing content.
+        :param base_dir:     (str) root directory containing program logo folders
+        :param station_data: (dict) station content directory and weekday schedule settings
+        :return:             (str) matching logo directory, or None when none exists
         """
 
         def normalize_tag(tag):
             """
-            Normalize tag
+            Return a trimmed tag and a version with spaces and path separators replaced by underscores
             """
             stripped = tag.strip()
             safe = (stripped.replace(' ', '_').replace('/', '_').replace('\\', '_').replace(':', '_'))
@@ -149,7 +128,7 @@ class LogoDisplay(object):
 
         def logo_dir_for_tag(tag):
             """
-            Logo dir for tag
+            Find an existing logo subdirectory for the sanitized or original tag name
             """
             stripped, safe = normalize_tag(tag)
 
@@ -250,7 +229,10 @@ class LogoDisplay(object):
 
     def find_temporal_logo_dir(self, base_dir):
         """
-        Find temporal logo dir
+        Find a logo subdirectory named for the current month or an applicable day range
+
+        :param base_dir: (str) root directory containing seasonal logo folders
+        :return:         (str) first matching directory, or None when no seasonal folder matches
         """
         today = datetime.date.today()
         month_name = today.strftime('%B')
@@ -342,17 +324,10 @@ class LogoDisplay(object):
 
     def select_logo_for_channel(self, station_data):
         """
-        Selection hierarchy:
+        Choose a station logo using program and seasonal folders before the base directory
 
-            1. Tag-based folder:           logo_dir/<first_tag>/
-            2. Month + Weekday + daypart:  logo_dir/<Month>/<Weekday>/<day_part>/
-            3. Month + Weekday:            logo_dir/<Month>/<Weekday>/
-            4. Month + daypart:            logo_dir/<Month>/<day_part>/
-            5. Month-only:                 logo_dir/<Month>/ or month-range
-            6. Weekday + daypart:          logo_dir/<Weekday>/<day_part>/
-            7. Weekday-only:               logo_dir/<Weekday>/
-            8. daypart-only:               logo_dir/<day_part>/
-            9. Base directory              (original behavior)
+        :param station_data: (dict) station logo directory, preferred image, and selection settings
+        :return:             (str) selected image path, or None when no candidate is available
         """
         multi = station_data.get('multi_logo', 'single').lower()
         if multi == 'off':
@@ -396,7 +371,7 @@ class LogoDisplay(object):
         # Helper to add a candidate directory if it exists and isn't already listed
         def add_candidate(path):
             """
-            Add candidate
+            Add an existing override directory once, preserving selection priority
             """
             if path and os.path.exists(path) and os.path.isdir(path):
                 if path not in override_dirs:
@@ -434,7 +409,7 @@ class LogoDisplay(object):
 
         def pick_single():
             """
-            Pick single
+            Prefer the named default logo in an override folder, then fall back to another available image
             """
             # Try override dirs in order
             for d in override_dirs:
@@ -461,7 +436,7 @@ class LogoDisplay(object):
 
         def pick_multi():
             """
-            Pick multi
+            Choose a random image from override folders, falling back to the base logo directory
             """
             pool = []
             for d in override_dirs:
@@ -483,26 +458,15 @@ class LogoDisplay(object):
     # Status reading and content tracking
     # -------------------------------------------------------------------------
 
-    def check_status(self, socket_file=SOCKET_FILE):
+    def check_status(self):
         """
-        Poll the play_status socket and keep track of:
-          - current channel info (network_name, title, etc.)
-          - current content type (FEATURE vs bump/commercial/etc.)
-          - when we last changed channel/program or returned to FEATURE.
+        Track channel, program, and content-type changes to reload logos and reset timing
 
-        Behavior:
-          - On network change: reset timer, reload logo, reclassify content.
-          - On title change:   update content type, reset timer on first FEATURE
-                               frame, reload multi-logo stations.
-          - On no net/title change: still detect transitions from non-FEATURE
-                                    to FEATURE (e.g., coming back from break)
-                                    and reset timer / reload multi-logo logos.
+        Reload on channel or title changes. When feature content resumes after a break,
+        restart its display interval and reshuffle stations configured for multiple logos.
         """
-        try:
-            with open(socket_file, 'r') as f:
-                status = json.loads(f.read())
-        except Exception as e:
-            _logger.warning('Unable to parse player status for logo: {}'.format(e))
+        status = self._get_status()
+        if status is None:
             return
 
         prev_net = self.current_channel_info.get('network_name')
@@ -516,7 +480,7 @@ class LogoDisplay(object):
         self.current_channel_info = status
 
         # Always classify the current content so our draw() logic is up to date
-        new_type = classify_current_content()
+        new_type = status.get('content_type') or ContentType.UNKNOWN
         self.current_content_type = new_type
 
         multi_setting = self.channel_config.get('multi_logo', 'single').lower()
@@ -556,7 +520,10 @@ class LogoDisplay(object):
 
     def load_animated_gif(self, path):
         """
-        Load animated gif
+        Decode GIF frames into Qt pixmaps and record their display durations
+
+        :param path: (str) animated image filename
+        :return:     (bool) whether loading succeeded; failures clear the current frames
         """
         try:
             from PIL import Image
@@ -594,7 +561,7 @@ class LogoDisplay(object):
 
     def clear_logo_frames(self):
         """
-        Clear logo frames
+        Discard loaded logo images and reset animation and path state
         """
         self.current_logo_frames = []
         self.current_logo_path = None
@@ -605,7 +572,9 @@ class LogoDisplay(object):
 
     def load_static_logo(self, path):
         """
-        Load static logo
+        Replace the current frames with a single image, clearing them if decoding fails
+
+        :param path: (str) image filename to load into a Qt pixmap
         """
         self.clear_logo_frames()
         try:
@@ -625,7 +594,9 @@ class LogoDisplay(object):
 
     def load_logo_for_channel(self, info):
         """
-        Load logo for channel
+        Load the selected station logo or configured fallback, respecting logo suppression
+
+        :param info: (dict) player status containing the network_name used to locate station settings
         """
         logo_path = None
         self.channel_config = {}
@@ -668,12 +639,13 @@ class LogoDisplay(object):
                              and not self.is_displaying_osd_default_logo)):
                 return
 
-            self.current_logo_path = str(logo_path)
             if str(logo_path).lower().endswith('.gif'):
                 if not self.load_animated_gif(str(logo_path)):
                     self.load_static_logo(str(logo_path))
             else:
                 self.load_static_logo(str(logo_path))
+            if self.current_logo_frames:
+                self.current_logo_path = str(logo_path)
         else:
             self.clear_logo_frames()
             self.is_displaying_osd_default_logo = False
@@ -684,10 +656,11 @@ class LogoDisplay(object):
 
     def update(self, dt):
         """
-        Update
+        Poll channel state and advance the current logo animation by at most one frame
+
+        :param dt: (float) elapsed time since the previous update in seconds
         """
-        self.time_since_change += dt
-        self.check_status()
+        super(LogoDisplay, self).update(dt)
 
         if self.is_animated and self.current_logo_frames:
             self.frame_timer += dt
@@ -698,15 +671,15 @@ class LogoDisplay(object):
                 self.frame_timer -= dur
                 self.current_frame_index = (self.current_frame_index + 1) % len(self.current_logo_frames)
 
-    def draw(self, painter, screen_w, screen_h):
+    def is_visible(self):
         """
-        Draw
+        Show loaded logos during features while station or fallback timing allows them
         """
         if (not self.current_logo_frames or self.current_frame_index >= len(self.current_logo_frames)):
-            return
+            return False
 
         if self.current_content_type != ContentType.FEATURE:
-            return
+            return False
 
         if self.is_displaying_osd_default_logo:
             permanent = self.config.default_logo_permanent
@@ -718,6 +691,22 @@ class LogoDisplay(object):
                         and self.channel_config.get('logo_display_time') is not None else self.config.display_time)
 
         if (not permanent and not self.config.always_show and self.time_since_change >= display_time):
+            return False
+
+        return True
+
+    def draw(self, painter, screen_w, screen_h):
+        """
+        Paint the current logo frame when feature content and visibility settings allow it
+
+        Apply station layout and opacity overrides, or fallback-logo settings when using
+        the global default. Stretch the frame to the configured width and height.
+
+        :param painter:  (QPainter) active painter for the OSD window
+        :param screen_w: (int) drawing surface width in pixels
+        :param screen_h: (int) drawing surface height in pixels
+        """
+        if not self.is_visible():
             return
 
         width = float(self.channel_config.get('logo_width', self.config.width))
@@ -741,9 +730,9 @@ class LogoDisplay(object):
 
         w = frac_to_size_px(width, screen_w)
         h = frac_to_size_px(height, screen_h)
-        x_margin_px = frac_to_margin_px(x_margin, screen_w)
-        y_margin_px = frac_to_margin_px(y_margin, screen_h)
-        x, y = resolve_top_left(screen_w, screen_h, w, h, halign, valign, x_margin_px, y_margin_px)
+        x_margin_px = calc_margin_px(x_margin, screen_w)
+        y_margin_px = calc_margin_px(y_margin, screen_h)
+        x, y = calc_draw_position(screen_w, screen_h, w, h, halign, valign, x_margin_px, y_margin_px)
 
         pixmap = self.current_logo_frames[self.current_frame_index]
 

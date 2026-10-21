@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage constants
+Define administration cache settings, reset-table names, log formatting, and the web-console startup
+message.
 """
 USE_FLUID_FILE_CACHE = True
 LOG_FORMAT = '%(asctime)s:%(levelname)s:%(name)s:%(message)s'

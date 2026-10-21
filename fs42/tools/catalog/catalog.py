@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage catalog
+Build station catalogs from configured media directories and select programs, commercials, and bumps
+to fill scheduled blocks.
 """
 import os
 import sys
@@ -58,7 +59,7 @@ def clear_fluid_cache():
 
 def _get_required_video_duration(path):
     """
-    Get required video duration
+    Probe a required video's positive duration in seconds, raising if both probe methods fail
     """
 
     duration, error_hint = media_processor._get_duration(path)
@@ -81,7 +82,14 @@ def _get_required_video_duration(path):
 
 def _harvest_slot(slot, tags, bump_overrides, commercial_overrides, start_bumps, end_bumps):
     """
-    Harvest slot
+    Collect a schedule slot's content and break-media references into the supplied indexes
+
+    :param slot:                 (dict) hourly schedule settings to inspect
+    :param tags:                 (dict) content tags to mark as required
+    :param bump_overrides:       (dict) alternative bump directories to collect
+    :param commercial_overrides: (dict) alternative commercial directories to collect
+    :param start_bumps:          (dict) explicit opening bump paths to collect
+    :param end_bumps:            (dict) explicit closing bump paths to collect
     """
     # collects the tags and directory overrides declared by a single slot
     if 'tags' in slot:
@@ -103,7 +111,7 @@ def _harvest_slot(slot, tags, bump_overrides, commercial_overrides, start_bumps,
 
 class ShowCatalog(object):
     """
-    ShowCatalog
+    Build a station's media catalog and select programs and break content for scheduling
     """
     prebump = 'prebump'
     postbump = 'postbump'
@@ -116,7 +124,14 @@ class ShowCatalog(object):
     def __init__(self, config, rebuild_catalog=False, load=True, debug=False, force=False,
                  skip_chapter_scan=False):
         """
-        Initialize the instance
+        Initialize catalog indexes and optionally load or rebuild the station's media catalog
+
+        :param config:            (dict) processed station configuration
+        :param rebuild_catalog:   (bool) whether to scan media and write a rebuilt catalog
+        :param load:              (bool) whether to load stored entries when not rebuilding
+        :param debug:             (bool) retained constructor option; currently unused
+        :param force:             (bool) whether to delete existing entries before rebuilding
+        :param skip_chapter_scan: (bool) whether to skip chapter discovery during media scans
         """
         self.config = config
         self._l = logging.getLogger('{} - CAT'.format(self.config['network_name']))
@@ -142,7 +157,7 @@ class ShowCatalog(object):
 
     def _write_catalog(self):
         """
-        Write catalog
+        Flatten the in-memory tag index and replace the station's stored catalog entries
         """
         # first, make them into a flat list
         flat_list = []
@@ -164,7 +179,7 @@ class ShowCatalog(object):
 
     def load_catalog(self):
         """
-        Load catalog
+        Load stored media into a tag index, skipping streaming networks
         """
         if self.config['network_type'] == 'streaming':
             return
@@ -181,7 +196,10 @@ class ShowCatalog(object):
 
     def build_catalog(self):
         """
-        Build catalog
+        Scan and persist media according to the station's network type
+
+        Initialize the shared fluid cache for standard networks, scan a single directory
+        for loop networks, and skip streaming networks. Guide catalogs are unsupported.
         """
         self._l.info('Starting catalog build for {}'.format(self.config['network_name']))
 
@@ -212,7 +230,9 @@ class ShowCatalog(object):
 
     def _build_single(self, tag='content'):
         """
-        Build single
+        Catalog a loop station's media directory under one tag and save the entries
+
+        :param tag: (str) content group assigned to every discovered media file
         """
         self.clip_index = {}
         self.tags = []
@@ -227,13 +247,13 @@ class ShowCatalog(object):
 
     def _build_tags(self):
         """
-        Build tags
+        Refresh the tag list from the current in-memory catalog index
         """
         self.tags = list(self.clip_index.keys())
 
     def _build_standard(self):
         """
-        Build standard
+        Catalog media referenced by regular schedules, overrides, clip shows, and break settings
         """
         self.clip_index = {}
         self.tags = []
@@ -400,7 +420,12 @@ class ShowCatalog(object):
 
     def _scan_directory(self, tag, is_bumps=False, content_type='feature'):
         """
-        Scan directory
+        Scan a content tag and its subfolders, preserving hints and optional bump positions
+
+        :param tag:          (str) directory relative to content_dir, or an absolute directory path
+        :param is_bumps:     (bool) whether to separate pre-break and post-break bump entries
+        :param content_type: (str) playback category to assign to discovered media
+        :return:             (int) number of entries added; previously scanned or empty tags add none
         """
         count_added = 0
         if not tag:
@@ -464,7 +489,7 @@ class ShowCatalog(object):
 
     def get_text_listing(self):
         """
-        Get text listing
+        Format the catalog as a readable media listing, excluding sign-off and off-air entries
         """
         content = "TITLE                | TAG        | Duration  | Hints\n"
         for tag in self.clip_index:
@@ -475,7 +500,7 @@ class ShowCatalog(object):
 
     def check_catalog(self):
         """
-        Check catalog
+        Log catalog entries shorter than one second, excluding sign-off and off-air media
         """
         too_short = []
         for tag in self.clip_index:
@@ -494,7 +519,7 @@ class ShowCatalog(object):
 
     def get_signoff(self):
         """
-        Get signoff
+        Return the station's first sign-off catalog entry, or None when unconfigured
         """
         all_signoff = catalog_api.get_by_tag(self.config, 'sign_off')
         candidate = None
@@ -504,7 +529,7 @@ class ShowCatalog(object):
 
     def get_offair(self):
         """
-        Get offair
+        Return the station's first off-air catalog entry, or None when unconfigured
         """
         all_offair = catalog_api.get_by_tag(self.config, 'off_air')
         candidate = None
@@ -514,7 +539,10 @@ class ShowCatalog(object):
 
     def __bump_collector(self, tag, fp):
         """
-        Bump collector
+        Catalog an explicit bump file or directory relative to the station content directory
+
+        :param tag: (str) existing bump index to append discovered entries to
+        :param fp:  (str) bump file or folder path relative to content_dir
         """
         bump_path = '{0}/{1}'.format(self.config['content_dir'], fp)
 
@@ -534,19 +562,23 @@ class ShowCatalog(object):
 
     def get_start_bump(self, fp):
         """
-        Get start bump
+        Choose an opening bump matching the requested file suffix or parent-folder name
         """
         return self.__bump_finder('start_bumps', fp)
 
     def get_end_bump(self, fp):
         """
-        Get end bump
+        Choose a closing bump matching the requested file suffix or parent-folder name
         """
         return self.__bump_finder('end_bumps', fp)
 
     def __bump_finder(self, bump_tag, fp):
         """
-        Bump finder
+        Select an explicit bump by path suffix, falling back to a random folder match
+
+        :param bump_tag: (str) bump index to search
+        :param fp:       (str) requested filename suffix or parent-folder name
+        :return:         (dict) selected path and duration in seconds, or None if unmatched
         """
         candidates = []
 
@@ -572,14 +604,14 @@ class ShowCatalog(object):
 
     def entry_by_fpath(self, fpath):
         """
-        Entry by fpath
+        Look up a stored media entry by its exact path within this station
         """
         results = catalog_api.get_by_path(self.config, fpath)
         return results
 
     def _lowest_count(self, candidates):
         """
-        Lowest count
+        Choose randomly among candidates tied for the lowest recorded selection count
         """
         min_count = sys.maxsize
         lowest_matches = []
@@ -594,7 +626,7 @@ class ShowCatalog(object):
 
     def get_all_by_tag(self, tag):
         """
-        Get all by tag
+        Return the in-memory entries for a tag, or None when the tag has no content
         """
         if tag in self.clip_index and len(self.clip_index[tag]):
             return self.clip_index[tag]
@@ -603,13 +635,19 @@ class ShowCatalog(object):
 
     def find_candidate(self, tag, seconds, when, exclusion_index=None, proposed_start=None, meta_hints=None):
         """
-        Find the best candidate for a given tag and duration
+        Choose eligible tagged media with the lowest selection count and increment its count
 
-        exclusion_index: optional dict of {realpath: [(start, end), ...]} built from
-            sibling channels sharing the same content_dir.  Candidates whose file is
-            already playing on a sibling channel in an overlapping window are skipped.
-        proposed_start: the datetime at which this slot would begin (required when
-            exclusion_index is provided).
+        Apply scheduling hints and optional sibling-channel overlap exclusions. The count
+        is changed in memory; this method does not persist it to the catalog database.
+
+        :param tag:                      (str) content group to search
+        :param seconds:                  (float) exclusive maximum duration in seconds; entries must last at least one second
+        :param when:                     (datetime) broadcast time used to evaluate scheduling hints
+        :param exclusion_index:          (dict) real paths mapped to occupied start/end windows, or None
+        :param proposed_start:           (datetime) proposed playback start for overlap checks, or None
+        :param meta_hints:               (list) legacy argument replaced by metadata hints from station settings
+        :return:                         (CatalogEntry) selected entry, or None for an absent or empty tag
+        :raises MatchingContentNotFound: if a populated tag has no eligible candidate
         """
         if tag in self.clip_index and len(self.clip_index[tag]):
             candidates = self.clip_index[tag]
@@ -646,7 +684,13 @@ class ShowCatalog(object):
 
     def _augment_candidates(self, candidates, key, seconds, when):
         """
-        Helper to merge coming-up-next bump folder candidates into an existing pool if the key exists
+        Append duration- and hint-compatible next-up bumps to the existing candidate list
+
+        :param candidates: (list) mutable pool receiving matching entries
+        :param key:        (str) additional catalog tag to inspect
+        :param seconds:    (float) exclusive maximum duration in seconds
+        :param when:       (datetime) broadcast time used to evaluate hints
+        :return:           (list) the updated candidate pool
         """
         if key in self.clip_index:
             extras = [
@@ -658,7 +702,16 @@ class ShowCatalog(object):
 
     def find_bump(self, seconds, when, position=None, bump_tag=None, lookahead=None):
         """
-        Find bump
+        Choose a least-used eligible bump, including announcements matching upcoming tags
+
+        :param seconds:                  (float) exclusive maximum bump duration in seconds
+        :param when:                     (datetime) broadcast time used for scheduling hints
+        :param position:                 (str) optional pre-break or post-break position
+        :param bump_tag:                 (str) bump directory override, or None to use station settings
+        :param lookahead:                (list) current tag followed by up to three upcoming tags, or None
+        :return:                         (CatalogEntry) selected bump without incrementing its count
+        :raises NoFillerContentFound:    if the selected bump directory has no catalog index
+        :raises MatchingContentNotFound: if no candidate satisfies duration and hint constraints
         """
         if not bump_tag:
             bump_tag = self.config['bump_dir']
@@ -734,7 +787,7 @@ class ShowCatalog(object):
 
     def find_commercial(self, seconds, when, commercial_dir):
         """
-        Find commercial
+        Choose a commercial that fits the available seconds and broadcast-time hints
         """
         com_tag = commercial_dir if commercial_dir else self.config['commercial_dir']
 
@@ -746,7 +799,18 @@ class ShowCatalog(object):
     def make_reel_block(self, when, bumpers=True, target_duration=120, commercial_dir=None, bump_dir=None,
                         lookahead=None):
         """
-        Make reel block
+        Assemble a break from optional bumpers and commercials or commercial-free filler
+
+        The target is approximate; individual selections can make the block longer.
+        An enabled autobump may fill the entire break instead.
+
+        :param when:            (datetime) broadcast time for content selection
+        :param bumpers:         (bool) whether to include opening and closing bumpers
+        :param target_duration: (float) desired break length in seconds
+        :param commercial_dir:  (str) commercial tag override, or None for station defaults
+        :param bump_dir:        (str) bumper tag override, or None for station defaults
+        :param lookahead:       (list) current and upcoming program tags for announcement selection
+        :return:                (ReelBlock) selected opening bumper, filler entries, and closing bumper
         """
         reels = []
         remaining = target_duration
@@ -801,7 +865,16 @@ class ShowCatalog(object):
     def make_reel_fill(self, when, length, use_bumpers=True, commercial_dir=None, bump_dir=None, strict_count=None,
                        lookahead=None):
         """
-        Make reel fill
+        Build break blocks and fill the remaining gap with short media or standby content
+
+        :param when:           (datetime) broadcast time for content selection
+        :param length:         (float) total gap to fill in seconds
+        :param use_bumpers:    (bool) whether each main break block includes bumpers
+        :param commercial_dir: (str) commercial tag override, or None
+        :param bump_dir:       (str) bumper tag override, or None
+        :param strict_count:   (int) requested main-block count used to divide the gap, or None
+        :param lookahead:      (list) current and upcoming program tags for announcement selection
+        :return:               (lst<ReelBlock>) main breaks followed by any remaining filler block
         """
         target_break_duration = self.config['break_duration']
 
@@ -888,7 +961,16 @@ class ShowCatalog(object):
     def gather_clip_content(self, tag, duration, when, start_clip, end_clip, break_duration=None,
                             break_strategy=None):
         """
-        Gather clip content
+        Choose a sequence of clips while reserving part of the slot for breaks
+
+        :param tag:            (str) primary clip-show content tag
+        :param duration:       (float) total slot duration in seconds
+        :param when:           (datetime) broadcast time for hint checks
+        :param start_clip:     (str) optional opening-clip tag
+        :param end_clip:       (str) optional closing-clip tag
+        :param break_duration: (float) reserved end-break duration in seconds, or None
+        :param break_strategy: (str) break placement mode, including end for a final break
+        :return:               (list) selected catalog entries in playback order
         """
         current_duration = 0
         keep_going = True
@@ -985,7 +1067,7 @@ class ShowCatalog(object):
 
     def summary(self):
         """
-        Summary
+        Format the indexed media and tag counts as a short catalog summary
         """
         (tags, count) = self.summary_data()
         text = '{0} videos under {1} tags'.format(count, tags)
@@ -993,7 +1075,7 @@ class ShowCatalog(object):
 
     def summary_data(self):
         """
-        Summary data
+        Count indexed tags and their media entries, returning the tag count first
         """
         count = 0
         for tag in self.tags:

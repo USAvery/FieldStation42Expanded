@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage epg cache
+Read cached XMLTV listings for configured streaming stations and expose their program times,
+metadata, and coverage extents.
 """
 import os
 import sqlite3
@@ -14,7 +15,7 @@ from fs42.tools.epg._constants import DEFAULT_DB_PATH
 
 def _local_timestamp(value):
     """
-    Local timestamp
+    Convert a datetime or numeric timestamp to Unix seconds, treating naive dates as local time
     """
     if value is None:
         return None
@@ -30,7 +31,7 @@ def _local_timestamp(value):
 
 def _iso_local(timestamp):
     """
-    Iso local
+    Format Unix seconds as an ISO datetime using the current local timezone offset
     """
     return datetime.datetime.fromtimestamp(
         timestamp,
@@ -40,7 +41,7 @@ def _iso_local(timestamp):
 
 def station_epg_config(station):
     """
-    Station epg config
+    Return enabled EPG settings with a source and channel ID, or None if incomplete
     """
     config = station.get('epg')
     if not isinstance(config, dict):
@@ -54,7 +55,7 @@ def station_epg_config(station):
 
 def station_enabled(station):
     """
-    Station enabled
+    Check whether a station has enabled, usable external program-guide settings
     """
     return station_epg_config(station) is not None
 
@@ -66,13 +67,15 @@ class EpgCache(object):
 
     def __init__(self, db_path=DEFAULT_DB_PATH):
         """
-        Initialize the instance
+        Select the existing XMLTV cache database to query
+
+        :param db_path: (str) path to the cached listings database
         """
         self.db_path = os.fspath(db_path)
 
     def _connect(self):
         """
-        Connect
+        Open the existing cache read-only, returning None if its file is absent
         """
         if not os.path.exists(self.db_path):
             return None
@@ -91,7 +94,16 @@ class EpgCache(object):
         include_meta=False,
     ):
         """
-        Get station listings
+        Read cached programs overlapping a station's requested time window
+
+        Apply the station's minute offset to cached times and return local ISO timestamps.
+        Missing configuration, absent cache files, or query failures produce an empty list.
+
+        :param station:      (dict) station settings containing source and XMLTV channel mappings
+        :param start:        (datetime) start of the requested window, or Unix seconds
+        :param end:          (datetime) end of the requested window, or Unix seconds
+        :param include_meta: (bool) whether to include descriptions, episode titles, genres, and ratings
+        :return:             (list) listing dictionaries ordered by broadcast start time
         """
         config = station_epg_config(station)
         if config is None:
@@ -181,7 +193,13 @@ class EpgCache(object):
         include_meta=False,
     ):
         """
-        Get all listings
+        Collect cached listings for EPG-enabled stations, indexed by network name
+
+        :param stations:     (list) station configuration dictionaries
+        :param start:        (datetime) beginning of the requested window, or Unix seconds
+        :param end:          (datetime) end of the requested window, or Unix seconds
+        :param include_meta: (bool) whether to include program metadata
+        :return:             (dict) network names mapped to their overlapping listings
         """
         schedules = {}
 
@@ -200,7 +218,10 @@ class EpgCache(object):
 
     def get_station_extents(self, station):
         """
-        Get station extents
+        Find a station's earliest and latest cached times after applying its EPG offset
+
+        :param station: (dict) station settings containing the EPG mapping
+        :return:        (tuple) local ISO start and end times, or two None values if unavailable
         """
         config = station_epg_config(station)
         if config is None:

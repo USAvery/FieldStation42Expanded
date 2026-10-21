@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage live schedule agent
+Monitor remaining schedule coverage during playback and launch background schedule-extension work
+under a shared lock.
 """
 import logging
 import datetime
@@ -12,7 +13,11 @@ import multiprocessing
 
 def _worker_build_schedules(lock, stations_to_build, amount_to_add):
     """
-    Worker build schedules
+    Extend selected station schedules in a child process while holding the shared build lock
+
+    :param lock:              (Lock) process-shared lock protecting schedule writes
+    :param stations_to_build: (list) processed station configurations needing more programming
+    :param amount_to_add:     (str) extension unit passed to each schedule builder
     """
     _l = logging.getLogger('ScheduleAgent.Worker')
     _l.info('Worker started - building {0} for {1} station(s)'.format(amount_to_add, len(stations_to_build)))
@@ -36,7 +41,7 @@ def _worker_build_schedules(lock, stations_to_build, amount_to_add):
 
 class LiveScheduleAgent(object):
     """
-    LiveScheduleAgent
+    Check schedule coverage periodically and extend expiring schedules in a background process
     """
     # map config strings to timedeltas for the trigger threshold
     _trigger_deltas = {
@@ -47,7 +52,10 @@ class LiveScheduleAgent(object):
 
     def __init__(self, schedule_agent_conf, lock):
         """
-        Initialize the instance
+        Set schedule-extension thresholds and initialize background-worker tracking
+
+        :param schedule_agent_conf: (dict) amount_to_add and trigger_add_at settings
+        :param lock:                (Lock) process-shared lock protecting schedule builds
         """
         self._l = logging.getLogger('ScheduleAgent')
         self._lock = lock
@@ -62,13 +70,13 @@ class LiveScheduleAgent(object):
 
     def get_lock(self):
         """
-        Get lock
+        Return the process-shared lock used to serialize schedule builds
         """
         return self._lock
 
     def _needs_check(self):
         """
-        Needs check
+        Allow the first coverage check and subsequent checks at least one hour apart
         """
         now = datetime.datetime.now()
         if self._last_check is None:
@@ -81,7 +89,7 @@ class LiveScheduleAgent(object):
 
     def _find_stations_needing_schedules(self):
         """
-        Find stations needing schedules
+        Collect schedule-enabled stations whose saved programming ends before the coverage threshold
         """
         from fs42.tools.schedule.liquid_manager import LiquidManager
         from fs42.core.station_manager import StationManager
@@ -108,7 +116,7 @@ class LiveScheduleAgent(object):
 
     def _worker_finished(self):
         """
-        Worker finished
+        Detect a completed background build, log its exit status, and clear the worker reference
         """
         if self._worker is None:
             return False
@@ -126,7 +134,9 @@ class LiveScheduleAgent(object):
 
     def tick(self):
         """
-        Tick
+        Reload completed builds or start a coverage extension when the periodic check is due
+
+        :return: (bool) whether schedules were reloaded after a worker finished
         """
         # first, check if a previous worker finished
         if self._worker_finished():

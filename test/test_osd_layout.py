@@ -3,15 +3,16 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage test osd layout
+Verify fractional display sizes, margins, and alignment combinations resolve to the expected Qt
+pixel coordinates.
 """
 import pytest
 
 from fs42.tools.osd.osd_layout import HAlignment
 from fs42.tools.osd.osd_layout import VAlignment
 from fs42.tools.osd.osd_layout import frac_to_size_px
-from fs42.tools.osd.osd_layout import resolve_top_left
-from fs42.tools.osd.osd_layout import frac_to_margin_px
+from fs42.tools.osd.osd_layout import calc_draw_position
+from fs42.tools.osd.osd_layout import calc_margin_px
 
 SCREEN_W = 1920.0
 SCREEN_H = 1080.0
@@ -19,7 +20,7 @@ SCREEN_H = 1080.0
 
 class TestFracConversions(object):
     """
-    TestFracConversions
+    Verify OSD sizes use full screen dimensions while margins use half dimensions
     """
 
     def test_margin_is_fraction_of_half_dimension(self):
@@ -27,7 +28,7 @@ class TestFracConversions(object):
         Check margin is fraction of half dimension
         """
         # VolumeDisplayConfig default x_margin=0.1 on a 1920-wide screen -> 96px
-        assert frac_to_margin_px(0.1, SCREEN_W) == pytest.approx(96.0)
+        assert calc_margin_px(0.1, SCREEN_W) == pytest.approx(96.0)
 
     def test_size_is_fraction_of_full_dimension(self):
         """
@@ -39,7 +40,7 @@ class TestFracConversions(object):
 
 class TestResolveTopLeft(object):
     """
-    TestResolveTopLeft
+    Verify aligned OSD coordinates account for element size and screen-edge margins
     """
     CONTENT_W = 200.0
     CONTENT_H = 50.0
@@ -64,7 +65,7 @@ class TestResolveTopLeft(object):
         """
         Check all alignment combinations
         """
-        x, y = resolve_top_left(
+        x, y = calc_draw_position(
             SCREEN_W,
             SCREEN_H,
             self.CONTENT_W,
@@ -83,7 +84,7 @@ class TestResolveTopLeft(object):
         """
         # Qt's origin is top-left/y-down, so VAlignment.TOP should anchor near y=0,
         # the opposite of the old GL NDC convention (+1 == visual top).
-        _, y = resolve_top_left(
+        _, y = calc_draw_position(
             SCREEN_W,
             SCREEN_H,
             self.CONTENT_W,

@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage welcome screen
+Display the terminal administration dashboard, summarize station readiness, and navigate to catalog
+and schedule operations.
 """
 from textual.app import Screen
 from textual.widgets import Button
@@ -21,13 +22,13 @@ from fs42.tools.station.gui.schedule_screen import ScheduleScreen
 
 class WelcomeScreen(Screen):
     """
-    WelcomeScreen
+    Show station summaries and navigation to catalog and schedule administration
     """
     CSS_PATH = 'welcome_screen.tcss'
 
     def compose(self):
         """
-        Compose
+        Create the station-summary area and catalog, schedule, and exit buttons
         """
         yield Header('Welcome to Station42')
         self.md = Markdown('LOADING...')
@@ -41,7 +42,7 @@ class WelcomeScreen(Screen):
 
     def on_button_pressed(self, event):
         """
-        On button pressed
+        Open the requested administration screen or the quit-confirmation dialog
         """
         match event.button.id:
             case 'manage_catalog':
@@ -53,7 +54,7 @@ class WelcomeScreen(Screen):
 
     def on_mount(self):
         """
-        On mount
+        Set the welcome screen title and summary layout, then load station statistics
         """
         self.title = 'FieldStation42'
         self.sub_title = 'Control Panel'
@@ -63,13 +64,13 @@ class WelcomeScreen(Screen):
 
     def on_screen_resume(self):
         """
-        On screen resume
+        Refresh station summaries after returning from another administration screen
         """
         self.populate_stats()
 
     def populate_stats(self):
         """
-        Populate stats
+        Build a Markdown summary of configured stations, catalog availability, and schedule coverage
         """
         self.md.update('')
         text = "# FieldStation42 Summary\n"

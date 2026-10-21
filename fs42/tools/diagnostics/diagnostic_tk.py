@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage diagnostic tk
+Provide a configurable Tk diagnostic-channel window with placeholder labels and queue-driven show,
+hide, and exit controls.
 """
 import os
 import sys
@@ -19,12 +20,15 @@ from fs42.core.station_manager import StationManager
 
 class DiagWindowConf(object):
     """
-    DiagWindowConf
+    Hold appearance settings for the placeholder diagnostic channel window
     """
 
     def __init__(self, w=720, h=480):
         """
-        Initialize the instance
+        Initialize default diagnostic fonts and window flags
+
+        :param w: (int) retained width argument; currently unused
+        :param h: (int) retained height argument; currently unused
         """
         self.fullscreen = True
         self.window_decorations = False
@@ -39,13 +43,13 @@ class DiagWindowConf(object):
 
     def _calc_internals(self):
         """
-        Calc internals
+        Reserve a hook for derived diagnostic layout settings; currently perform no work
         """
         pass
 
     def merge_config(self, to_merge):
         """
-        Merge config
+        Apply supplied configuration keys as attributes and return the updated settings object
         """
         for key in to_merge.keys():
             setattr(self, key, to_merge[key])
@@ -54,12 +58,15 @@ class DiagWindowConf(object):
 
 class DiagnosticChannel(tk.Frame):
     """
-    DiagnosticChannel
+    Arrange placeholder diagnostic labels in a two-column Tk frame
     """
 
     def __init__(self, parent, conf):
         """
-        Initialize the instance
+        Create the diagnostic label grid with its default font and colors
+
+        :param parent: (Widget) containing Tk window
+        :param conf:   (DiagWindowConf) retained appearance argument; currently unused by the labels
         """
         super(DiagnosticChannel, self).__init__(parent)
 
@@ -73,7 +80,7 @@ class DiagnosticChannel(tk.Frame):
 
     def _create_widgets(self):
         """
-        Create widgets
+        Create the title, two diagnostic rows, and footer labels
         """
         # Title label at the top
         self.title_label = tk.Label(self, text='Title', font=self.default_font, bg=self.default_bg,
@@ -110,7 +117,7 @@ class DiagnosticChannel(tk.Frame):
 
 class DiagCommands(object):
     """
-    DiagCommands
+    Name queue messages understood by the diagnostic window
     """
     show_window = 'show_window'
     hide_window = 'hide_window'
@@ -119,12 +126,15 @@ class DiagCommands(object):
 
 class DiagnosticApp(tk.Tk):
     """
-    DiagnosticApp
+    Host the diagnostic Tk window and poll its process-control queue
     """
 
     def __init__(self, user_conf, queue=None):
         """
-        Initialize the instance
+        Apply diagnostic window geometry and start polling for process-control messages
+
+        :param user_conf: (dict) window settings updated with missing width and height defaults
+        :param queue:     (Queue) optional incoming window-control messages
         """
         super(DiagnosticApp, self).__init__()
 
@@ -158,13 +168,13 @@ class DiagnosticApp(tk.Tk):
 
     def get_conf(self):
         """
-        Get conf
+        Return the merged diagnostic-window appearance settings
         """
         return self.conf
 
     def tick(self):
         """
-        Tick
+        Poll for a diagnostic-window shutdown message and schedule the next check
         """
         if self.queue and self.queue.qsize() > 0:
             msg = self.queue.get_nowait()
@@ -177,7 +187,10 @@ class DiagnosticApp(tk.Tk):
 
 def diag_channel_runner(user_conf, queue):
     """
-    Diag channel runner
+    Create the diagnostic window and run its Tk event loop
+
+    :param user_conf: (dict) diagnostic window settings
+    :param queue:     (Queue) incoming window-control messages
     """
     app = DiagnosticApp(user_conf, queue)
     layout = DiagnosticChannel(app, app.get_conf())

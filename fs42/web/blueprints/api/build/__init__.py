@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Expose the package interface
+Start background catalog and schedule builds through HTTP endpoints and expose task progress stored
+on the application instance.
 """
 import uuid
 import threading
@@ -27,7 +28,11 @@ router = APIRouter(prefix='/build', tags=['build'])
 @router.post('/catalog/{network_name}')
 async def rebuild_catalog(network_name: str, request: Request):
     """
-    Rebuild catalog
+    Start a background catalog rebuild and discard affected station schedules
+
+    :param network_name: (str) network to rebuild, or all for every station
+    :param request:      (Request) request providing application task state and player queues
+    :response:           (jsn) task identifier used to poll progress
     """
     task_id = str(uuid.uuid4())
     with request.app.state.web.rebuild_tasks_lock:
@@ -35,7 +40,7 @@ async def rebuild_catalog(network_name: str, request: Request):
 
     def rebuild_worker():
         """
-        Rebuild worker
+        Reset affected schedules, rebuild catalog data, and record background task progress
         """
         # Clear the fluid file cache dedup set so scan_file_cache runs fresh
         # for each unique content_dir in this rebuild pass.  Without this, a
@@ -95,7 +100,11 @@ async def rebuild_catalog(network_name: str, request: Request):
 @router.get('/catalog/status/{task_id}')
 async def rebuild_catalog_status(task_id: str, request: Request):
     """
-    Rebuild catalog status
+    Return a catalog rebuild's current status and accumulated log
+
+    :param task_id: (str) identifier returned when the rebuild was started
+    :param request: (Request) request providing application task state
+    :response:      (jsn) status and log, or an unknown-task error
     """
     with request.app.state.web.rebuild_tasks_lock:
         task = request.app.state.web.rebuild_tasks.get(task_id)
@@ -107,7 +116,12 @@ async def rebuild_catalog_status(task_id: str, request: Request):
 @router.post('/schedule/add_time/{amount}/{network_name}')
 async def add_time_to_schedule(amount: str, network_name: str, request: Request):
     """
-    Add time to schedule
+    Start a background extension of one or all station schedules
+
+    :param amount:       (str) extension unit accepted by the schedule builder
+    :param network_name: (str) network to extend, or all
+    :param request:      (Request) request providing task state and player queues
+    :response:           (jsn) task identifier used to poll progress
     """
     task_id = str(uuid.uuid4())
     with request.app.state.web.add_time_tasks_lock:
@@ -115,7 +129,7 @@ async def add_time_to_schedule(amount: str, network_name: str, request: Request)
 
     def add_time_worker():
         """
-        Add time worker
+        Extend selected schedules, log progress, and reload scheduling state after completion
         """
         try:
             with request.app.state.web.add_time_tasks_lock:
@@ -159,7 +173,11 @@ async def add_time_to_schedule(amount: str, network_name: str, request: Request)
 @router.get('/schedule/add_time/status/{task_id}')
 async def add_time_to_schedule_status(task_id: str, request: Request):
     """
-    Add time to schedule status
+    Return a schedule extension's current status and accumulated log
+
+    :param task_id: (str) background extension identifier
+    :param request: (Request) request providing application task state
+    :response:      (jsn) status and log, or an unknown-task error
     """
     with request.app.state.web.add_time_tasks_lock:
         task = request.app.state.web.add_time_tasks.get(task_id)
@@ -171,7 +189,14 @@ async def add_time_to_schedule_status(task_id: str, request: Request):
 @router.post('/schedule/reset/{network_name}')
 async def rebuild_schedule(network_name: str, request: Request):
     """
-    Rebuild schedule
+    Start a background schedule reset for one network or all networks
+
+    This operation deletes saved programming and rewinds pending sequences; it does
+    not generate replacement programming.
+
+    :param network_name: (str) network to reset, or all
+    :param request:      (Request) request providing task state and player queues
+    :response:           (jsn) task identifier used to poll progress
     """
     task_id = str(uuid.uuid4())
     with request.app.state.web.rebuild_tasks_lock:
@@ -179,7 +204,7 @@ async def rebuild_schedule(network_name: str, request: Request):
 
     def rebuild_schedule_worker():
         """
-        Rebuild schedule worker
+        Reset selected schedules and notify the player to reload its scheduling state
         """
         try:
             with request.app.state.web.rebuild_tasks_lock:
@@ -223,7 +248,11 @@ async def rebuild_schedule(network_name: str, request: Request):
 @router.get('/schedule/reset/status/{task_id}')
 async def rebuild_schedule_status(task_id: str, request: Request):
     """
-    Rebuild schedule status
+    Return a schedule reset's current status and accumulated log
+
+    :param task_id: (str) background reset identifier
+    :param request: (Request) request providing application task state
+    :response:      (jsn) status and log, or an unknown-task error
     """
     with request.app.state.web.rebuild_tasks_lock:
         task = request.app.state.web.rebuild_tasks.get(task_id)

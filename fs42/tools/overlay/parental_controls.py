@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage parental controls
+Display the parental-control PIN prompt in a separate Qt process and update its entered-digit and
+error indicators from player queue messages.
 """
 import sys
 import signal
@@ -56,12 +57,17 @@ THEMES = {
 
 class ParentalControlsWindow(QWidget):
     """
-    ParentalControlsWindow
+    Show a station PIN prompt and reflect digit and error updates from the player
     """
 
     def __init__(self, network_name, queue, theme_name='classic', parent=None):
         """
-        Initialize the instance
+        Create a centered PIN prompt and start polling messages from the player
+
+        :param network_name: (str) locked station name shown in the prompt
+        :param queue:        (Queue) incoming digit-count, error-state, and close messages
+        :param theme_name:   (str) visual theme name, falling back to classic
+        :param parent:       (QWidget) optional Qt parent window
         """
         super(ParentalControlsWindow, self).__init__(parent)
         self.network_name = network_name
@@ -100,7 +106,7 @@ class ParentalControlsWindow(QWidget):
 
     def poll_queue(self):
         """
-        Poll queue
+        Apply queued PIN-entry updates and quit when the player sends a close message
         """
         try:
             while True:
@@ -117,13 +123,15 @@ class ParentalControlsWindow(QWidget):
 
     def scaled(self, value):
         """
-        Scaled
+        Convert a 1080p reference size to integer pixels for the current screen height
         """
         return int(value * self.scale_factor)
 
     def paintEvent(self, event):
         """
-        PaintEvent
+        Paint the station PIN prompt, masked digit boxes, and any incorrect-PIN message
+
+        :param event: (QPaintEvent) Qt repaint notification
         """
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
@@ -212,14 +220,18 @@ class ParentalControlsWindow(QWidget):
 
 def signal_handler(sig, frame):
     """
-    Signal handler
+    Quit the parental-control Qt event loop when an interrupt signal arrives
     """
     QApplication.quit()
 
 
 def run_parental_controls_app(network_name, queue, theme_name='classic'):
     """
-    Run parental controls app
+    Run the parental-control prompt until closed through its queue or interrupted
+
+    :param network_name: (str) locked station name shown in the prompt
+    :param queue:        (Queue) player messages controlling digit count, error state, and closure
+    :param theme_name:   (str) prompt color theme
     """
     signal.signal(signal.SIGINT, signal_handler)
 
@@ -233,12 +245,17 @@ def run_parental_controls_app(network_name, queue, theme_name='classic'):
 
 def run_parental_controls(network_name, queue, theme_name='classic'):
     """
-    Run parental controls
+    Start the parental-control prompt in a separate process
+
+    :param network_name: (str) locked station name shown in the prompt
+    :param queue:        (Queue) player messages controlling the prompt
+    :param theme_name:   (str) prompt color theme
+    :return:             (Process) started child process
     """
 
     def parental_controls_process():
         """
-        Parental controls process
+        Run the PIN-prompt Qt application inside the spawned child process
         """
         run_parental_controls_app(network_name, queue, theme_name)
 

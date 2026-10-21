@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage fluid builder
+Maintain cached media scans and extract black-frame breaks and chapter markers for use when
+inserting commercial reels.
 """
 import os
 import sys
@@ -19,12 +20,14 @@ from fs42.core.station_manager import StationManager
 
 class FluidBuilder(object):
     """
-    FluidBuilder
+    Maintain cached media metadata and detected chapter or black-frame break positions
     """
 
     def __init__(self, db_path=None):
         """
-        Initialize the instance
+        Initialize the media-cache tables using the configured database
+
+        :param db_path: (str) optional database-path argument; None selects shared station settings
         """
         if db_path is None:
             self.db_path = StationManager().server_conf['db_path']
@@ -39,7 +42,10 @@ class FluidBuilder(object):
 
     def scan_file_cache(self, content_dir, media_filter='video'):
         """
-        Scan file cache
+        Scan media recursively and refresh cached records for discovered files
+
+        :param content_dir:  (str) media directory to inspect
+        :param media_filter: (str) audio, video, or another value to include all supported formats
         """
         connection = sqlite3.connect(self.db_path)
         try:
@@ -56,7 +62,7 @@ class FluidBuilder(object):
 
     def check_file_cache(self, full_path):
         """
-        Check file cache
+        Read the cached metadata record for an exact resolved media path
         """
         connection = sqlite3.connect(self.db_path)
         try:
@@ -67,7 +73,7 @@ class FluidBuilder(object):
 
     def trim_file_cache(self, from_time):
         """
-        Trim file cache
+        Remove cached file records older than the supplied retention timestamp
         """
         connection = sqlite3.connect(self.db_path)
         try:
@@ -78,7 +84,9 @@ class FluidBuilder(object):
 
     def scan_breaks(self, dir_path):
         """
-        Scan breaks
+        Detect and store missing black-frame break points for cached media under a directory
+
+        :param dir_path: (str) existing directory to scan recursively
         """
         connection = sqlite3.connect(self.db_path)
         try:
@@ -113,7 +121,7 @@ class FluidBuilder(object):
 
     def get_breaks(self, full_path):
         """
-        Get breaks
+        Read stored black-frame break points for the supplied media path
         """
         #fname = os.path.realpath(fname)
         connection = sqlite3.connect(self.db_path)
@@ -125,7 +133,9 @@ class FluidBuilder(object):
 
     def scan_chapters(self, dir_path):
         """
-        Scan chapters
+        Probe and cache missing chapter markers for cataloged media beneath a directory
+
+        :param dir_path: (str) existing directory to scan recursively
         """
         connection = sqlite3.connect(self.db_path)
         try:
@@ -163,7 +173,7 @@ class FluidBuilder(object):
 
     def get_chapters(self, full_path):
         """
-        Get chapters
+        Read cached embedded chapter markers for the supplied media path
         """
         connection = sqlite3.connect(self.db_path)
         try:

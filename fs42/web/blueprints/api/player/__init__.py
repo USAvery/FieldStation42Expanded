@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Expose the package interface
+Expose player status and host diagnostics, send playback and overlay commands to the player queue,
+and control volume through available system audio backends.
 """
 import re
 import json
@@ -248,7 +249,9 @@ async def _get_cpu_info(request):
 @router.get('/status')
 async def get_player_status():
     """
-    Get player status
+    Read the latest player status document from the configured status file
+
+    :response: (jsn) player status or an error for an absent or unconfigured file
     """
     status_socket = StationManager().server_conf['status_socket']
     if status_socket:
@@ -265,7 +268,10 @@ async def get_player_status():
 @router.get('/status/queue_connected')
 async def get_connected(request: Request):
     """
-    Get connected
+    Report whether this web application has a player command queue
+
+    :param request: (Request) request providing application state
+    :response:      (jsn) queue_connected flag
     """
     command_queue = request.app.state.player_command_queue
     if command_queue:
@@ -277,7 +283,10 @@ async def get_connected(request: Request):
 @router.get('/channels/{channel}')
 async def player_channel(channel: str):
     """
-    Player channel
+    Write a direct, next-channel, or previous-channel command to the player's command file
+
+    :param channel: (str) numeric channel, up, or down
+    :response:      (jsn) submitted command or an invalid-command error
     """
     command = {'command': 'direct', 'channel': -1}
     if channel.isnumeric():
@@ -298,7 +307,10 @@ async def player_channel(channel: str):
 @router.post('/channels/guide')
 async def show_guide(request: Request):
     """
-    Show guide
+    Queue a request to toggle the player's guide display
+
+    :param request: (Request) request providing the player command queue
+    :response:      (jsn) acknowledgment that the guide command was queued
     """
     command_queue = request.app.state.player_command_queue
     command_queue.put({'command': 'guide'})
@@ -309,7 +321,10 @@ async def show_guide(request: Request):
 @router.post('/commands/stop')
 async def player_stop(request: Request):
     """
-    Player stop
+    Queue a player exit command
+
+    :param request: (Request) request providing the player command queue
+    :response:      (jsn) stop-command acknowledgment; completion is asynchronous
     """
     command_queue = request.app.state.player_command_queue
     command_queue.put({'command': 'exit'})
@@ -318,7 +333,11 @@ async def player_stop(request: Request):
 
 async def _queue_mpv_command(request, action):
     """
-    Queue mpv command
+    Queue a runtime MPV action or report that the player is disconnected
+
+    :param request: (Request) request providing the player command queue
+    :param action:  (str) runtime MPV action name
+    :return:        (dict) acknowledgment containing the queued action
     """
     command_queue = request.app.state.player_command_queue
     if not command_queue:
@@ -358,7 +377,11 @@ async def mpv_cycle_audio(request: Request):
 @router.post('/parental/digit/{digit}')
 async def parental_digit(request: Request, digit: str):
     """
-    Parental digit
+    Validate and queue one digit for the player's parental-control prompt
+
+    :param request: (Request) request providing the player command queue
+    :param digit:   (str) exactly one numeric character
+    :response:      (jsn) acknowledgment that the digit was queued
     """
     if not digit.isdigit() or len(digit) != 1:
         raise HTTPException(status_code=400, detail='Digit must be a single number.')
@@ -374,7 +397,10 @@ async def parental_digit(request: Request, digit: str):
 @router.post('/parental/clear')
 async def parental_clear(request: Request):
     """
-    Parental clear
+    Queue a request to clear the player's partially entered PIN
+
+    :param request: (Request) request providing the player command queue
+    :response:      (jsn) acknowledgment that the clear command was queued
     """
     command_queue = request.app.state.player_command_queue
     if not command_queue:
@@ -387,7 +413,10 @@ async def parental_clear(request: Request):
 @router.post('/ticker')
 async def show_ticker(request: Request):
     """
-    Show ticker
+    Queue a scrolling announcement using text and display options from the JSON body
+
+    :param request: (Request) JSON message, header, style, and iterations plus the player queue
+    :response:      (jsn) acknowledgment that the ticker request was queued
     """
     data = await request.json()
     command_queue = request.app.state.player_command_queue

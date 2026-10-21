@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage autobump agent
+Build browser-rendered station bumps and next-up announcements. Encode their display options as URLs
+and calculate durations for background-video loops.
 """
 import os
 import random
@@ -23,7 +24,7 @@ tag_str = ':autobump:'
 
 def do_fill(station_config):
     """
-    Do fill
+    Decide randomly whether to fill a break using the station's autobump probability
     """
     if 'autobump' not in station_config:
         return False
@@ -36,7 +37,11 @@ def do_fill(station_config):
 
 def fill_block(station_config, duration):
     """
-    Fill block
+    Create a countdown next-up bump lasting the requested number of seconds
+
+    :param station_config: (dict) station settings containing autobump or off_air_autobump
+    :param duration:       (float) length in seconds, also written into the selected bump settings
+    :return:               (CatalogEntry) generated bump, or None when neither configuration exists
     """
     if 'autobump' in station_config:
         ab_config = station_config['autobump']
@@ -52,7 +57,12 @@ def fill_block(station_config, duration):
 
 def gen_bumps(station_config):
     """
-    Gen bumps
+    Create message and next-up bump entries from the station's autobump settings
+
+    Fill in a missing duration from background-video loops, or use seven seconds.
+
+    :param station_config: (dict) station settings whose autobump duration may be updated
+    :return:               (dict) generated bump entries; disabled autobumps return empty start/end block values
     """
     if 'autobump' not in station_config:
         return {'start_block': None, 'end_block': None}
@@ -81,21 +91,27 @@ def gen_bumps(station_config):
 
 def is_autobump_url(url):
     """
-    Is autobump url
+    Check whether a catalog path carries the generated browser-bump URL prefix
     """
     return url.startswith(url_prefix)
 
 
 def extract_url(prefixed_url):
     """
-    Extract url
+    Remove the internal autobump marker to obtain the browser URL
     """
     return prefixed_url.removeprefix(url_prefix)
 
 
 def message_bump(ab_config, base_url, loopmusic=True, show_countdown=False):
     """
-    Message bump
+    Encode a station announcement as a browser-rendered catalog entry
+
+    :param ab_config:      (dict) bump settings updated with music and countdown options
+    :param base_url:       (str) address of the bump HTML page
+    :param loopmusic:      (bool) whether background music should repeat
+    :param show_countdown: (bool) whether the page should show remaining time
+    :return:               (CatalogEntry) prefixed page URL and configured duration in seconds
     """
     ab_config['loopmusic'] = 'true' if loopmusic else 'false'
     ab_config['countdown'] = 'true' if show_countdown else 'false'
@@ -109,7 +125,14 @@ def message_bump(ab_config, base_url, loopmusic=True, show_countdown=False):
 
 def next_up_bump(ab_config, base_url, network_name, loopmusic=True, show_countdown=False):
     """
-    Next up bump
+    Encode an upcoming-program announcement as a browser-rendered catalog entry
+
+    :param ab_config:      (dict) bump settings updated with station subtitle and playback options
+    :param base_url:       (str) address of the bump HTML page
+    :param network_name:   (str) station whose upcoming programs the page should request
+    :param loopmusic:      (bool) whether background music should repeat
+    :param show_countdown: (bool) whether the page should show remaining time
+    :return:               (CatalogEntry) prefixed page URL and configured duration in seconds
     """
     ab_config['subtitle'] = 'Coming up on {}'.format(network_name)
     ab_config['next_network'] = network_name
@@ -123,7 +146,7 @@ def next_up_bump(ab_config, base_url, network_name, loopmusic=True, show_countdo
 
 def get_bg_video_loop_count(config):
     """
-    Get bg video loop count
+    Read a positive background-video repeat count, falling back to one for invalid values
     """
     try:
         loop_count = int(config.get('bg_video_loop_count', 1))
@@ -134,7 +157,7 @@ def get_bg_video_loop_count(config):
 
 def get_bg_video_duration(bg_video):
     """
-    Get bg video duration
+    Probe a local bump background video's duration in seconds, returning None on failure
     """
     if str(bg_video).startswith('http'):
         return None
@@ -161,7 +184,7 @@ def get_bg_video_duration(bg_video):
 
 def resolve_bg_video_path(bg_video):
     """
-    Resolve bg video path
+    Resolve a background-video filename against the working directory or bundled bump videos
     """
     # full paths can be probed directly
     if os.path.isabs(str(bg_video)):
@@ -181,7 +204,7 @@ def resolve_bg_video_path(bg_video):
 
 def resolve_bg_video_url(bg_video):
     """
-    Resolve bg video url
+    Convert a relative background-video name into the local server's bump-video URL
     """
     if str(bg_video).startswith('http'):
         return bg_video
@@ -196,30 +219,15 @@ def resolve_bg_video_url(bg_video):
 
 def generate_bump_query(config):
     """
-    Generate a query string for bump.html with the specified parameters
+    Encode bump presentation settings as URL query parameters
 
-    :param config: (obj) Dictionary containing bump configuration
-            - title (required): Main station name/title
-            - subtitle: Station tagline or description
-            - variation: Visual style ('modern', 'retro', 'corporate', 'terminal')
-            - detail1, detail2, detail3: Custom detail lines
-            - bg_color: Background color (hex format, e.g., '#ff0000')
-            - fg_color: Text color (hex format, e.g., '#ffffff')
-            - bg: Background image URL
-            - bg_video: Background video URL or filename
-            - bg_video_loop_count: Number of times to play the background video if no duration is set
-            - bg_video_audio: Whether to use background video audio when bg_music is not set
-            - text_position: Position of text overlay
-            - text_delay: Delay before text appears, in seconds
-            - text_fade_in: Text fade-in duration, in seconds
-            - text_fade_out: Text fade-out duration, in seconds
-            - text_hide_before_end: How many seconds before the autobump ends that text should be fully hidden
-            - css: URL to custom CSS override file
-            - next_network: Network name to fetch next 3 upcoming shows
-            - duration: Auto-hide after specified milliseconds (0 = no auto-hide)
-            - bg_music: Background music URL or filename (e.g., 'retro.mp3' or full URL)
+    Require a title and include recognized text, color, background, animation, music,
+    countdown, and upcoming-network options. Convert duration from seconds to
+    milliseconds and expand relative media names into local server URLs.
 
-    :return: Query string for bump.html
+    :param config:      (dict) bump settings, including title and optional duration in seconds
+    :return:            (str) percent-encoded query string without a leading question mark
+    :raises ValueError: if title is missing
     """
     if 'title' not in config:
         raise ValueError('title is required')

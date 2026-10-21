@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage nfo agent
+Parse XML or plain-text NFO sidecars into metadata and display fields, and launch or close eligible
+metadata overlays.
 """
 import os
 import logging
@@ -19,31 +20,45 @@ _logger = logging.getLogger('NFOAgent')
 
 class NFOData(object):
     """
-    NFOData
+    Hold the ordered text lines used by the media-information overlay
     """
 
     def __init__(self, lines):
         """
-        Initialize the instance
+        Store display lines with title, information, and description in positional order
         """
         self.lines = lines  # list of non-empty strings, up to MAX_NFO_LINES
 
     @property
     def title(self):
+        """
+        Return the first display line or an empty string
+        """
         return self.lines[0] if self.lines else ''
 
     @property
     def info(self):
+        """
+        Return the second display line or an empty string
+        """
         return self.lines[1] if len(self.lines) > 1 else ''
 
     @property
     def description(self):
+        """
+        Return the third display line or an empty string
+        """
         return self.lines[2] if len(self.lines) > 2 else ''
 
 
 def _run_overlay_app(lines, play_duration, show_seconds, overlay_cfg):
     """
-    Run overlay app
+    Run the Qt media-information overlay with configured styling and visibility timing
+
+    :param lines:         (lst<str>) metadata lines to display
+    :param play_duration: (float) media playback length in seconds, or None for persistent display
+    :param show_seconds:  (float) duration of timed visibility periods in seconds
+    :param overlay_cfg:   (dict) font, text-effect, layout, and fade settings
     """
 
     import sys
@@ -60,18 +75,18 @@ def _run_overlay_app(lines, play_duration, show_seconds, overlay_cfg):
 
     def _qt_weight(weight_str):
         """
-        Qt weight
+        Map the bold setting to Qt's bold weight and other values to normal weight
         """
         return QFont.Bold if weight_str == 'bold' else QFont.Normal
 
     class NFOOverlayWindow(QWidget):
         """
-        NFOOverlayWindow
+        Paint metadata lines on a transparent screen-sized surface with adjustable opacity
         """
 
         def __init__(self, nfo_lines):
             """
-            Initialize the instance
+            Scale metadata text for the screen and load configured fonts, colors, and effects
             """
             super(NFOOverlayWindow, self).__init__()
             self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
@@ -116,7 +131,14 @@ def _run_overlay_app(lines, play_duration, show_seconds, overlay_cfg):
 
         def _draw_drop_shadow(self, painter, x, y, text, font, px):
             """
-            Draw drop shadow
+            Paint text over repeated diagonal offsets to create a shadow
+
+            :param painter: (QPainter) active drawing context
+            :param x:       (int) text baseline origin in pixels
+            :param y:       (int) text baseline height in pixels
+            :param text:    (str) line to paint
+            :param font:    (QFont) text font
+            :param px:      (int) shadow offset extent in pixels
             """
             painter.setFont(font)
             painter.setPen(self.effect_color)
@@ -127,7 +149,14 @@ def _run_overlay_app(lines, play_duration, show_seconds, overlay_cfg):
 
         def _draw_outline(self, painter, x, y, text, font, px):
             """
-            Draw outline
+            Paint text at eight surrounding offsets before painting its foreground
+
+            :param painter: (QPainter) active drawing context
+            :param x:       (int) text baseline origin in pixels
+            :param y:       (int) text baseline height in pixels
+            :param text:    (str) line to paint
+            :param font:    (QFont) text font
+            :param px:      (int) outline offset in pixels
             """
             painter.setFont(font)
             offsets = [
@@ -148,7 +177,7 @@ def _run_overlay_app(lines, play_duration, show_seconds, overlay_cfg):
 
         def _draw_text(self, painter, x, y, text, font, px):
             """
-            Draw text
+            Paint a metadata line with the configured shadow or outline effect
             """
             if overlay_cfg['overlay_effect'] == 'drop_shadow':
                 self._draw_drop_shadow(painter, x, y, text, font, px)
@@ -157,7 +186,7 @@ def _run_overlay_app(lines, play_duration, show_seconds, overlay_cfg):
 
         def paintEvent(self, event):
             """
-            PaintEvent
+            Render metadata lines to a transparent pixmap and composite it at the current opacity
             """
             if not self.lines:
                 return
@@ -209,7 +238,7 @@ def _run_overlay_app(lines, play_duration, show_seconds, overlay_cfg):
 
     def fade_out(on_done=None):
         """
-        Fade out
+        Start a timer that fades the overlay to transparent and optionally invokes a completion callback
         """
         steps = max(1, overlay_cfg['overlay_fade_duration_ms'] // FADE_INTERVAL_MS)
         step_size = 1.0 / steps
@@ -217,7 +246,7 @@ def _run_overlay_app(lines, play_duration, show_seconds, overlay_cfg):
 
         def tick():
             """
-            Tick
+            Decrease overlay opacity for one fade step and finish at full transparency
             """
             window.opacity = max(0.0, window.opacity - step_size)
             window.update()
@@ -232,7 +261,7 @@ def _run_overlay_app(lines, play_duration, show_seconds, overlay_cfg):
 
     def fade_in():
         """
-        Fade in
+        Show the overlay and start a timer that increases its opacity to fully visible
         """
         window.opacity = 0.0
         window.show()
@@ -242,7 +271,7 @@ def _run_overlay_app(lines, play_duration, show_seconds, overlay_cfg):
 
         def tick():
             """
-            Tick
+            Increase overlay opacity for one fade step and stop at full visibility
             """
             window.opacity = min(1.0, window.opacity + step_size)
             window.update()
@@ -255,7 +284,7 @@ def _run_overlay_app(lines, play_duration, show_seconds, overlay_cfg):
 
     def signal_handler(sig, frame):
         """
-        Signal handler
+        Quit the metadata overlay's Qt event loop when interrupted
         """
         QApplication.quit()
 
@@ -284,7 +313,7 @@ def _run_overlay_app(lines, play_duration, show_seconds, overlay_cfg):
 
 def _load_overlay_config():
     """
-    Load overlay config
+    Merge recognized overlay settings from the station manager into display defaults
     """
     cfg = dict(_OVERLAY_DEFAULTS)
     try:
@@ -323,14 +352,14 @@ def parse_nfo_string(content):
 
     def get(field):
         """
-        Get
+        Read trimmed text from a direct XML child, using an empty string when missing
         """
         el = root.find(field)
         return el.text.strip() if el is not None and el.text else ''
 
     def as_int(raw):
         """
-        As int
+        Convert digit-only metadata text to an integer and preserve other values
         """
         return int(raw) if raw.isdigit() else raw
 
@@ -391,7 +420,10 @@ def parse_nfo_string(content):
 
 def read_metadata_from_disk(file_path):
     """
-    Read metadata from disk
+    Read and parse the UTF-8 NFO sidecar beside a media file
+
+    :param file_path: (str) media filename whose extension is replaced with .nfo
+    :return:          (dict) parsed metadata, or None if the sidecar is absent, unreadable, or invalid
     """
 
     nfo_path = os.path.splitext(file_path)[0] + '.nfo'
@@ -414,7 +446,10 @@ def read_metadata_from_disk(file_path):
 
 def overlay_lines(meta):
     """
-    Overlay lines
+    Select nonempty music or plaintext metadata lines for the compact overlay
+
+    :param meta: (dict) normalized media metadata
+    :return:     (list) display lines up to MAX_NFO_LINES, or None for unsupported or empty metadata
     """
 
     if not meta:
@@ -433,7 +468,10 @@ def overlay_lines(meta):
 
 def display_fields(meta):
     """
-    Display fields
+    Map music, episode, movie, or plaintext metadata into three common display fields
+
+    :param meta: (dict) normalized media metadata
+    :return:     (dict) title, info, and description strings, or None if metadata is absent
     """
 
     if not meta:
@@ -463,7 +501,12 @@ def display_fields(meta):
 
 def show_overlay(nfo_data, play_duration=None, show_seconds=DEFAULT_SHOW_SECONDS):
     """
-    Show overlay
+    Start a separate daemon process displaying the supplied media-information lines
+
+    :param nfo_data:      (NFOData) display lines and title, or None to skip display
+    :param play_duration: (float) media duration in seconds, or None for persistent display
+    :param show_seconds:  (float) length of timed visibility periods in seconds
+    :return:              (Process) started overlay process, or None if absent or startup fails
     """
 
     if nfo_data is None:
@@ -486,7 +529,7 @@ def show_overlay(nfo_data, play_duration=None, show_seconds=DEFAULT_SHOW_SECONDS
 
 def close_overlay(process):
     """
-    Close overlay
+    Terminate an active metadata overlay, escalating to kill if it does not exit promptly
     """
 
     if not process or not process.is_alive():

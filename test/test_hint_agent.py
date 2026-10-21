@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage test hint agent
+Verify time-dependent metadata hints filter catalog candidates correctly, including exclusive
+matches and unrestricted content.
 """
 from datetime import datetime
 from unittest.mock import patch
@@ -28,12 +29,12 @@ SPECIAL_ONLY = ['mix/special']
 
 class TestHintAgent(object):
     """
-    TestHintAgent
+    Verify folder metadata restrictions and exclusive hints filter media candidates correctly
     """
 
     def setup_method(self):
         """
-        Setup method
+        Reset shared station state and install holidays for metadata-filtering tests
         """
         # reset the Borg singleton so each test starts clean
         StationManager._StationManager__we_are_all_one = {}
@@ -43,7 +44,7 @@ class TestHintAgent(object):
 
     def _make_manager(self, custom_holidays):
         """
-        Make manager
+        Load test holiday definitions without reading real station configuration files
         """
         config_data = {'server_port': 4242, 'custom_holidays': custom_holidays}
         with patch.object(StationIO, 'load_main_config', return_value=config_data):
@@ -52,7 +53,7 @@ class TestHintAgent(object):
 
     def _filter(self, meta_hints, when):
         """
-        Filter
+        Apply metadata rules to special and general media fixtures and return retained tags
         """
         # entries are rebuilt every call - HintAgent caches its meta lookup on them
         candidates = [

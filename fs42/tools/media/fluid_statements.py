@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage fluid statements
+Read and update the SQLite media scan cache, including file metadata, detected break points, and
+chapter markers.
 """
 import os
 import json
@@ -70,7 +71,10 @@ def iterate_file_entries(connection, entries):
 
 def refresh_video_meta(connection, repo_entry):
     """
-    Refresh video meta
+    Re-read video metadata and update its cached JSON only when the contents change
+
+    :param connection: (Connection) writable media-cache database connection
+    :param repo_entry: (FileRepoEntry) cached media record to compare with current metadata
     """
 
     metadata = media_processor.extract_metadata(repo_entry.path, 'video')
@@ -248,7 +252,7 @@ def delete_chapter_points(connection, path):
 
 def init_db(connection):
     """
-    Init db
+    Create media-cache and break-point tables and add missing media-type storage
     """
     cursor = connection.cursor()
     cursor.execute("""CREATE TABLE IF NOT EXISTS file_meta (

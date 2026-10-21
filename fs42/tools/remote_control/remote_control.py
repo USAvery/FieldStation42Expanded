@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage remote controller
+Translate Linux keyboard and IR input events into player API commands, guide navigation, PIN entry,
+and service controls, with configurable mappings and input debouncing.
 """
 import os
 import sys
@@ -139,7 +140,7 @@ def send_custom_guide_key(key_name):
 
 def read_exec_mappings():
     """
-    Read exec mappings
+    Read configured key-to-shell-command mappings, using an empty mapping if absent or invalid
     """
     mappings = {}
     if not os.path.exists(CALLBACK_MAP_FILE):
@@ -159,7 +160,7 @@ exec_mappings = read_exec_mappings()
 
 def write_press_socket(digits):
     """
-    Write press socket
+    Publish the currently entered channel digits and their timestamp to the status file
     """
     try:
         with open(PRESS_SOCKET, 'w') as fp:
@@ -170,7 +171,7 @@ def write_press_socket(digits):
 
 def clear_press_socket():
     """
-    Clear press socket
+    Empty the channel-digit status file after the pending entry is cleared
     """
     try:
         with open(PRESS_SOCKET, 'w') as fp:
@@ -229,7 +230,10 @@ def send_channel_change():
 
 def send_parental_digit_if_active(number):
     """
-    Send parental digit if active
+    Forward a numeric key to PIN entry when the player is awaiting parental authorization
+
+    :param number: (int) digit entered on the remote
+    :return:       (bool) whether the player accepted the digit as PIN input
     """
     try:
         status_response = requests.get('{}/player/status'.format(FS42_BASE_URL), timeout=2)

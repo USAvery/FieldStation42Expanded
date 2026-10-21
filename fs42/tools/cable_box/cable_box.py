@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage cable box
+Run the Raspberry Pi cable-box controls and numeric display. Read keypad input, send player
+commands, and display channel, clock, or temperature information.
 """
 import os
 import sys
@@ -29,7 +30,7 @@ _logger = project_logger.setup('fs42.tools.cable_box.main')
 
 def get_temperature():
     """
-    Get temperature
+    Read the Raspberry Pi temperature and return rounded degrees Fahrenheit
     """
     a = str(subprocess.check_output(['vcgencmd', 'measure_temp']))
     _logger.info('{} {}'.format('A is', a))
@@ -43,13 +44,17 @@ def get_temperature():
 
 class CableBox(object):
     """
-    CableBox
+    Read a physical keypad and show channel, clock, or temperature information on the LED display
     """
 
     def __init__(self, channel_socket='runtime/channel.socket', status_socket='runtime/play_status.socket',
                  press_socket='runtime/press.socket'):
         """
-        Initialize the instance
+        Initialize GPIO keypad and LED hardware and load clock-display preferences
+
+        :param channel_socket: (str) file used to send player channel commands
+        :param status_socket:  (str) file containing player status JSON
+        :param press_socket:   (str) file containing remote-entered channel digits
         """
         self.channel_socket = channel_socket
         self.status_socket = status_socket
@@ -84,7 +89,10 @@ class CableBox(object):
 
     def send_command(self, command, channel=-1):
         """
-        Send command
+        Send a player command or handle reserved exit, shutdown, and temperature channels
+
+        :param command: (str) player action such as up, down, or direct
+        :param channel: (int) direct channel number; 99 exits, 98 halts, and 97 shows temperature
         """
         as_obj = {'command': command, 'channel': channel}
         as_str = json.dumps(as_obj)
@@ -110,7 +118,7 @@ class CableBox(object):
 
     def check_status(self):
         """
-        Check status
+        Read and decode player status only when its file contents change
         """
         new_stat = None
         with open(self.status_socket) as fp:
@@ -128,7 +136,7 @@ class CableBox(object):
 
     def check_press(self):
         """
-        Check press
+        Consume remote-entered channel digits and return them only when less than two seconds old
         """
         try:
             with open(self.press_socket) as fp:
@@ -146,7 +154,7 @@ class CableBox(object):
 
     def read_keys(self):
         """
-        Read keys
+        Return the pressed keypad key only when exactly one key is held
         """
         pressed = self.keypad.pressed_keys
         if len(pressed) == 1:
@@ -155,7 +163,7 @@ class CableBox(object):
 
     def event_loop(self):
         """
-        Event loop
+        Poll the keypad and status files while updating channel selection and the idle display
         """
         last_pressed = ''
         in_selection = False

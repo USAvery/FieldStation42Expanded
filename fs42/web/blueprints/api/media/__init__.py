@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Expose the package interface
+List and serve local media and JSON files through HTTP, including generated guide videos and audio
+or video extension filtering.
 """
 import os
 import logging
@@ -28,7 +29,10 @@ GUIDE_VIDEOS_DIR = os.path.join(PROJECT_ROOT, 'runtime', 'guide_videos')
 
 def safe_resolve(relative_path):
     """
-    Safe resolve
+    Resolve a requested path and reject resolved strings outside the project-root prefix
+
+    :param relative_path: (str) requested path with leading separators removed
+    :return:              (str) resolved filesystem path
     """
     clean = relative_path.lstrip('/').lstrip('\\')
     resolved = os.path.realpath(os.path.join(PROJECT_ROOT, clean))
@@ -40,7 +44,11 @@ def safe_resolve(relative_path):
 @router.get('/list')
 async def list_media(path: str, type: str = 'audio'):
     """
-    List media
+    List supported media files directly inside a requested project directory
+
+    :param path: (str) project-relative directory to list
+    :param type: (str) audio, video, or any
+    :response:   (jsn) requested path and sorted media-serving URLs
     """
     resolved = safe_resolve(path)
 
@@ -70,7 +78,10 @@ async def list_media(path: str, type: str = 'audio'):
 @router.get('/file')
 async def serve_file(path: str):
     """
-    Serve file
+    Serve a supported audio or video file after resolving and checking the requested path
+
+    :param path: (str) requested project-relative media filename
+    :return:     (FileResponse) file stream with its inferred media type
     """
     resolved = safe_resolve(path)
 
@@ -90,7 +101,10 @@ async def serve_file(path: str):
 @router.get('/json')
 async def serve_json(path: str):
     """
-    Serve json
+    Serve a JSON file after resolving its path and checking its extension
+
+    :param path: (str) requested project-relative JSON filename
+    :return:     (FileResponse) file stream with application/json content type
     """
     resolved = safe_resolve(path)
 
@@ -108,7 +122,9 @@ async def serve_json(path: str):
 @router.get('/list_videos')
 async def list_videos():
     """
-    List videos
+    List supported guide-background videos as browser-accessible URLs
+
+    :response: (jsn) sorted video URLs, or an empty list when the directory is absent
     """
     if not os.path.isdir(GUIDE_VIDEOS_DIR):
         return {'files': []}

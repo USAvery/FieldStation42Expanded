@@ -3,7 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage test schedule hint
+Verify temporal hint matching for week numbers, months, quarters, custom holidays, and date ranges.
 """
 from datetime import datetime
 from unittest.mock import patch
@@ -23,7 +23,7 @@ from fs42.tools.schedule import schedule_hint as schedule_hint_utils
 
 class TestWeekNumberHint(object):
     """
-    TestWeekNumberHint
+    Verify ISO week-number parsing and broadcast-date matching
     """
 
     def test_hint_week_1(self):
@@ -62,7 +62,7 @@ class TestWeekNumberHint(object):
 
 class TestMonthHint(object):
     """
-    TestMonthHint
+    Verify named month hints match only their calendar month
     """
 
     def test_hint(self):
@@ -101,7 +101,7 @@ class TestMonthHint(object):
 
 class TestQuarterHint(object):
     """
-    TestQuarterHint
+    Verify quarter syntax and three-month calendar matching
     """
 
     def test_quarter(self):
@@ -142,12 +142,12 @@ class TestQuarterHint(object):
 
 class TestCustomHolidayHint(object):
     """
-    TestCustomHolidayHint
+    Verify fixed-date and ordinal-weekday custom holidays across calendar years
     """
 
     def setup_method(self):
         """
-        Setup method
+        Reset the shared station registry before each custom-holiday test
         """
         # reset the Borg singleton so each test starts clean
         StationManager._StationManager__we_are_all_one = {}
@@ -156,7 +156,7 @@ class TestCustomHolidayHint(object):
 
     def _make_manager(self, custom_holidays):
         """
-        Make manager
+        Install test holiday definitions without loading real station files
         """
         config_data = {'server_port': 4242, 'custom_holidays': custom_holidays}
         with patch.object(StationIO, 'load_main_config', return_value=config_data):
@@ -230,7 +230,7 @@ class TestCustomHolidayHint(object):
 
 class TestRangeHint(object):
     """
-    TestRangeHint
+    Verify annual date intervals, including ranges that cross the year boundary
     """
 
     def test_range(self):

@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage slot reader
+Resolve a station's effective time slot, including date and week overrides, content tags, and break
+settings, and normalize weekly slot definitions.
 """
 import copy
 import math
@@ -15,7 +16,11 @@ from fs42.core import timings
 
 def get_tag_from_slot(slot, when):
     """
-    Get tag from slot
+    Choose a slot's content tag randomly or by its portion of the current hour
+
+    :param slot: (dict) hourly slot containing a tag or tag list
+    :param when: (datetime) broadcast time used for deterministic within-hour selection
+    :return:     (tuple) selected tag and its list index; missing values are None
     """
     response = None
     tag_index = None
@@ -52,7 +57,7 @@ def get_tag_from_slot(slot, when):
 
 def _date_key_matches(date_key, when):
     """
-    Date key matches
+    Match a date against an annual day or inclusive range, including ranges across New Year
     """
     # match date_overrides keys like "April 23" or "December 24 - January 2"
     try:
@@ -84,7 +89,7 @@ def _date_key_matches(date_key, when):
 
 def _get_date_override(conf, when):
     """
-    Get date override
+    Return the first date-specific schedule matching the requested broadcast date
     """
     overrides = conf.get('date_overrides', {})
 
@@ -100,7 +105,7 @@ def _get_date_override(conf, when):
 
 def _get_week_override(conf, when):
     """
-    Get week override
+    Return the first week-override mapping whose date range includes the broadcast date
     """
     overrides = conf.get('week_overrides', {})
 
@@ -116,7 +121,7 @@ def _get_week_override(conf, when):
 
 def get_break_info(conf, when):
     """
-    Get break info
+    Read break strategy and explicit bumper references from the effective hourly slot
     """
     slot, slot_num = get_slot(conf, when)
     if slot is None:
@@ -131,7 +136,11 @@ def get_break_info(conf, when):
 
 def get_slot(conf, when):
     """
-    Get slot
+    Resolve an hourly slot with date overrides before week overrides and the regular schedule
+
+    :param conf: (dict) processed station schedule configuration
+    :param when: (datetime) broadcast date and hour to resolve
+    :return:     (tuple) slot dictionary or None, followed by the hour key as a string
     """
     slot_number = str(when.hour)
     day_str = timings.DAYS[when.weekday()]
@@ -158,7 +167,12 @@ def get_slot(conf, when):
 
 def _smooth_week(source_days, target_days, network_name, where=''):
     """
-    Smooth week
+    Copy the preceding content tags into continued slots in broadcast-hour order
+
+    :param source_days:  (dict) weekday schedules to inspect
+    :param target_days:  (dict) corresponding schedules to update
+    :param network_name: (str) station name for invalid-continuation errors
+    :param where:        (str) optional override context for error messages
     """
     # smooths tags across slot boundaries for one week-shaped mapping of day -> slots
     last_tag = None
@@ -181,7 +195,10 @@ def _smooth_week(source_days, target_days, network_name, where=''):
 
 def smooth_tags(conf):
     """
-    Smooth tags
+    Copy station settings and expand continued tags in regular and overridden weeks
+
+    :param conf: (dict) processed station configuration
+    :return:     (dict) independent configuration with continued slot tags populated
     """
     # this function smooths tags through slot boundaries - so if not specified will use previous slots tag.
     smoothed = copy.deepcopy(conf)

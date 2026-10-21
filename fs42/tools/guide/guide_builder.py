@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage guide builder
+Project scheduled blocks into guide rows and time columns, resolving program titles and filling
+stations without schedules with placeholders.
 """
 import os
 import sys
@@ -23,7 +24,7 @@ from fs42.tools.schedule.liquid_manager import LiquidManager
 
 def normalize_video_title(title):
     """
-    Normalize video title
+    Clean a media title using the server's custom filename patterns
     """
     custom_patterns = StationManager().server_conf.get('title_patterns', [])
     return title_parser.parse_title(title, custom_patterns)
@@ -31,7 +32,7 @@ def normalize_video_title(title):
 
 def metadata_title_for_block(programming_block):
     """
-    Metadata title for block
+    Read the cached display title for a single-media block, skipping clip collections
     """
     content = programming_block.content
     if content is None or isinstance(content, list):
@@ -41,12 +42,15 @@ def metadata_title_for_block(programming_block):
 
 class PreviewBlock(object):
     """
-    PreviewBlock
+    Represent one guide cell with its duration and continuation flags
     """
 
     def __init__(self, title, width=1):
         """
-        Initialize the instance
+        Store a guide title and initial cell width with continuation flags cleared
+
+        :param title: (str) program title shown in the guide
+        :param width: (float) cell width value; guide queries express it as visible seconds
         """
         self.title = title
         self.width = width
@@ -55,21 +59,26 @@ class PreviewBlock(object):
 
     def __repr__(self):
         """
-        Repr
+        Format a guide cell's title, width, and continuation flags for diagnostics
         """
         return '{0}: width={1} started={2} later={3}'.format(self.title, self.width, self.started_earlier,
                                                              self.ends_later)
 
     def to_json(self):
         """
-        ToJSON
+        Serialize the guide cell's attributes as a JSON string
         """
         return json.dumps(self, default=lambda o: o.__dict__)
 
 
 def query_slot(network_name, when, normalize):
     """
-    Query slot
+    Build program-preview cells spanning ninety minutes from the requested time
+
+    :param network_name: (str) station whose loaded schedule should be queried
+    :param when:         (datetime) beginning of the visible guide window
+    :param normalize:    (bool) whether to clean titles when cached metadata has no title
+    :return:             (lst<PreviewBlock>) cells with visible durations and continuation flags
     """
     start_marker = when
     current_marker = start_marker
@@ -118,13 +127,17 @@ def query_slot(network_name, when, normalize):
 
 class GuideBuilder(object):
     """
-    GuideBuilder
+    Build guide rows and time labels from active station schedules
     """
 
     def __init__(self, num_blocks=3, template_dir='fs42/tools/guide/templates/',
                  static_dir='fs42/tools/guide/static/'):
         """
-        Initialize the instance
+        Store guide block-count and asset-directory settings
+
+        :param num_blocks:   (int) configured number of guide time blocks
+        :param template_dir: (str) guide template directory
+        :param static_dir:   (str) guide static-asset directory
         """
         # ordered array of {"conf": station_config, "schedule": schedule}
         self.num_blocks = num_blocks
@@ -133,7 +146,13 @@ class GuideBuilder(object):
 
     def build_view(self, normalize=True):
         """
-        Build view
+        Build a current ninety-minute guide view for visible stations
+
+        Use station-name placeholders for unscheduled networks and an unavailable-data
+        message when a station schedule cannot be queried.
+
+        :param normalize: (bool) whether to clean program titles without metadata titles
+        :return:          (dict) guide rows, station metadata, and half-hour time labels
         """
         view = {'rows': [], 'meta': []}
 

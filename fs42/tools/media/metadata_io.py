@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage metadata io
+Read cached media metadata in single or batch queries and normalize legacy fields into a consistent
+representation for titles and displays.
 """
 import os
 import json
@@ -15,7 +16,7 @@ _logger = logging.getLogger('MetadataIO')
 
 def _default_db_path():
     """
-    Default db path
+    Read the metadata database filename from shared station settings
     """
     from fs42.core.station_manager import StationManager
     return StationManager().server_conf['db_path']
@@ -23,7 +24,7 @@ def _default_db_path():
 
 def pick_title(meta):
     """
-    Pick title
+    Prefer the series title for episodes and the regular title for other metadata
     """
     if not meta:
         return None
@@ -34,7 +35,7 @@ def pick_title(meta):
 
 def normalize(meta):
     """
-    Normalize
+    Copy legacy metadata when needed to rename date to year and supply a missing music type
     """
     if not isinstance(meta, dict):
         return meta
@@ -54,7 +55,11 @@ def normalize(meta):
 
 def read_many(file_paths, db_path=None):
     """
-    Read many
+    Read cached metadata in batches and map resolved files back to the caller's paths
+
+    :param file_paths: (list) original media paths to look up
+    :param db_path:    (str) optional database filename; None uses station settings
+    :return:           (dict) original paths mapped to available normalized metadata
     """
     if not file_paths:
         return {}
@@ -102,7 +107,11 @@ def read_many(file_paths, db_path=None):
 
 def read(file_path, db_path=None):
     """
-    Read
+    Read normalized cached metadata for a media file's resolved absolute path
+
+    :param file_path: (str) media filename whose metadata is requested
+    :param db_path:   (str) optional database filename; None uses station settings
+    :return:          (dict) decoded metadata, or None if absent or unreadable
     """
     if db_path is None:
         try:

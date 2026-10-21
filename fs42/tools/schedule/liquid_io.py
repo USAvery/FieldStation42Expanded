@@ -92,7 +92,7 @@ def _build_block_from_row(row, content_cache=None):
 
 def _block_factory(liquid_type, args):
     """
-    Block factory
+    Reconstruct the requested schedule-block subclass from its stored constructor arguments
     """
     match liquid_type:
         case 'LiquidBlock':
@@ -117,7 +117,7 @@ class LiquidIO(object):
 
     def __init__(self):
         """
-        Initialize the instance
+        Select the configured SQLite database and ensure schedule storage exists
         """
         self.db_path = StationManager().server_conf['db_path']
         self._init_liquid_table()
@@ -125,7 +125,9 @@ class LiquidIO(object):
     @contextmanager
     def _get_connection(self):
         """
-        Get connection
+        Yield a schedule database connection, committing success and rolling back failures
+
+        Close the connection on every exit from the context manager.
         """
         connection = sqlite3.connect(self.db_path)
         try:
@@ -202,7 +204,12 @@ class LiquidIO(object):
 
     def query_liquid_blocks(self, station_name, start, end):
         """
-        Query liquid blocks
+        Restore a station's blocks overlapping a time window, batching their catalog lookups
+
+        :param station_name: (str) network name restricting the query
+        :param start:        (datetime) exclusive lower boundary for block end times
+        :param end:          (datetime) exclusive upper boundary for block start times
+        :return:             (list) restored schedule blocks ordered by start time
         """
         with self._get_connection() as connection:
             cursor = connection.cursor()
@@ -236,7 +243,11 @@ class LiquidIO(object):
 
     def query_all_liquid_blocks(self, start, end):
         """
-        Query all liquid blocks
+        Restore overlapping schedule blocks for all stations with one batched catalog lookup
+
+        :param start: (datetime) beginning of the query window
+        :param end:   (datetime) end of the query window
+        :return:      (dict) network names mapped to chronologically ordered blocks
         """
 
         with self._get_connection() as connection:
@@ -312,7 +323,7 @@ class LiquidIO(object):
 
     def delete_liquid_blocks(self, station_name):
         """
-        Delete liquid blocks
+        Delete all saved schedule blocks belonging to the specified network
         """
         with self._get_connection() as connection:
             cursor = connection.cursor()

@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage liquid schedule
+Generate and extend station schedules by choosing catalog content, applying slot and exclusion
+rules, and filling program and commercial time.
 """
 import os
 import sys
@@ -99,12 +100,15 @@ def _register_exclusion(exclusion_index, block):
 
 class ClipShowKickBack(Exception):
     """
-    ClipShowKickBack
+    Carry a clip-show tag when ordinary program scheduling must switch to compilation handling
     """
 
     def __init__(self, message, clip_tag):
         """
-        Initialize the instance
+        Attach the fallback clip-show tag to a scheduling exception
+
+        :param message:  (str) explanation of why clip-show handling is required
+        :param clip_tag: (str) compilation tag the caller should schedule
         """
         super(ClipShowKickBack, self).__init__(message)
         self.clip_tag = clip_tag
@@ -112,12 +116,14 @@ class ClipShowKickBack(Exception):
 
 class LiquidSchedule(object):
     """
-    LiquidSchedule
+    Extend a station's saved schedule by selecting media and building timed playback blocks
     """
 
     def __init__(self, conf):
         """
-        Initialize the instance
+        Load the station's catalog and existing schedule blocks
+
+        :param conf: (dict) processed station configuration
         """
         self._l = logging.getLogger('Liquid')
         # self.conf = TagHintReader.smooth_tags(conf)
@@ -127,7 +133,13 @@ class LiquidSchedule(object):
 
     def _calc_target_duration(self, duration, increment=None, break_info=None, break_strategy=None):
         """
-        Calc target duration
+        Round content and explicit bumpers to a schedule interval with room for breaks
+
+        :param duration:       (float) content length in seconds
+        :param increment:      (int) rounding interval in minutes, or None for station settings
+        :param break_info:     (dict) optional start and end bump durations
+        :param break_strategy: (str) break placement mode controlling extra commercial allowance
+        :return:               (float) target block duration in seconds
         """
         # get the target duration for the show based on the schedule increment
         if increment is None:
@@ -157,13 +169,13 @@ class LiquidSchedule(object):
 
     def _load_blocks(self):
         """
-        Load blocks
+        Refresh this station's block list from the stored schedule
         """
         self._blocks = liquid_api.get_blocks(self.conf)
 
     def _end_time(self):
         """
-        End time
+        Return the last stored block's end time, or None for an empty schedule
         """
         # get the lastest time in the schedule
         if len(self._blocks) > 0:
@@ -173,7 +185,10 @@ class LiquidSchedule(object):
 
     def _flood(self, start_time, end_target):
         """
-        Flood
+        Build and save daily looping-media blocks for the requested interval
+
+        :param start_time: (datetime) start of the first loop block
+        :param end_target: (datetime) end boundary; only complete days are added
         """
         # flood the schedule - this is used for loop channels
         diff = end_target - start_time
@@ -199,7 +214,15 @@ class LiquidSchedule(object):
 
     def _fill(self, slot_config, tag_str, current_mark, tag_index=None, exclusion_index=None, first_in_slot=True):
         """
-        Fill
+        Choose the next sequenced or eligible program and build its scheduled block
+
+        :param slot_config:     (dict) active slot settings, including sequence and break options
+        :param tag_str:         (str) selected content tag
+        :param current_mark:    (datetime) proposed block start
+        :param tag_index:       (int) selected tag's index for per-show sequences, or None
+        :param exclusion_index: (dict) sibling-channel media occupancy windows, or None
+        :param first_in_slot:   (bool) whether slot-opening bump rules should apply
+        :return:                (tuple) new program block and the next scheduling time
         """
         seq_key = None
         candidate = None
@@ -270,7 +293,12 @@ class LiquidSchedule(object):
 
     def _clip_fill(self, tag_str, current_mark, slot_config):
         """
-        Clip fill
+        Assemble a configured clip compilation and assign its scheduled start and end
+
+        :param tag_str:      (str) clip-show configuration key
+        :param current_mark: (datetime) compilation start
+        :param slot_config:  (dict) active slot settings for break overrides
+        :return:             (tuple) compilation block and its scheduled end time
         """
         new_block = None
         next_mark = None
@@ -300,7 +328,13 @@ class LiquidSchedule(object):
 
     def _break_info(self, slot_config, tag_str, candidate_path, first_in_slot=True):
         """
-        Break info
+        Resolve slot and content-specific break settings against station defaults
+
+        :param slot_config:    (dict) active hourly slot settings
+        :param tag_str:        (str) selected content tag
+        :param candidate_path: (str) media path used to match tag-directory overrides
+        :param first_in_slot:  (bool) whether to include the slot's opening bumper
+        :return:               (tuple) resolved break settings, placement strategy, and interval in minutes
         """
         break_info = {
             'start_bump': None,
@@ -423,7 +457,10 @@ class LiquidSchedule(object):
 
     def _fluid(self, start_time, end_target):
         """
-        Fluid
+        Build and persist standard programming across slots, marathons, and off-air periods
+
+        :param start_time: (datetime) start of new programming, or None for the current time
+        :param end_target: (datetime) boundary to extend the schedule through
         """
         # this is the core of the scheduler.
         new_blocks = []
@@ -554,7 +591,9 @@ class LiquidSchedule(object):
 
     def _increment(self, how_much):
         """
-        Increment
+        Extend the saved schedule by a day or to the next broadcast week or month boundary
+
+        :param how_much: (str) extension unit: day, week, or month
         """
         # add time to the existing schedule
         # firsst, get the current end-of-schedule
@@ -593,32 +632,32 @@ class LiquidSchedule(object):
 
     def add_days(self, day_count):
         """
-        Add days
+        Append the requested number of daily schedule extensions
         """
         for i in range(day_count):
             self._increment('day')
 
     def add_week(self):
         """
-        Add week
+        Extend programming to the next Monday broadcast-day boundary
         """
         self._increment('week')
 
     def add_month(self):
         """
-        Add month
+        Extend programming to the first broadcast day of the next month
         """
         self._increment('month')
 
     def add_amount(self, amount):
         """
-        Add amount
+        Dispatch a day, week, or month schedule extension by its unit name
         """
         self._increment(amount)
 
     def print_schedule(self):
         """
-        Print schedule
+        Log the loaded schedule blocks and each block's playback entries
         """
         for block in self._blocks:
             _logger.info('here: ' + block)

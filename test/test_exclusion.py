@@ -129,7 +129,7 @@ class TestOverlapLogic(unittest.TestCase):
     @staticmethod
     def _overlaps(windows, proposed_start, duration_seconds):
         """
-        Overlaps
+        Check whether a proposed media interval intersects any occupied sibling-channel window
         """
         proposed_end = proposed_start + datetime.timedelta(seconds=duration_seconds)
         return any(proposed_start < w_end and w_start < proposed_end for w_start, w_end in windows)
@@ -218,7 +218,7 @@ class TestOverlapLogic(unittest.TestCase):
 
 class TestFindCandidateExclusion(unittest.TestCase):
     """
-    TestFindCandidateExclusion
+    Verify catalog selection excludes media already scheduled on overlapping sibling channels
     """
 
     def test_no_exclusion_picks_lowest_count(self):
@@ -366,13 +366,13 @@ class TestFindCandidateExclusion(unittest.TestCase):
 
 class TestRegisterExclusion(unittest.TestCase):
     """
-    TestRegisterExclusion
+    Verify scheduled media is registered under its resolved path and occupied time window
     """
 
     @staticmethod
     def _register():
         """
-        Register
+        Return the production exclusion-registration helper for focused tests
         """
         from fs42.tools.schedule.liquid_schedule import LiquidSchedule
         return liquid_schedule_utils._register_exclusion
@@ -475,7 +475,7 @@ class TestRegisterExclusion(unittest.TestCase):
 
 class TestBuildExclusionIndex(unittest.TestCase):
     """
-    TestBuildExclusionIndex
+    Verify sibling station schedules are converted into media-overlap exclusion indexes
     """
 
     def _make_schedule(self):
@@ -511,7 +511,7 @@ class TestBuildExclusionIndex(unittest.TestCase):
 
     def _sibling_conf(self, name='Comedy2', content_dir=CONTENT_DIR, tag='comedy'):
         """
-        Sibling conf
+        Build a minimal sibling-station configuration sharing a content directory
         """
         return {
             'network_name': name,
@@ -811,7 +811,7 @@ class TestFillGracefulDegradation(unittest.TestCase):
 
     def _slot(self):
         """
-        Slot
+        Create a minimal comedy slot for testing fallback content selection
         """
         return {'tags': 'comedy'}
 

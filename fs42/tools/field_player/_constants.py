@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage constants
+Define playback outcome codes, runtime file locations, display limits, and guide-preview layouts and
+compositor keys.
 """
 import re
 
@@ -64,7 +65,7 @@ PREVIEW_KEYS = {
 
 class PlayerState(object):
     """
-    PlayerState
+    Name the outcomes and control transitions exchanged by player components
     """
     FAILED = 1
     EXITED = 2

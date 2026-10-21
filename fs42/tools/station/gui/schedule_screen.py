@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage schedule screen
+Display schedule coverage in the terminal interface and run schedule rebuilds or extensions with
+progress feedback.
 """
 import os
 
@@ -27,13 +28,13 @@ from fs42.tools.schedule.liquid_schedule import LiquidSchedule
 
 class ScheduleScreen(Screen):
     """
-    ScheduleScreen
+    Present schedule inspection, rebuilding, and extension controls in the terminal interface
     """
     CSS_PATH = 'catalog_screen.tcss'
 
     def compose(self):
         """
-        Compose
+        Create the station selector, schedule action buttons, and programming table
         """
         yield Header('Welcome to Station42')
         self.dt = DataTable()
@@ -60,7 +61,7 @@ class ScheduleScreen(Screen):
 
     async def on_button_pressed(self, event):
         """
-        On button pressed
+        Dispatch schedule actions and require available catalogs before rebuilding or extending
         """
         match event.button.id:
             case 'view_selected':
@@ -122,7 +123,7 @@ class ScheduleScreen(Screen):
 
     def on_mount(self):
         """
-        On mount
+        Set the schedule screen title and table size, then show coverage statistics
         """
         self.title = 'FieldStation42'
         self.sub_title = 'Control Panel'
@@ -132,7 +133,7 @@ class ScheduleScreen(Screen):
 
     def rebuild_done(self):
         """
-        Rebuild done
+        Reload shared schedules, dismiss the progress dialog, and refresh coverage statistics
         """
         LiquidManager().reload_schedules()
         self.app.pop_screen()
@@ -140,14 +141,16 @@ class ScheduleScreen(Screen):
 
     def update_loading_message(self, message):
         """
-        Update loading message
+        Replace the text shown in the active schedule progress dialog
         """
         self.app.query_one(LoadingScreen).set_message(message)
 
     @work(exclusive=True, thread=True)
     def addtime_thread(self, how_long):
         """
-        Addtime thread
+        Extend stations with schedule paths by one month in a worker thread
+
+        :param how_long: (obj) retained interface argument; the current worker always adds a month
         """
         stations = StationManager().stations
         for station in stations:
@@ -159,7 +162,7 @@ class ScheduleScreen(Screen):
     @work(exclusive=True, thread=True)
     def rebuild_all_thread(self):
         """
-        Rebuild all thread
+        Remove configured schedule files and generate a month of programming in a worker thread
         """
         for station in StationManager().stations:
             if 'schedule_path' in station:
@@ -170,7 +173,7 @@ class ScheduleScreen(Screen):
 
     def all_catalogs_found(self):
         """
-        All catalogs found
+        Check that catalogs load for all stations requiring locally scheduled media
         """
         all_found = True
         for station in StationManager().stations:
@@ -184,7 +187,7 @@ class ScheduleScreen(Screen):
 
     def populate_stats(self):
         """
-        Populate stats
+        Replace the table with each network's schedule boundaries and coverage in days
         """
         self.dt.clear(True)
         self.dt.add_columns('Network Name', 'Schedule Start Date', 'Schedule End Date', 'Days')

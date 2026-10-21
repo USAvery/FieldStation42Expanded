@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage sequence
+Represent named episode sequences and their entries, including configured playback ranges and
+current positions.
 """
 import math
 import random
@@ -12,31 +13,40 @@ import logging
 
 class SequenceEntry(object):
     """
-    SequenceEntry
+    Identify one episode file in an ordered playback sequence
     """
 
     def __init__(self, fpath):
         """
-        Initialize the instance
+        Store the episode's filesystem path as text
         """
         self.fpath = str(fpath)
 
     def __str__(self):
         """
-        Get the display text
+        Format the episode path for sequence diagnostics
         """
         return 'SequenceEntry(fpath={})'.format(self.fpath)
 
 
 class NamedSequence(object):
     """
-    NamedSequence
+    Track an ordered episode collection, its allowed range, and the next playback position
     """
 
     def __init__(self, station_name, sequence_name, tag_path, start_perc, end_perc, current_index, file_list,
                  initialized=False):
         """
-        Initialize the instance
+        Initialize a station's named episode sequence and populate its sorted media list
+
+        :param station_name:  (str) network owning the sequence
+        :param sequence_name: (str) configured sequence identifier
+        :param tag_path:      (str) content tag or child-show path
+        :param start_perc:    (float) fractional starting boundary; negative selects a random initial episode
+        :param end_perc:      (float) fractional exclusive ending boundary
+        :param current_index: (int) saved episode position
+        :param file_list:     (list) episode paths to sort and store
+        :param initialized:   (bool) whether to preserve the saved position instead of choosing an initial one
         """
         self._l = logging.getLogger('{}'.format(self.__class__.__name__))
         self.station_name = station_name
@@ -53,7 +63,7 @@ class NamedSequence(object):
 
     def __str__(self):
         """
-        Get the display text
+        Format sequence identity, fractional boundaries, and current position for diagnostics
         """
         return 'NamedSequence(station={0}, sequence={1}, tag={2}, start={3}, end={4}, index={5})'.format(
             self.station_name, self.sequence_name, self.tag_path, self.start_perc, self.end_perc,
@@ -61,7 +71,9 @@ class NamedSequence(object):
 
     def populate(self, file_list):
         """
-        Populate
+        Sort episode paths and derive the playable range and initial position
+
+        :param file_list: (list) episode paths replacing the current collection
         """
         self.episodes = []  # Reset the episodes list
         for file in file_list:
@@ -110,6 +122,6 @@ class NamedSequence(object):
 
     def get_series_length(self):
         """
-        Get series length
+        Return the length of the private episode collection
         """
         return len(self._episodes)

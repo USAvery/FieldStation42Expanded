@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage sequence api
+Build and scan station sequences, select the next episode or child show, and reset or normalize
+saved positions for looping and completion.
 """
 import os
 import random
@@ -19,14 +20,14 @@ from fs42.tools.sequence.sequence_io import SequenceIO
 
 def make_sequence_key(station_config, sequence_name, tag_path):
     """
-    Make sequence key
+    Build the station, sequence-name, and content-tag identity stored on schedule blocks
     """
     return {'station_name': station_config['network_name'], 'sequence_name': sequence_name, 'tag_path': tag_path}
 
 
 def get_sequences_for_station(station_config):
     """
-    Get sequences for station
+    Restore all saved episode sequences belonging to the configured network
     """
     _l = logging.getLogger('SEQUENCE')
     sio = SequenceIO()
@@ -36,7 +37,7 @@ def get_sequences_for_station(station_config):
 
 def get_sequence(station_config, sequence_name, tag_path):
     """
-    Get sequence
+    Resolve the active child show and return its saved episode sequence, or None
     """
     _l = logging.getLogger('SEQUENCE')
     sio = SequenceIO()
@@ -54,7 +55,12 @@ def get_sequence(station_config, sequence_name, tag_path):
 
 def get_next_in_sequence(station_config, sequence_name, tag_path):
     """
-    Get next in sequence
+    Select the next episode and persist sequence advancement or child-show rotation
+
+    :param station_config: (dict) station settings identifying the network
+    :param sequence_name:  (str) configured sequence identifier
+    :param tag_path:       (str) content tag or parent show-group path
+    :return:               (SequenceEntry) selected episode, or None for missing or empty sequences
     """
     _l = logging.getLogger('SEQUENCE')
     sio = SequenceIO()
@@ -122,7 +128,13 @@ def get_next_in_sequence(station_config, sequence_name, tag_path):
 
 def reset_by_episode_path(station_config, sequence_name, tag_path, episode_path):
     """
-    Reset by episode path
+    Move a saved sequence position back to the matching episode path
+
+    :param station_config: (dict) station settings identifying the network
+    :param sequence_name:  (str) sequence identifier
+    :param tag_path:       (str) content tag identifying the sequence
+    :param episode_path:   (str) exact episode filename to resume from
+    :return:               (bool) whether the episode was found and the position updated
     """
     _l = logging.getLogger('SEQUENCE')
     sio = SequenceIO()
@@ -141,7 +153,7 @@ def reset_by_episode_path(station_config, sequence_name, tag_path, episode_path)
 
 def delete_sequences(station_config):
     """
-    Delete sequences
+    Delete the station's saved sequences and their episode entries
     """
     _l = logging.getLogger('SEQUENCE')
     _l.debug('Deleting sequences for {}'.format(station_config['network_name']))
@@ -152,7 +164,7 @@ def delete_sequences(station_config):
 
 def rebuild_sequences(station_config):
     """
-    Rebuild sequences
+    Discard a station's saved sequence positions and rebuild sequences from its slots
     """
     _l = logging.getLogger('SEQUENCE')
     _l.debug('Rebuilding sequences for {}'.format(station_config['network_name']))
@@ -163,7 +175,7 @@ def rebuild_sequences(station_config):
 
 def scan_sequences(station_config):
     """
-    Scan sequences
+    Build or refresh sequences referenced by regular slots and date or week overrides
     """
     for slot in _sequence_slots(station_config):
         _scan_sequence_slot(station_config, slot)
@@ -171,7 +183,7 @@ def scan_sequences(station_config):
 
 def _sequence_slots(station_config):
     """
-    Sequence slots
+    Yield dictionary slots from the regular schedule and date or week overrides
     """
     # first, scan normal weekly schedule slots
     for day in DAYS:
@@ -212,7 +224,7 @@ def _sequence_slots(station_config):
 
 def _scan_sequence_slot(station_config, slot):
     """
-    Scan sequence slot
+    Build sequences for a slot's tags, applying per-show sequence IDs when configured
     """
     if 'sequence' not in slot or 'tags' not in slot:
         return
@@ -238,7 +250,13 @@ def _scan_sequence_slot(station_config, slot):
 
 def _catalogued_only(catalog_paths, file_list, seq_name, tag):
     """
-    Catalogued only
+    Keep sequence files present in the catalog and log omitted media paths
+
+    :param catalog_paths: (set) filenames known to the station catalog
+    :param file_list:     (list) discovered episode paths
+    :param seq_name:      (str) sequence name for warning messages
+    :param tag:           (str) content tag for warning messages
+    :return:              (list) paths eligible for sequence storage
     """
     kept = [f for f in file_list if str(f) in catalog_paths]
     skipped = [f for f in file_list if str(f) not in catalog_paths]
@@ -254,7 +272,11 @@ def _catalogued_only(catalog_paths, file_list, seq_name, tag):
 
 def _build_sequence(station_config, this_tag, slot):
     """
-    Build sequence
+    Build or refresh one tag's episode sequence and any random-show child sequences
+
+    :param station_config: (dict) station media directories and catalog settings
+    :param this_tag:       (str) content tag to scan
+    :param slot:           (dict) sequence name, range, and strategy settings
     """
     _l = logging.getLogger('SEQUENCE')
     seq_tag = this_tag
@@ -377,7 +399,13 @@ def _build_sequence(station_config, this_tag, slot):
 
 def _choose_next_child_sequence(station_config, sequence_name, parent_tag, current_tag_path=None):
     """
-    Choose next child sequence
+    Choose a child show, preferring one that is neither current nor active elsewhere
+
+    :param station_config:   (dict) station settings identifying the network
+    :param sequence_name:    (str) show-group sequence identifier
+    :param parent_tag:       (str) content directory containing child shows
+    :param current_tag_path: (str) child show to avoid repeating, or None
+    :return:                 (str) chosen child tag, or None when no children exist
     """
     sio = SequenceIO()
 
@@ -414,7 +442,7 @@ def _choose_next_child_sequence(station_config, sequence_name, parent_tag, curre
 
 def _get_active_child_sequence(station_config, sequence_name, parent_tag):
     """
-    Get active child sequence
+    Read or choose and persist the active child show, falling back to the original tag
     """
     sio = SequenceIO()
 
@@ -435,7 +463,7 @@ def _get_active_child_sequence(station_config, sequence_name, parent_tag):
 
 def _normalize_sequence_position(seq):
     """
-    Normalize sequence position
+    Repair out-of-range episode positions and report whether the sequence contains media
     """
 
     if not seq or not seq.episodes:
@@ -457,7 +485,10 @@ def _normalize_sequence_position(seq):
 
 def _find_show_dirs(base_dir):
     """
-    Find show dirs
+    Find media-containing show directories and collapse season subfolders to their parent show
+
+    :param base_dir: (str) show-group directory to walk, including symbolic links
+    :return:         (lst<str>) sorted unique show directories beneath the group
     """
     show_dirs = []
 

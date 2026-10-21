@@ -3,7 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Expose the package interface
+Expose station catalog retrieval and searches across one or all catalogs as HTTP endpoints.
 """
 from fastapi import APIRouter
 
@@ -16,7 +16,10 @@ router = APIRouter(prefix='/catalogs', tags=['catalogs'])
 @router.get('/search_all')
 async def search_all_catalogs(query: str = None):
     """
-    Search all catalogs
+    Search media catalogs across catalog-enabled stations
+
+    :param query: (str) optional title, tag, or path search text
+    :response:    (jsn) matching entries grouped by network, including per-station errors
     """
     station_manager = StationManager()
     all_results = []
@@ -47,7 +50,10 @@ async def search_all_catalogs(query: str = None):
 @router.get('/{network_name}')
 async def get_catalog(network_name: str):
     """
-    Get catalog
+    Read every stored catalog entry for a network
+
+    :param network_name: (str) active network name
+    :response:           (jsn) network name and catalog entries
     """
     conf = StationManager().station_by_name(network_name)
     catalog_entries = catalog_api.get_entries(conf)
@@ -57,7 +63,11 @@ async def get_catalog(network_name: str):
 @router.get('/search/{network_name}')
 async def search_catalog(network_name: str, query: str = None):
     """
-    Search catalog
+    Search a network's catalog or return all entries when the query is empty
+
+    :param network_name: (str) active network name
+    :param query:        (str) optional title, tag, or path search text
+    :response:           (jsn) network name, query, and matching entries
     """
     conf = StationManager().station_by_name(network_name)
     if query:

@@ -3,7 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Expose the package interface
+Expose channel lists and station, catalog, and schedule summaries for the web console.
 """
 from fastapi import APIRouter
 
@@ -19,7 +19,7 @@ router = APIRouter(prefix='/summary', tags=['summary'])
 @router.get('/')
 async def get_summary():
     """
-    Get summary
+    Combine station identity, catalog totals, and schedule coverage for the console overview
     """
     summaries = []
     for station in StationManager().stations:
@@ -43,7 +43,7 @@ async def get_summary():
 @router.get('/channels')
 def get_channels():
     """
-    Get channels
+    List active channel identities and whether local or external guide data is available
     """
     # Minimal station listing for the guide
     channels = [{
@@ -59,7 +59,7 @@ def get_channels():
 @router.get('/stations')
 async def get_stations():
     """
-    Get stations
+    List the network names currently loaded in the station registry
     """
     station_ids = [station['network_name'] for station in StationManager().stations]
     return {'network_names': station_ids}
@@ -68,7 +68,7 @@ async def get_stations():
 @router.get('/schedules')
 async def get_schedule_summaries():
     """
-    Get schedule summaries
+    Return the loaded networks' schedule start and end boundaries
     """
     summaries = LiquidManager().get_summary_json()
     return {'schedule_summaries': summaries}
@@ -77,7 +77,7 @@ async def get_schedule_summaries():
 @router.get('/schedules/{network_name}')
 async def get_schedule_summary(network_name: str):
     """
-    Get schedule summary
+    Return one network's schedule coverage or an error if it does not support scheduling
     """
     station = StationManager().station_by_name(network_name)
     if station['_has_schedule']:
@@ -90,7 +90,7 @@ async def get_schedule_summary(network_name: str):
 @router.get('/catalogs')
 async def get_catalog_summary():
     """
-    Get catalog summary
+    Count stored catalog entries for every active station
     """
     summaries = []
     for station in StationManager().stations:

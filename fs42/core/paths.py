@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage paths
+Provide the repository root and lexical filesystem helpers for matching path components, deriving
+relative paths, and reading text.
 """
 import os
 

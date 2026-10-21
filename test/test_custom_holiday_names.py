@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage test custom holiday names
+Verify custom holiday names are accepted unless they collide with reserved scheduling terms or
+configured day parts.
 """
 from unittest.mock import patch
 
@@ -19,7 +20,7 @@ from fs42.core.station_manager import StationConfigError
 
 def _load(custom_holidays, day_parts=None):
     """
-    Load
+    Create an isolated station manager with supplied holiday and optional day-part settings
     """
     # reset the Borg singleton so each call starts clean
     StationManager._StationManager__we_are_all_one = {}
@@ -35,7 +36,7 @@ def _load(custom_holidays, day_parts=None):
 
 class TestCustomHolidayNameValidation(object):
     """
-    TestCustomHolidayNameValidation
+    Verify custom holiday names cannot collide with built-in scheduling hints
     """
 
     # a holiday name is matched as a bare string against folder names and marathon

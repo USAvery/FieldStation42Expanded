@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage guide tk
+Display a scrolling program guide in a configurable Tk window with station rows, time headings, and
+rotating messages.
 """
 import os
 import sys
@@ -28,12 +29,15 @@ from fs42.tools.guide.guide_builder import GuideBuilder
 
 class GuideWindowConf(object):
     """
-    GuideWindowConf
+    Hold guide appearance settings and calculate the dimensions used by Tk guide frames
     """
 
     def __init__(self, w=720, h=480):
         """
-        Initialize the instance
+        Initialize guide fonts, colors, timing, audio, and layout defaults
+
+        :param w: (int) guide window width in pixels
+        :param h: (int) guide window height in pixels
         """
         self.fullscreen = True
 
@@ -94,7 +98,7 @@ class GuideWindowConf(object):
 
     def _calc_internals(self):
         """
-        Calc internals
+        Derive guide frame sizes, row counts, font tuples, and millisecond message timing
         """
         self.half_h = self.height / 2
         self.half_w = self.width / 2
@@ -127,7 +131,7 @@ class GuideWindowConf(object):
 
     def merge_config(self, to_merge):
         """
-        Merge config
+        Apply recognized guide settings and recalculate the dependent layout dimensions
         """
         for key in to_merge:
             if hasattr(self, key):
@@ -180,7 +184,7 @@ class GuideWindowConf(object):
 
 class GuideCommands(object):
     """
-    GuideCommands
+    Name process-control messages accepted by the Tk guide window
     """
     show_window = 'show_window'
     hide_window = 'hide_window'
@@ -189,12 +193,15 @@ class GuideCommands(object):
 
 class AdFrame(tk.Frame):
     """
-    AdFrame
+    Rotate configured messages and images in the guide's upper panel
     """
 
     def __init__(self, parent, conf):
         """
-        Initialize the instance
+        Create guide announcement and image labels and start rotating their contents
+
+        :param parent: (Widget) containing Tk guide window
+        :param conf:   (GuideWindowConf) appearance, image, message, and rotation settings
         """
         super(AdFrame, self).__init__(parent, bg=conf.top_bg)
 
@@ -219,7 +226,7 @@ class AdFrame(tk.Frame):
 
     def rotate_message(self):
         """
-        Rotate message
+        Advance the announcement and optional image, then schedule the next rotation
         """
         self.lbl_messages.config(text=self.conf.messages[self.message_index])
         self.message_index += 1
@@ -252,12 +259,16 @@ class AdFrame(tk.Frame):
 
 class ScheduleFrame(tk.Frame):
     """
-    ScheduleFrame
+    Show a scrolling program grid with time headers and messages between scroll cycles
     """
 
     def __init__(self, parent, conf, tuning_in=True):
         """
-        Initialize the instance
+        Build the guide grid, clock, and pause overlay and start scrolling
+
+        :param parent:    (Widget) containing Tk guide window
+        :param conf:      (GuideWindowConf) grid appearance and scrolling settings
+        :param tuning_in: (bool) whether to begin with program rows already in view
         """
         super(ScheduleFrame, self).__init__(parent, bg=conf.bottom_bg)
         self.parent = parent
@@ -280,7 +291,7 @@ class ScheduleFrame(tk.Frame):
 
     def build_header(self):
         """
-        Build header
+        Create the guide clock and half-hour column labels
         """
         self.lbl_current_time = tk.Label(
             self,
@@ -311,7 +322,7 @@ class ScheduleFrame(tk.Frame):
 
     def build_footer_overlay(self):
         """
-        Build footer overlay
+        Create the message panel shown between complete schedule-scroll cycles
         """
         viewport_h = self.conf.bottom_section_height - self.conf.sched_h
         self.footer_overlay = tk.Frame(self, bg=self.conf.bottom_bg)
@@ -328,7 +339,7 @@ class ScheduleFrame(tk.Frame):
 
     def build_schedule(self):
         """
-        Build schedule
+        Rebuild the scrolling channel grid from current programming and update its time labels
         """
 
         if hasattr(self, 'canvas'):
@@ -410,7 +421,7 @@ class ScheduleFrame(tk.Frame):
 
     def scroll_canvas_view(self):
         """
-        Scroll canvas view
+        Advance the guide viewport and begin the message pause after the last row
         """
         # If scroll speed is zero, don't scroll at all
         if self.scroll_speed == 0:
@@ -433,7 +444,7 @@ class ScheduleFrame(tk.Frame):
 
     def start_pause(self):
         """
-        Start pause
+        Show a random footer message for two and a half seconds between scroll cycles
         """
         # Cover the canvas and show a random footer message for a beat.
         self.footer_label.config(text=random.choice(self.conf.footer_messages))
@@ -442,7 +453,7 @@ class ScheduleFrame(tk.Frame):
 
     def clear_pause_message(self):
         """
-        Clear pause message
+        Clear the footer text and wait one second before restarting the guide scroll
         """
         # Swap to a plain blue screen (still covering the canvas) before looping.
         self.footer_label.config(text='')
@@ -450,7 +461,7 @@ class ScheduleFrame(tk.Frame):
 
     def end_pause(self):
         """
-        End pause
+        Refresh stale guide data and reset the viewport for another scroll cycle
         """
         # check to see if its been more than a minute since we started
         diff = datetime.datetime.now() - self.start_time
@@ -465,7 +476,7 @@ class ScheduleFrame(tk.Frame):
 
     def update_time(self):
         """
-        Update time
+        Refresh the guide clock using the configured time format once per second
         """
         time_f = StationManager().server_conf['time_format']
         current_time = datetime.datetime.now().strftime(time_f)
@@ -476,12 +487,15 @@ class ScheduleFrame(tk.Frame):
 
 class GuideApp(tk.Tk):
     """
-    GuideApp
+    Host the Tk guide channel and receive process-control messages from the player
     """
 
     def __init__(self, user_conf, queue=None):
         """
-        Initialize the instance
+        Configure guide window geometry and begin polling its control queue
+
+        :param user_conf: (dict) guide settings updated with resolved window dimensions
+        :param queue:     (Queue) optional incoming window-control messages
         """
         super(GuideApp, self).__init__()
 
@@ -534,13 +548,13 @@ class GuideApp(tk.Tk):
 
     def get_conf(self):
         """
-        Get conf
+        Return merged guide appearance and layout settings
         """
         return self.conf
 
     def tick(self):
         """
-        Tick
+        Poll for a guide shutdown message and schedule the next queue check
         """
         if self.queue and self.queue.qsize() > 0:
             msg = self.queue.get_nowait()
@@ -553,7 +567,10 @@ class GuideApp(tk.Tk):
 
 def guide_channel_runner(user_conf, queue):
     """
-    Guide channel runner
+    Create the announcement and schedule frames and run the guide's Tk event loop
+
+    :param user_conf: (dict) guide appearance and behavior settings
+    :param queue:     (Queue) incoming player control messages
     """
     app = GuideApp(user_conf, queue)
     AdFrame(app, app.get_conf())

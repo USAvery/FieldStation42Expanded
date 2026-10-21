@@ -3,7 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage decorators
+Wrap tool operations with exception logging while preserving the original exception and traceback.
 """
 import functools
 
@@ -12,18 +12,21 @@ from fs42.core import logger
 
 def error(subject):
     """
-    Report an unhandled tool error and preserve its traceback
+    Create a decorator that logs an operation's exception before re-raising it
+
+    :param subject: (str) logger name used to report failures
+    :return:        (callable) decorator preserving the wrapped function's metadata
     """
 
     def decorate(function):
         """
-        Decorate
+        Wrap a function with exception logging under the configured subject
         """
 
         @functools.wraps(function)
         def run(*args, **kwargs):
             """
-            Run
+            Call the wrapped operation and log any exception without suppressing it
             """
             try:
                 return function(*args, **kwargs)

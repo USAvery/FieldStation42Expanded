@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage guide preview
+Resize and position the playback window for the guide's video preview, then restore the normal
+layout when the guide closes.
 """
 import os
 import time
@@ -20,7 +21,7 @@ from fs42.tools.field_player.display_refresh import CRT_DISPLAY_IDENTIFIER
 
 def _wayland_environment():
     """
-    Wayland environment
+    Copy the process environment with defaults for Wayland display-control commands
     """
     env = os.environ.copy()
     env.setdefault('XDG_RUNTIME_DIR', '/run/user/{}'.format(os.getuid()))
@@ -30,7 +31,7 @@ def _wayland_environment():
 
 def _query_display_selection(logger=None):
     """
-    Query display selection
+    Query wlr-randr and choose guide-preview display settings, returning None on failure
     """
     try:
         result = subprocess.run(
@@ -56,7 +57,7 @@ def _query_display_selection(logger=None):
 
 def _video_aspect(mpv):
     """
-    Video aspect
+    Read MPV's displayed video aspect ratio, falling back to sixteen by nine
     """
     try:
         params = mpv.video_out_params or {}
@@ -78,7 +79,7 @@ def _video_aspect(mpv):
 
 def _closest_aspect_profile(aspect):
     """
-    Closest aspect profile
+    Choose the supported preview layout whose aspect ratio is nearest to the video
     """
     return min(
         ASPECT_PROFILES,
@@ -88,7 +89,11 @@ def _closest_aspect_profile(aspect):
 
 def _fit_inside(box, aspect):
     """
-    Fit inside
+    Fit and center video inside a preview rectangle without changing its aspect ratio
+
+    :param box:    (dict) preview x, y, width, and height in pixels
+    :param aspect: (float) source video width divided by height
+    :return:       (dict) fitted rectangle and horizontal/vertical bar sizes as percentages
     """
     box_width = box['width']
     box_height = box['height']
@@ -119,7 +124,11 @@ def _fit_inside(box, aspect):
 
 def _trigger_labwc_preview(key_name, logger=None):
     """
-    Trigger labwc preview
+    Send a logo-modifier key chord through wtype to activate a labwc preview binding
+
+    :param key_name: (str) configured compositor shortcut key
+    :param logger:   (Logger) optional destination for failure messages
+    :return:         (bool) whether the shortcut command completed successfully
     """
     wtype = shutil.which('wtype')
     if not wtype:

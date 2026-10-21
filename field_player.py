@@ -3,7 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage field player
+Preserve the original playback command by forwarding to the field-player tool.
 """
 from fs42.tools.field_player import main
 

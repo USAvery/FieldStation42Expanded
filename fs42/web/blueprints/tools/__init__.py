@@ -3,7 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Expose the package interface
+Collect the browser-page routers registered by the main station-console application.
 """
 from fs42.web.blueprints.tools.ppv import router as ppv_router
 from fs42.web.blueprints.tools.bump import router as bump_router

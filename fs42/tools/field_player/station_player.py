@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage station player
+Execute station schedules through MPV and coordinate guide, web-channel, and overlay processes.
+Handle playback recovery, runtime commands, parental controls, and player status updates.
 """
 import os
 import glob
@@ -67,7 +68,18 @@ def update_status_socket(
     pin_digits_entered=0,
 ):
     """
-    Update status socket
+    Replace the configured player status file with the current playback and PIN state
+
+    :param status:             (str) playback state such as playing or stopped
+    :param network_name:       (str) active station name
+    :param channel:            (int) active channel number
+    :param title:              (str) optional current program title
+    :param timestamp:          (str) strftime format for the status update time
+    :param duration:           (str) optional formatted playback progress and duration
+    :param file_path:          (str) optional current media path
+    :param content_type:       (str) optional explicit content category
+    :param awaiting_pin:       (bool) whether playback is waiting for parental authorization
+    :param pin_digits_entered: (int) number of masked PIN digits entered
     """
     status_obj = {
         'status': status,
@@ -123,19 +135,22 @@ def _media_prefers_dmabuf(file_path, is_stream, media_type):
 
 def is_non_interrupting(response):
     """
-    Is non interrupting
+    Check whether a player outcome allows current playback to continue
     """
     return response.status == PlayerState.SUCCESS
 
 
 class PlayerOutcome(object):
     """
-    PlayerOutcome
+    Carry a player-state transition and optional command or diagnostic payload
     """
 
     def __init__(self, status=PlayerState.SUCCESS, payload=None):
         """
-        Initialize the instance
+        Store the playback result and any information needed by the main player loop
+
+        :param status:  (PlayerState) outcome or requested player transition
+        :param payload: (obj) optional command, channel, or diagnostic data
         """
         self.status = status
         self.payload = payload
@@ -143,7 +158,7 @@ class PlayerOutcome(object):
 
 class StationPlayer(object):
     """
-    StationPlayer
+    Play timed station plans and coordinate MPV, guide windows, overlays, and runtime input
     """
     MPV_RUNTIME_COMMANDS = {
         'toggle_subtitles': ('cycle', 'sub-visibility'),
@@ -232,7 +247,11 @@ class StationPlayer(object):
 
     def __init__(self, station_config, input_check_fn, mpv=None):
         """
-        Initialize the instance
+        Initialize media playback and the state used to coordinate station display processes
+
+        :param station_config: (dict) active station's playback settings
+        :param input_check_fn: (callable) callback returning pending PlayerOutcome commands
+        :param mpv:            (obj) optional existing MPV client; otherwise create a managed client
         """
         self._l = logging.getLogger('FieldPlayer')
 
@@ -394,7 +413,7 @@ class StationPlayer(object):
 
     def load_up(self):
         """
-        Load up
+        Initialize the shared schedule manager and log its loading time
         """
         start_time = time.perf_counter()
         liquid = LiquidManager()
@@ -403,7 +422,10 @@ class StationPlayer(object):
 
     def show_text(self, text, duration=4):
         """
-        Show text
+        Send a temporary text message to MPV's on-screen display
+
+        :param text:     (str) message to render
+        :param duration: (int) display duration passed directly to MPV in milliseconds
         """
         self.mpv.command('show-text', text, duration)
 
@@ -450,7 +472,7 @@ class StationPlayer(object):
 
     def _guide_overlay_config(self):
         """
-        Guide overlay config
+        Prepare a web-guide configuration for persistent interactive display with live preview
         """
         guide_conf = StationManager().guide_config
         if not guide_conf or guide_conf.get('network_type') != 'web':
@@ -496,7 +518,7 @@ class StationPlayer(object):
 
     def _restore_guide_video_layout(self):
         """
-        Restore guide video layout
+        Restore the saved MPV layout after the interactive guide closes
         """
         if self._guide_video_layout is None:
             return
@@ -562,7 +584,7 @@ class StationPlayer(object):
 
     def _open_guide_overlay(self):
         """
-        Open guide overlay
+        Show the preloaded guide, arrange its video preview, and report whether it opened
         """
         # Re-apply the policy on every open in case HDMI renegotiated after the
         # renderer was preloaded (for example when a TV sleeps/wakes).
@@ -592,7 +614,7 @@ class StationPlayer(object):
 
     def _close_guide_overlay(self):
         """
-        Close guide overlay
+        Hide the persistent guide and restore normal video placement
         """
         if self.guide_visible and self.guide_queue:
             try:
@@ -633,7 +655,7 @@ class StationPlayer(object):
 
     def _toggle_guide_overlay(self):
         """
-        Toggle guide overlay
+        Toggle the interactive guide and return whether it is now visible
         """
         if self.guide_visible:
             self._close_guide_overlay()
@@ -644,7 +666,7 @@ class StationPlayer(object):
 
     def _start_parental_controls_overlay(self, network_name):
         """
-        Start parental controls overlay
+        Replace any existing PIN prompt with a new prompt for the requested station
         """
         self._close_parental_controls_overlay()
 
@@ -665,14 +687,14 @@ class StationPlayer(object):
 
     def _update_parental_controls_overlay(self, digits=0, error=False):
         """
-        Update parental controls overlay
+        Send the masked digit count and error flag to the PIN-prompt process
         """
         if self.parental_controls_queue:
             self.parental_controls_queue.put({'digits': digits, 'error': error})
 
     def _close_parental_controls_overlay(self):
         """
-        Close parental controls overlay
+        Request PIN-prompt closure and terminate the process if it does not exit promptly
         """
         if self.parental_controls_queue:
             try:
@@ -697,7 +719,7 @@ class StationPlayer(object):
 
     def _parental_controls_pin(self):
         """
-        Parental controls pin
+        Return a valid configured four-digit PIN, or None when absent or malformed
         """
         pin = str(StationManager().server_conf.get('parental_controls_pin', ''))
         if len(pin) == 4 and pin.isdigit():
@@ -709,7 +731,7 @@ class StationPlayer(object):
 
     def _parental_controls_theme(self):
         """
-        Parental controls theme
+        Return the configured PIN-prompt theme, falling back to minimal for unknown names
         """
         theme = StationManager().server_conf.get('parental_controls_theme', 'minimal')
         if theme in ('classic', 'modern', 'minimal'):
@@ -720,7 +742,7 @@ class StationPlayer(object):
 
     def _parental_controls_required(self, network_name):
         """
-        Parental controls required
+        Check whether a station enables parental controls and a valid global PIN exists
         """
         if not self._parental_controls_pin():
             return False
@@ -734,7 +756,13 @@ class StationPlayer(object):
 
     def prompt_parental_controls(self, station_config):
         """
-        Prompt parental controls
+        Pause playback and collect PIN digits until authorized or interrupted
+
+        Update the prompt and public status after each digit, allowing runtime commands
+        while waiting for input. Close the prompt when leaving the authorization loop.
+
+        :param station_config: (dict) locked station's name and channel settings
+        :return:               (PlayerOutcome) successful authorization or the interrupting player command
         """
         network_name = station_config['network_name']
         channel_number = station_config['channel_number']
@@ -826,7 +854,7 @@ class StationPlayer(object):
 
     def _close_now_playing(self):
         """
-        Close now playing
+        Terminate the active now-playing overlay and clear its process reference
         """
         # terminate the Now Playing overlay if it's running
         if self.now_playing_process and self.now_playing_process.is_alive():
@@ -847,7 +875,7 @@ class StationPlayer(object):
 
     def _nfo_overlay_data(self, file_path):
         """
-        Nfo overlay data
+        Convert cached music or plaintext metadata into displayable overlay lines
         """
 
         from fs42.tools.media import metadata_io
@@ -860,7 +888,7 @@ class StationPlayer(object):
 
     def _show_now_playing(self, file_path):
         """
-        Show now playing
+        Replace the current now-playing process with an overlay for the requested media file
         """
         # show the Now Playing overlay for an audio file
         import time
@@ -897,7 +925,7 @@ class StationPlayer(object):
 
     def shutdown(self):
         """
-        Shutdown
+        Stop web and information overlays and terminate the MPV client
         """
         self.current_playing_file_path = None
         # Terminate any running web process
@@ -932,13 +960,13 @@ class StationPlayer(object):
 
     def update_filters(self):
         """
-        Update filters
+        Apply the current simulated reception filter to MPV
         """
         self.mpv.vf = self.reception.filter()
 
     def update_reception(self):
         """
-        Update reception
+        Improve reception by one step and clear the video filter when reception becomes perfect
         """
         if not self.reception.is_perfect():
             self.reception.improve()
@@ -951,7 +979,16 @@ class StationPlayer(object):
     def play_file(self, file_path, file_duration=None, offset_seconds=None, is_stream=False, title='Unknown',
                   content_type=None, media_type=None):
         """
-        Play file
+        Start a media file, stream, or generated browser bump and publish playback status
+
+        :param file_path:      (str) media filename, stream URL, or prefixed autobump URL
+        :param file_duration:  (float) planned playback duration in seconds, or None
+        :param offset_seconds: (float) initial seek offset in seconds, or None
+        :param is_stream:      (bool) whether to use stream startup handling
+        :param title:          (str) program title for status displays
+        :param content_type:   (str) explicit playback category, or None
+        :param media_type:     (str) audio or video category, or None
+        :return:               (bool) whether playback startup succeeded
         """
         try:
             is_autobump = autobump_agent.is_autobump_url(file_path)
@@ -1209,12 +1246,19 @@ class StationPlayer(object):
     def _seek_with_verify(self, file_path, offset_seconds, timeout_seconds, tolerance=1.0, verify_window=2.0,
                           retry_delay=0.2):
         """
-        Seek with verify
+        Retry an absolute MPV seek until playback reaches the requested offset or time runs out
+
+        :param file_path:       (str) media path included in diagnostic messages
+        :param offset_seconds:  (float) target playback position in seconds
+        :param timeout_seconds: (float) overall retry deadline in seconds
+        :param tolerance:       (float) acceptable position error in seconds
+        :param verify_window:   (float) idle verification interval before retrying a seek
+        :param retry_delay:     (float) pause in seconds between attempts
         """
 
         def safe_prop(name, default=None):
             """
-            Safe prop
+            Read an MPV property and use a fallback value if the client cannot provide it
             """
             try:
                 return getattr(self.mpv, name)
@@ -1257,7 +1301,10 @@ class StationPlayer(object):
 
     def play_and_wait(self, file_path):
         """
-        Play and wait
+        Loop a media file until an interrupting command arrives, handling runtime commands meanwhile
+
+        :param file_path: (str) media file to loop
+        :return:          (PlayerOutcome) command that interrupted playback
         """
         self._l.info('Play and wait on file {}'.format(file_path))
         self._close_now_playing()
@@ -1292,7 +1339,10 @@ class StationPlayer(object):
 
     def play_file_list(self, file_list):
         """
-        Play file list
+        Shuffle existing media files into a looping MPV playlist
+
+        :param file_list: (list) candidate media paths; missing files are omitted
+        :return:          (bool) whether a nonempty playlist was started successfully
         """
 
         try:
@@ -1332,7 +1382,7 @@ class StationPlayer(object):
 
     def _apply_vfx(self, current_time):
         """
-        Apply vfx
+        Resolve station playback effects and update MPV video and audio filters
         """
         vfx = None
         if 'video_scramble_fx' in self.station_config:
@@ -1387,13 +1437,16 @@ class StationPlayer(object):
 
     def play_image(self, duration):
         """
-        Play image
+        Reserve the image-playback interface; the current implementation performs no action
         """
         pass
 
     def show_guide(self, guide_config):
         """
-        Show guide
+        Run the guide channel in a child process with optional background audio
+
+        :param guide_config: (dict) guide appearance and audio settings
+        :return:             (PlayerOutcome) input command that ends guide playback
         """
         # create the pipe to communicate with the guide channel
         queue = multiprocessing.Queue()
@@ -1481,7 +1534,7 @@ class StationPlayer(object):
 
     def stop_player(self):
         """
-        Stop player
+        Stop MPV playback and clear the current media path
         """
         try:
             self.mpv.stop()
@@ -1491,7 +1544,11 @@ class StationPlayer(object):
 
     def show_web(self, web_config, blocking=True):
         """
-        Show web
+        Launch a browser channel and optionally wait for its duration or an interrupting command
+
+        :param web_config: (dict) page URL, display options, and optional duration in seconds
+        :param blocking:   (bool) whether to monitor the page until completion or interruption
+        :return:           (PlayerOutcome) startup result or outcome ending the browser channel
         """
         if not WEB_RENDER_AVAILABLE:
             self._l.error('Web rendering not available - PySide6 not installed')
@@ -1582,7 +1639,7 @@ class StationPlayer(object):
 
     def schedule_panic(self, network_name):
         """
-        Schedule panic
+        Attempt a one-day schedule extension under the build lock after programming runs out
         """
         self._l.critical('*********************Schedule Panic*********************')
         self._l.critical(
@@ -1602,7 +1659,11 @@ class StationPlayer(object):
 
     def play_slot(self, network_name, when):
         """
-        Play slot
+        Resolve and play the current scheduled program, requesting PIN entry or schedule repair when needed
+
+        :param network_name: (str) station to play
+        :param when:         (datetime) broadcast time used to join the schedule
+        :return:             (PlayerOutcome) playback result or requested player-state transition
         """
         liquid = LiquidManager()
 
@@ -1628,7 +1689,10 @@ class StationPlayer(object):
 
     def _play_from_point(self, play_point):
         """
-        Play from point
+        Play the remaining timed plan while handling input, effects, overlays, and unavailable streams
+
+        :param play_point: (PlayPoint) active plan entry and elapsed offset at tune-in
+        :return:           (PlayerOutcome) completed playback or an interrupting command
         """
         # Fade to black duration before commercial breaks (in seconds)
         FADE_DURATION = 0.5
@@ -1827,7 +1891,7 @@ class StationPlayer(object):
 
     def get_current_path(self):
         """
-        Get current path
+        Return the current media filename without its extension, or None when nothing is playing
         """
         if self.current_playing_file_path:
             basename = os.path.basename(self.current_playing_file_path)

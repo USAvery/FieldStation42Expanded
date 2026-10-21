@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage test folder hints
+Verify folder names produce the expected scheduling hints and that registered hints survive database
+JSON round trips.
 """
 from datetime import datetime
 from unittest.mock import patch
@@ -17,12 +18,12 @@ from fs42.tools.schedule import schedule_hint as schedule_hint_utils
 
 class TestFolderHints(object):
     """
-    TestFolderHints
+    Verify folder names produce the expected scheduling and bumper-placement hints
     """
 
     def setup_method(self):
         """
-        Setup method
+        Reset shared station state and install fixed-date and weekday-based holiday fixtures
         """
         # reset the Borg singleton so each test starts clean
         StationManager._StationManager__we_are_all_one = {}
@@ -41,7 +42,7 @@ class TestFolderHints(object):
 
     def _hints_for(self, folder, bumpdir=False):
         """
-        Hints for
+        Return sorted hint class names recognized from a synthetic catalog folder
         """
         hints = media_processor._process_hints('catalog/test/{}'.format(folder), 'tag', bumpdir=bumpdir)
         return sorted(type(hint).__name__ for hint in hints)
@@ -111,12 +112,12 @@ class TestFolderHints(object):
 
 class TestHintJSONRoundTrip(object):
     """
-    TestHintJSONRoundTrip
+    Verify scheduling hints retain their type and behavior after JSON serialization
     """
 
     def setup_method(self):
         """
-        Setup method
+        Reset shared station state and install the holiday needed by serialization tests
         """
         StationManager._StationManager__we_are_all_one = {}
         StationManager._initialized = False

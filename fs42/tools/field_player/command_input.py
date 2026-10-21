@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage command input
+Bridge the serial controller and the player through runtime command and status files. Handle channel
+selection, player exit, and host shutdown commands received over UART.
 """
 import os
 import sys
@@ -22,7 +23,7 @@ uart = serial.Serial('/dev/ttyAMA0', baudrate=9600, timeout=10)
 
 def old_loop():
     """
-    Old loop
+    Bridge legacy UART commands to channel changes, player termination, and system shutdown
     """
     while True:
         time.sleep(0.1)
@@ -48,7 +49,7 @@ def old_loop():
 
 def new_loop():
     """
-    New loop
+    Bridge UART channel JSON to the player and send changed channel status back to the controller
     """
     last_stat = ''
     while True:

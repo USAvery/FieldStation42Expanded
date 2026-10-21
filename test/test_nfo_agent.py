@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage test nfo agent
+Verify XML and plain-text NFO parsing, display-field extraction, and eligibility rules for metadata
+overlays.
 """
 import pytest
 
@@ -12,7 +13,7 @@ from fs42.tools.media import nfo_agent
 
 class TestParseNfoString(object):
     """
-    TestParseNfoString
+    Verify XML and plaintext NFO content becomes structured media metadata
     """
 
     def test_musicvideo(self):
@@ -159,7 +160,7 @@ class TestParseNfoString(object):
 
 class TestOverlayLines(object):
     """
-    TestOverlayLines
+    Verify supported metadata types produce bounded, nonempty overlay lines
     """
 
     def test_music_order_is_artist_title_album_year(self):
@@ -217,7 +218,7 @@ class TestOverlayLines(object):
 
 class TestDisplayFields(object):
     """
-    TestDisplayFields
+    Verify media metadata maps into common title, information, and description fields
     """
 
     def test_music(self):

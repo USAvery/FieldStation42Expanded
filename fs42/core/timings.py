@@ -3,7 +3,7 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage timings
+Define scheduling time units and calendar labels, and calculate the start of the next week or month.
 """
 import calendar
 import datetime
@@ -27,7 +27,10 @@ H_HOUR_CONTENT_DURATION = 1320  # 22 minutes
 
 def next_week(when):
     """
-    Next week
+    Find the next Monday at the start of the broadcast day
+
+    :param when: (datetime) date within the current week
+    :return:     (datetime) naive datetime for the following Monday at 06:00
     """
     weekday = when.weekday()
     # go one day past the EOW (weekday is 0-6)
@@ -37,7 +40,10 @@ def next_week(when):
 
 def next_month(when):
     """
-    Next month
+    Find the first day of the next month at the start of the broadcast day
+
+    :param when: (datetime) date within the current month
+    :return:     (datetime) naive datetime for the following month's first day at 06:00
     """
     eom = (when.replace(day=1) + datetime.timedelta(days=32)).replace(day=1)
     return datetime.datetime(eom.year, eom.month, eom.day, hour=OPERATING_HOURS[0])

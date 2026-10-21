@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage aerial listener
+Run the standalone Pico button controller. Send channel-change, exit, and halt commands over UART
+and show feedback on the OLED and LEDs.
 """
 # this runs on the pico component - not the pi
 
@@ -58,7 +59,7 @@ pixels = neopixel.NeoPixel(pixel_pin, num_pixels, brightness=0.3, auto_write=Fal
 
 def color_chase(color, wait):
     """
-    Color chase
+    Light successive NeoPixels with the supplied color and pause between each step
     """
     for i in range(num_pixels):
         pixels[i] = color
@@ -69,7 +70,7 @@ def color_chase(color, wait):
 
 def rainbow_cycle(wait):
     """
-    Rainbow cycle
+    Animate a full color-wheel cycle across the NeoPixel strip with a per-frame delay
     """
     for j in range(255):
         for i in range(num_pixels):
@@ -81,7 +82,7 @@ def rainbow_cycle(wait):
 
 def show_waiting():
     """
-    Show waiting
+    Clear the OLED and display the controller's waiting message
     """
     oled.fill(0)
     oled.text('Waiting...', 0, 10, 1)
@@ -90,7 +91,7 @@ def show_waiting():
 
 def show_command(cmd):
     """
-    Show command
+    Clear the OLED and display the last controller command
     """
     oled.fill(0)
     oled.text('CMD: {}'.format(cmd), 0, 0, 1)
@@ -99,7 +100,7 @@ def show_command(cmd):
 
 def show_ambient():
     """
-    Show ambient
+    Set every NeoPixel to the controller's yellow idle color
     """
     pixels.fill(YELLOW)
     pixels.show()

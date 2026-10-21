@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage test autobump agent
+Verify generated station-bump URLs, configuration defaults, duration handling, and encoded
+announcement options.
 """
 import urllib.parse
 
@@ -15,7 +16,7 @@ from fs42.tools.catalog.catalog_entry import CatalogEntry
 
 class TestAutoBumpAgent(object):
     """
-    TestAutoBumpAgent
+    Verify generated bump URLs, media defaults, and playback-duration calculations
     """
 
     def test_generate_bump_query_basic(self):

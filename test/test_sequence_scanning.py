@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage test sequence scanning
+Verify media discovery through directories and symbolic links, hidden-file filtering, show grouping,
+and sequence-row replacement without duplicates.
 """
 
 import os
@@ -39,7 +40,7 @@ from fs42.tools.sequence.sequence import NamedSequence  # noqa: E402
 
 def _touch(*parts):
     """
-    Touch
+    Create an empty fixture file and its parent directories, returning its path
     """
     path = os.path.join(*parts)
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -62,7 +63,7 @@ class ScanFixtureMixin(object):
 
     def setUp(self):
         """
-        SetUp
+        Create a media tree containing season folders, hidden files, and a linked external show
         """
         self.tmp = tempfile.mkdtemp()
         self.lib = os.path.join(self.tmp, 'lib')
@@ -83,20 +84,20 @@ class ScanFixtureMixin(object):
 
     def tearDown(self):
         """
-        TearDown
+        Remove the temporary media tree after a scanning test
         """
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def relative(self, paths):
         """
-        Relative
+        Normalize discovered paths into a sorted list relative to the fixture library
         """
         return sorted(os.path.relpath(p, self.lib) for p in paths)
 
 
 class TestRfindMedia(ScanFixtureMixin, unittest.TestCase):
     """
-    TestRfindMedia
+    Verify recursive media discovery handles supported extensions, hidden files, and links
     """
 
     def test_finds_nested_and_mixed_case_media(self):
@@ -141,7 +142,7 @@ class TestRfindMedia(ScanFixtureMixin, unittest.TestCase):
 
 class TestFindShowDirs(ScanFixtureMixin, unittest.TestCase):
     """
-    TestFindShowDirs
+    Verify show discovery collapses season folders and preserves distinct show directories
     """
 
     def test_collapses_season_folders_to_show_root(self):
@@ -191,7 +192,7 @@ class TestPutSequence(unittest.TestCase):
 
     def setUp(self):
         """
-        SetUp
+        Create an isolated SQLite database for sequence persistence tests
         """
         self.tmp = tempfile.mkdtemp()
         self.db_path = os.path.join(self.tmp, 'test.db')
@@ -207,13 +208,13 @@ class TestPutSequence(unittest.TestCase):
 
     def tearDown(self):
         """
-        TearDown
+        Remove the temporary sequence database directory
         """
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def _row_id(self):
         """
-        Row id
+        Read the stored database ID of the synthetic named sequence
         """
         connection = sqlite3.connect(self.db_path)
         try:
@@ -226,7 +227,7 @@ class TestPutSequence(unittest.TestCase):
 
     def _entry_count(self):
         """
-        Entry count
+        Count persisted episode rows in the temporary sequence database
         """
         connection = sqlite3.connect(self.db_path)
         try:
@@ -236,7 +237,7 @@ class TestPutSequence(unittest.TestCase):
 
     def _put(self, files):
         """
-        Put
+        Save the supplied episode paths under the synthetic station's named sequence
         """
         self.sio.put_sequence('stn', NamedSequence('stn', 'seq', 'tag', 0.0, 1.0, 0, files))
 

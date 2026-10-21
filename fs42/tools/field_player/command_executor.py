@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage command executor
+Run executable channels as subprocesses and translate completion or interruption into player
+outcomes.
 """
 import time
 import shlex
@@ -16,19 +17,19 @@ _logger = project_logger.setup('fs42.tools.field_player.command_executor')
 
 class CommandExecutor(object):
     """
-    CommandExecutor
+    Start, inspect, and terminate the subprocess used by an executable channel
     """
 
     def __init__(self, command_str):
         """
-        Initialize the instance
+        Store a command string until the executable channel is started
         """
         self.command = command_str
         self.process = None
 
     def start(self):
         """
-        Start
+        Split the configured command into arguments and launch it without a shell
         """
         try:
             # Safely split command with spaces/quotes
@@ -39,7 +40,7 @@ class CommandExecutor(object):
 
     def stop(self):
         """
-        Stop
+        Terminate the launched process, wait for its exit, and clear the process reference
         """
         if self.process:
             self.process.terminate()
@@ -48,7 +49,7 @@ class CommandExecutor(object):
 
     def get_status(self):
         """
-        Get status
+        Report whether the command is stopped, running, or completed
         """
         if self.process is None:
             return 'stopped'
@@ -60,7 +61,11 @@ class CommandExecutor(object):
 
 def execute_command(channel_conf, input_check_fn):
     """
-    Execute command
+    Run an executable channel until its process finishes or player input interrupts it
+
+    :param channel_conf:   (dict) executable_command and optional executable_shutdown settings
+    :param input_check_fn: (callable) callback returning a pending player command
+    :return:               (PlayerOutcome) interrupting command, or None if the process finishes normally
     """
     process = CommandExecutor(channel_conf['executable_command'])
     process.start()

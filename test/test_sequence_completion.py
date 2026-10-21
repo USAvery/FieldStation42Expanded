@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage test sequence completion
+Verify sequence range boundaries, saved playback positions, child-show rotation, and looping after
+completion.
 """
 
 import os
@@ -30,7 +31,7 @@ from fs42.tools.sequence.sequence import NamedSequence  # noqa: E402
 
 def _seq(n_episodes, end_perc=1.0, start_perc=0.0, current_index=0):
     """
-    Seq
+    Create an initialized synthetic episode sequence with configurable bounds and position
     """
     files = ['/m/ep{0:02d}.mp4'.format(i) for i in range(n_episodes)]
     return NamedSequence('stn', 'seq', 'tag', start_perc, end_perc, current_index, files, initialized=True)
@@ -38,7 +39,7 @@ def _seq(n_episodes, end_perc=1.0, start_perc=0.0, current_index=0):
 
 class TestNormalizeSequencePosition(unittest.TestCase):
     """
-    TestNormalizeSequencePosition
+    Verify missing, empty, and out-of-range episode sequence positions are handled
     """
 
     def test_index_at_episode_count_is_left_alone(self):
@@ -77,7 +78,7 @@ class TestNormalizeSequencePosition(unittest.TestCase):
 
 class TestEndIndexClamp(unittest.TestCase):
     """
-    TestEndIndexClamp
+    Verify fractional sequence boundaries cannot extend beyond the available episode list
     """
 
     def test_end_perc_one_gives_full_length(self):
@@ -173,7 +174,7 @@ class TestRandomShowRotation(unittest.TestCase):
 
     def setUp(self):
         """
-        SetUp
+        Create an isolated sequence database with two child shows for rotation tests
         """
         self.tmp = tempfile.mkdtemp()
         self.db_path = os.path.join(self.tmp, 'test.db')
@@ -192,13 +193,13 @@ class TestRandomShowRotation(unittest.TestCase):
 
     def tearDown(self):
         """
-        TearDown
+        Remove the temporary sequence database directory after a rotation test
         """
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def _put_child(self, tag_path, files):
         """
-        Put child
+        Save a child-show sequence beneath the synthetic shows group
         """
         ns = NamedSequence('stn', self.SEQ, tag_path, 0.0, 1.0, 0, files, initialized=True)
         ns.parent_tag = 'shows'
@@ -206,7 +207,7 @@ class TestRandomShowRotation(unittest.TestCase):
 
     def _next_show(self):
         """
-        Next show
+        Advance the grouped sequence and return the selected episode's show name
         """
         entry = sequence_api.get_next_in_sequence(self.STATION, self.SEQ, 'shows')
         # /m/ShowA/a1.mp4 -> ShowA
@@ -241,7 +242,7 @@ class TestChildlessLoopBack(unittest.TestCase):
 
     def setUp(self):
         """
-        SetUp
+        Create an isolated sequence database restricted to the second half of four episodes
         """
         self.tmp = tempfile.mkdtemp()
         self.db_path = os.path.join(self.tmp, 'test.db')
@@ -262,13 +263,13 @@ class TestChildlessLoopBack(unittest.TestCase):
 
     def tearDown(self):
         """
-        TearDown
+        Remove the temporary sequence database directory after a loop-back test
         """
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def _next(self):
         """
-        Next
+        Advance the test sequence and return the next episode path
         """
         return sequence_api.get_next_in_sequence(self.STATION, self.SEQ, self.TAG).fpath
 

@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage display refresh
+Inspect Wayland display modes and select a resolution and refresh rate suitable for playback,
+including CRT-specific limits and video frame-rate matching.
 """
 import os
 import subprocess
@@ -17,7 +18,7 @@ from fs42.tools.field_player._constants import CRT_DISPLAY_IDENTIFIER
 
 def _wayland_environment():
     """
-    Wayland environment
+    Copy the process environment and supply missing Wayland runtime and display defaults
     """
     env = os.environ.copy()
     env.setdefault('XDG_RUNTIME_DIR', '/run/user/{}'.format(os.getuid()))
@@ -27,7 +28,10 @@ def _wayland_environment():
 
 def _parse_outputs(text):
     """
-    Parse outputs
+    Parse wlr-randr text into output names, enabled flags, supported modes, and current modes
+
+    :param text: (str) captured wlr-randr standard output
+    :return:     (dict) display records with width, height, and refresh-rate mode tuples
     """
     outputs = {}
     current_name = None
@@ -75,7 +79,7 @@ def _parse_outputs(text):
 
 def _preferred_multiple(fps):
     """
-    Preferred multiple
+    Prefer double-rate display refresh for roughly 25-to-30 fps video and single-rate otherwise
     """
     if 24.5 <= fps <= 30.5:
         return 2
@@ -85,7 +89,11 @@ def _preferred_multiple(fps):
 
 def _best_refresh(fps, candidates):
     """
-    Best refresh
+    Choose the refresh rate closest to an even frame cadence, or near 60 Hz for unknown fps
+
+    :param fps:        (float) video frames per second, or None
+    :param candidates: (list) supported display refresh rates in Hz
+    :return:           (float) preferred refresh rate, or None when no modes are available
     """
     if not candidates:
         return None
@@ -107,7 +115,7 @@ def _best_refresh(fps, candidates):
 
     def score(refresh):
         """
-        Score
+        Rank a refresh rate by cadence error and distance from the preferred frame multiplier
         """
         ratio = refresh / fps
         multiple = max(1, int(round(ratio)))
@@ -124,7 +132,10 @@ def _best_refresh(fps, candidates):
 
 def _target_resolution(output_data):
     """
-    Target resolution
+    Choose 640x480 for the recognized CRT adapter or the largest normal mode up to 1080p
+
+    :param output_data: (dict) display description and supported mode tuples
+    :return:            (tuple) selected width/height pair or None, followed by a diagnostic explanation
     """
     modes = output_data['modes']
     description = output_data.get('description', '')

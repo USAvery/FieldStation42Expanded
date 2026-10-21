@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage app
+Create and run the FastAPI station console with player command queues, configuration-error
+responses, and a shutdown monitor tied to the server lifecycle.
 """
 import asyncio
 import logging
@@ -86,7 +87,7 @@ def create_app(command_queue=None, shutdown_queue=None, server_conf=None):
 
 class PlayerStatusFilter(logging.Filter):
     """
-    PlayerStatusFilter
+    Suppress routine player-status polling records from HTTP access logs
     """
 
     def filter(self, record):

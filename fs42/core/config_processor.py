@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage config processor
+Expand station templates and date or week overrides into the scheduling slots consumed by catalog
+and schedule builders.
 """
 import copy
 from datetime import datetime
@@ -33,7 +34,10 @@ overridable = [
 
 def preprocess(conf):
     """
-    Preprocess
+    Expand station templates and named overrides into concrete scheduling slots
+
+    :param conf: (dict) station configuration to update in place
+    :return:     (dict) the same configuration with weekly, date, and week slots expanded
     """
     # first, fill in templates
     processed = _process_templates(conf)
@@ -45,7 +49,16 @@ def preprocess(conf):
 
 def _expand_slot_overrides(slot, slot_override_defs, network_name, where):
     """
-    Expand slot overrides
+    Apply a named slot override and remove its reference from the expanded slot
+
+    Reject unknown overrides and fields that are not allowed to vary per slot.
+    A slot without an override is returned unchanged; an overridden slot is copied.
+
+    :param slot:               (dict) hourly scheduling slot, optionally containing overrides
+    :param slot_override_defs: (dict) named collections of permitted slot settings
+    :param network_name:       (str) station name to include in validation errors
+    :param where:              (str) slot location to include in validation errors
+    :return:                   (dict) slot with the named settings applied
     """
     if not isinstance(slot, dict):
         raise ConfigurationError('Slot {0} for {1} must be a slot object.'.format(where, network_name))
@@ -74,7 +87,12 @@ def _expand_slot_overrides(slot, slot_override_defs, network_name, where):
 
 def _valid_date_key(date_key, section='date_overrides'):
     """
-    Valid date key
+    Validate a month-and-day date or a pair of dates separated by ' - '
+
+    :param date_key:            (str) date expression such as January 01 - January 07
+    :param section:             (str) configuration section to identify in error messages
+    :return:                    (bool) True when each date parses successfully
+    :raises ConfigurationError: if the expression contains an invalid date
     """
     # validate that this looks like either "Month Day" or "Month Day - Month Day"
     # raises ConfigurationError with helpful message on failure
@@ -98,7 +116,10 @@ def _valid_date_key(date_key, section='date_overrides'):
 
 def _process_templates(conf):
     """
-    Process templates
+    Replace weekday template names with independent copies of their hourly slots
+
+    :param conf: (dict) station configuration to update in place
+    :return:     (dict) configuration with weekday templates expanded
     """
     # first, see if there are templates
     if 'day_templates' not in conf:
@@ -129,7 +150,10 @@ def _process_templates(conf):
 
 def _process_date_overrides(conf):
     """
-    Process date overrides
+    Validate date-specific schedules and expand their templates and slot overrides
+
+    :param conf: (dict) station configuration to update in place
+    :return:     (dict) configuration with concrete hourly slots for each date override
     """
     if 'date_overrides' not in conf:
         return conf
@@ -179,7 +203,10 @@ def _process_date_overrides(conf):
 
 def _process_week_overrides(conf):
     """
-    Process week overrides
+    Expand weekday schedules within each date-bounded week override
+
+    :param conf: (dict) station configuration to update in place
+    :return:     (dict) configuration with validated weekday names and expanded slots
     """
     if 'week_overrides' not in conf:
         return conf
@@ -247,7 +274,10 @@ def _process_week_overrides(conf):
 
 def _process_strategy(conf):
     """
-    Process strategy
+    Apply named slot overrides throughout the station's regular weekly schedule
+
+    :param conf: (dict) station configuration to update in place
+    :return:     (dict) configuration containing the expanded weekly slots
     """
     if 'slot_overrides' not in conf:
         return conf

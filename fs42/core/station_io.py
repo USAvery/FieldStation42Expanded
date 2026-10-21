@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage station io
+Load, validate, and persist station JSON files. Normalize configurations and enforce unique network
+names and channel numbers, including saved drafts.
 """
 import os
 import re
@@ -21,8 +22,7 @@ from fs42.tools.schedule import schedule_hint as schedule_hint_utils
 
 class StationIO(object):
     """
-    StationIO handles all file I/O operations for station configurations
-    This includes reading, writing, and deleting station configuration files.
+    Read, validate, and persist station configuration files, including inactive drafts
     """
 
     # Defaults for optional station config fields
@@ -46,7 +46,7 @@ class StationIO(object):
 
     def __init__(self):
         """
-        Initialize the instance
+        Set the configuration directory, schema path, and logger used for station files
         """
         self._l = logging.getLogger('STATIONIO')
         self.confs_dir = 'confs/'
@@ -55,7 +55,7 @@ class StationIO(object):
 
     def load_schema(self):
         """
-        Load schema
+        Read the station validation schema, or return None if the schema file is absent
         """
         if os.path.exists(self.schema_path):
             with open(self.schema_path) as f:
@@ -64,7 +64,7 @@ class StationIO(object):
 
     def normalize_filename(self, network_name):
         """
-        Normalize filename
+        Turn a network name into a lowercase filename stem with underscore separators
         """
         # Convert to lowercase, replace spaces and special chars with underscores
         safe_name = re.sub(r'[^\w\s-]', '', network_name.lower())
@@ -73,14 +73,14 @@ class StationIO(object):
 
     def get_config_file_path(self, network_name):
         """
-        Get config file path
+        Build the station's JSON path from its normalized network name
         """
         filename = self.normalize_filename(network_name)
         return '{0}{1}.json'.format(self.confs_dir, filename)
 
     def load_main_config(self):
         """
-        Load main config
+        Read global server settings, or return None when no main configuration exists
         """
 
         if os.path.exists(self.main_config_path):
@@ -95,7 +95,7 @@ class StationIO(object):
 
     def load_all_station_configs(self):
         """
-        Load all station configs
+        Read station JSON documents with their source filenames, excluding the main config
         """
 
         cfiles = glob.glob('{}*.json'.format(self.confs_dir))
@@ -117,7 +117,10 @@ class StationIO(object):
 
     def read_raw_station_config(self, network_name):
         """
-        Read raw station config
+        Read a station's saved configuration without expanding templates or applying defaults
+
+        :param network_name: (str) exact network name stored inside the station file
+        :return:             (tuple) success flag, raw configuration or None, and error message or None
         """
 
         file_path = self.find_config_by_network_name(network_name)
@@ -136,7 +139,7 @@ class StationIO(object):
 
     def list_raw_station_configs(self):
         """
-        List raw station configs
+        Read all saved station documents, skipping unreadable files and the main config
         """
 
         cfiles = glob.glob('{}*.json'.format(self.confs_dir))
@@ -159,7 +162,13 @@ class StationIO(object):
 
     def write_station_config(self, file_path, config_data):
         """
-        Write station config
+        Back up an existing station file and replace it with serialized configuration
+
+        Write through a temporary file and report backup or write failures to the caller.
+
+        :param file_path:   (str) destination JSON filename
+        :param config_data: (dict) complete document including the station_conf wrapper
+        :return:            (tuple) success flag and status or error message
         """
 
         # Create backup if file exists
@@ -196,7 +205,12 @@ class StationIO(object):
 
     def delete_station_file(self, file_path):
         """
-        Delete station file
+        Attempt a backup and delete a station's configuration file
+
+        A failed backup is logged but does not prevent deletion.
+
+        :param file_path: (str) station JSON file to remove
+        :return:          (tuple) success flag and status or error message
         """
 
         if not os.path.exists(file_path):
@@ -221,7 +235,10 @@ class StationIO(object):
 
     def find_config_by_network_name(self, network_name):
         """
-        Find config by network name
+        Find the JSON file whose station_conf contains the requested network name
+
+        :param network_name: (str) exact stored network name to match
+        :return:             (str) matching path, or None if no readable station file matches
         """
 
         for conf_file in glob.glob('{}*.json'.format(self.confs_dir)):
@@ -240,7 +257,14 @@ class StationIO(object):
 
     def _process_single_config(self, config_data, filename):
         """
-        Process single config
+        Expand a station's schedule and normalize its settings for runtime use
+
+        Apply defaults, check media paths, normalize clip shows and metadata hints, and
+        mark whether the network type supports catalogs and schedules.
+
+        :param config_data: (dict) wrapped station document to update in place
+        :param filename:    (str) source filename for diagnostic messages
+        :return:            (dict) processed station_conf, or None when its active date rule excludes today
         """
 
         # Preprocess the configuration
@@ -318,7 +342,14 @@ class StationIO(object):
 
     def _normalize_clip_shows(self, clip_shows, schedule_increment, filename):
         """
-        Normalize clip shows
+        Index clip-show definitions by tag and convert their durations to seconds
+
+        Reserve five percent of each requested duration when schedule_increment is truthy.
+
+        :param clip_shows:         (list) tags or dictionaries describing clip compilations
+        :param schedule_increment: (int) configured schedule interval in minutes
+        :param filename:           (str) source configuration path for validation errors
+        :return:                   (dict) tag-indexed clip settings with target and total durations in seconds
         """
 
         clip_dict = {}
@@ -366,7 +397,9 @@ class StationIO(object):
 
     def load_and_process_all_stations(self):
         """
-        Load and process all stations
+        Load usable station configurations and collect processing failures for diagnostics
+
+        :return: (tuple) processed active stations and records describing skipped invalid stations
         """
         raw_configs = self.load_all_station_configs()
         processed_stations = []
@@ -396,7 +429,10 @@ class StationIO(object):
 
     def validate_station_config(self, config_data):
         """
-        Validate station config
+        Check required station fields and the JSON schema, logging missing media paths
+
+        :param config_data: (dict) complete document including the station_conf wrapper
+        :return:            (tuple) validity flag and list of validation error messages
         """
 
         errors = []
@@ -449,7 +485,15 @@ class StationIO(object):
 
     def save_station_config(self, network_name, config_data, is_update=False):
         """
-        Save station config
+        Validate and save a station, checking name and channel conflicts before writing
+
+        For updates, locate the original file by its stored network name. If the station
+        is renamed, write the new file before removing the old one.
+
+        :param network_name: (str) current network name used to locate an existing station
+        :param config_data:  (dict) replacement document including the station_conf wrapper
+        :param is_update:    (bool) whether to exclude the existing station from uniqueness checks
+        :return:             (tuple) success flag, status message, and written path or None
         """
 
         # Validate the configuration
@@ -499,7 +543,10 @@ class StationIO(object):
 
     def remove_station_config(self, network_name):
         """
-        Remove station config
+        Find and delete the saved configuration for a network
+
+        :param network_name: (str) exact stored name of the station to remove
+        :return:             (tuple) success flag and status or error message
         """
 
         file_path = self.find_config_by_network_name(network_name)
@@ -519,7 +566,12 @@ class StationIO(object):
 
     def _check_uniqueness(self, channel_number, network_name, exclude_name=None):
         """
-        Check uniqueness
+        Check a proposed name and channel number against all readable saved stations
+
+        :param channel_number: (int) proposed channel number
+        :param network_name:   (str) proposed network name
+        :param exclude_name:   (str) existing station to ignore during an update, or None
+        :return:               (tuple) availability flag and conflict message or None
         """
 
         existing_stations = [raw.get('station_conf', {}) for raw in self.list_raw_station_configs()]

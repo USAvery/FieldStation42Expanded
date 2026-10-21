@@ -3,14 +3,15 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage state
+Hold background-build results, synchronization locks, and CPU-sampling state owned by one web
+application instance.
 """
 import threading
 
 
 class WebState(object):
     """
-    WebState
+    Keep background task logs, synchronization locks, and CPU samples for one web application
     """
 
     def __init__(self):

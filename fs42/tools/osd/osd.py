@@ -3,371 +3,29 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage main
+Build the persistent transparent display window and its configured status, volume, and logo
+elements. Poll runtime state and hide the window when no element is visible.
 """
-import os
-import re
-import json
-from collections import defaultdict
-
-from fs42.core import logger as project_logger
-from fs42.tools.osd._constants import DEFAULT_FONT
-from fs42.tools.osd._constants import CONFIG_FILE_PATH
-from fs42.tools.osd._constants import VOLUME_SOCKET_FILE
-from fs42.tools.osd._constants import MAIN_SOCKET_FILE as SOCKET_FILE
-
-_logger = project_logger.setup('fs42.tools.osd.main')
-
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QPen
-from pydantic import BaseModel
-from PySide6.QtGui import QFont
-from PySide6.QtGui import QColor
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QPainter
 from PySide6.QtWidgets import QWidget
-from PySide6.QtGui import QFontDatabase
 from PySide6.QtCore import QElapsedTimer
 from PySide6.QtWidgets import QApplication
 
-from fs42.tools.osd.osd_layout import HAlignment
-from fs42.tools.osd.osd_layout import VAlignment
-from fs42.tools.osd.logo_display import LogoDisplay
-from fs42.tools.osd.osd_layout import frac_to_size_px
-from fs42.tools.osd.osd_layout import resolve_top_left
-from fs42.tools.osd.osd_layout import frac_to_margin_px
-from fs42.tools.osd.logo_display import LogoDisplayConfig
-
-_registered_font_families = {}
-
-
-def resolve_font(font_path, pixel_size):
-    """
-    StatusDisplayConfig.font is a TTF file path (matching the old Pillow
-    ImageFont.truetype(path, size) semantics), but Qt's QFont constructor
-    takes a family name, not a path. Load the file into Qt's font database
-    once per path and cache the resulting family name.
-
-    font_size is likewise pixels (Pillow semantics), not points, so it's set
-    via setPixelSize rather than the QFont point-size constructor argument.
-    """
-    path = font_path or DEFAULT_FONT
-    family = _registered_font_families.get(path)
-    if family is None:
-        font_id = QFontDatabase.addApplicationFont(path)
-        families = QFontDatabase.applicationFontFamilies(font_id) if font_id != -1 else []
-        if families:
-            family = families[0]
-        else:
-            _logger.warning('[WARNING] Could not load font {}, falling back to default'.format(path))
-            family = QFont().defaultFamily()
-        _registered_font_families[path] = family
-
-    font = QFont(family)
-    font.setPixelSize(pixel_size)
-    return font
-
-
-class StatusDisplayConfig(BaseModel):
-    """
-    StatusDisplayConfig
-    """
-    socket_file: str = SOCKET_FILE
-    display_time: float = 2.0
-    halign: HAlignment = HAlignment.LEFT
-    valign: VAlignment = VAlignment.TOP
-    format_text: str = '{channel_number} - {network_name}'
-    text_color: tuple[int, int, int, int] = (0, 255, 0, 200)
-    font_size: int = 40
-    expansion_factor: float = 1.0
-    font: str | None = None
-    x_margin: float = 0.1
-    y_margin: float = 0.1
-    delay: float = 0.0
-
-
-class StatusDisplay(object):
-    """
-    StatusDisplay
-    """
-
-    def __init__(self, config):
-        """
-        Initialize the instance
-        """
-        self.config = config
-        self._font = resolve_font(self.config.font, self.config.font_size)
-        self._string = ''
-
-        self.time_since_change = 0
-        self.last_status = None  # Track the last status to detect changes
-
-        self.check_status()
-
-    def check_status(self, socket_file=None):
-        """
-        Check status
-        """
-        if socket_file is None:
-            socket_file = self.config.socket_file
-        try:
-            with open(socket_file, 'r') as f:
-                status = f.read()
-        except OSError:
-            return
-
-        if not status.strip():
-            return
-
-        try:
-            status = json.loads(status)
-        except (json.JSONDecodeError, ValueError):
-            _logger.warning('Unable to parse player status, {}'.format(status))
-            return
-
-        # Check if status field changed (e.g., from "stopped" to "playing")
-        status_changed = self.last_status is None or status.get('status') != self.last_status.get('status')
-        self.last_status = status
-
-        new_string = self.config.format_text.format_map(defaultdict(str, status))
-        # Reset timer if text changed OR if status changed (like stopped->playing)
-        if new_string != self._string or status_changed:
-            self.time_since_change = -self.config.delay
-            if new_string:
-                self._string = new_string
-
-    def update(self, dt):
-        """
-        Update
-        """
-        self.time_since_change += dt
-        self.check_status()
-
-    def is_visible(self):
-        """
-        Is visible
-        """
-        return bool(self._string and self.time_since_change < self.config.display_time)
-
-    def draw(self, painter, screen_w, screen_h):
-        """
-        Draw
-        """
-        if not self.is_visible():
-            return
-
-        painter.setFont(self._font)
-        metrics = painter.fontMetrics()
-        text_w = metrics.horizontalAdvance(self._string) * self.config.expansion_factor
-        text_h = metrics.height() * self.config.expansion_factor
-
-        x_margin_px = frac_to_margin_px(self.config.x_margin, screen_w)
-        y_margin_px = frac_to_margin_px(self.config.y_margin, screen_h)
-        x, y = resolve_top_left(
-            screen_w,
-            screen_h,
-            text_w,
-            text_h,
-            self.config.halign,
-            self.config.valign,
-            x_margin_px,
-            y_margin_px,
-        )
-
-        painter.setPen(QColor(*self.config.text_color))
-        if self.config.expansion_factor != 1.0:
-            painter.save()
-            painter.translate(x, y + metrics.ascent() * self.config.expansion_factor)
-            painter.scale(self.config.expansion_factor, self.config.expansion_factor)
-            painter.drawText(0, 0, self._string)
-            painter.restore()
-        else:
-            painter.drawText(int(x), int(y + metrics.ascent()), self._string)
-
-
-class VolumeDisplayConfig(BaseModel):
-    """
-    VolumeDisplayConfig
-    """
-    display_time: float = 5.0
-    halign: HAlignment = HAlignment.CENTER
-    valign: VAlignment = VAlignment.BOTTOM
-    color: tuple[int, int, int, int] = (0, 255, 0, 200)
-    width: float = 0.4
-    height: float = 0.04
-    x_margin: float = 0.1
-    y_margin: float = 0.375
-    border_thickness: float = 2.0
-    padding: float = 0.008
-
-
-class VolumeDisplay(object):
-    """
-    VolumeDisplay
-    """
-
-    def __init__(self, config):
-        """
-        Initialize the instance
-        """
-        self.config = config
-        self.volume = 0.0
-        # Start hidden until we actually see a volume message.
-        self.time_since_change = float('inf')
-
-    def check_volume(self, socket_file=VOLUME_SOCKET_FILE):
-        """
-        Check volume
-        """
-        try:
-            with open(socket_file, 'r') as f:
-                content = f.read()
-        except OSError:
-            return
-
-        if not content.strip():
-            return
-
-        try:
-            status = json.loads(content)
-        except (json.JSONDecodeError, ValueError):
-            _logger.warning('Unable to parse volume status, {}'.format(content))
-            return
-
-        raw_volume = status.get('volume')
-        if raw_volume is None:
-            return
-
-        # The volume field can arrive in several shapes depending on the mixer:
-        # "75%", "MUTED (75%)", "unknown", "MUTE", etc. Pull the first number
-        # out of whatever we get so a decorated string still drives the meter. If
-        # there's no number at all (e.g. "unknown"), there's nothing to show.
-        match = re.search(r'\d+(?:\.\d+)?', str(raw_volume))
-        if not match:
-            _logger.info('No volume level in volume status, {}'.format(raw_volume))
-            return
-        pct = float(match.group())
-
-        self.volume = max(0.0, min(1.0, pct / 100.0))
-        self.time_since_change = 0.0
-
-        # Truncate the socket so we only display each change once.
-        try:
-            with open(socket_file, 'w'):
-                pass
-        except OSError:
-            pass
-
-    def update(self, dt):
-        """
-        Update
-        """
-        self.time_since_change += dt
-        self.check_volume()
-
-    def is_visible(self):
-        """
-        Is visible
-        """
-        return self.time_since_change < self.config.display_time
-
-    def draw(self, painter, screen_w, screen_h):
-        """
-        Draw
-        """
-        if not self.is_visible():
-            return
-
-        w = frac_to_size_px(self.config.width, screen_w)
-        h = frac_to_size_px(self.config.height, screen_h)
-        x_margin_px = frac_to_margin_px(self.config.x_margin, screen_w)
-        y_margin_px = frac_to_margin_px(self.config.y_margin, screen_h)
-        x, y = resolve_top_left(
-            screen_w,
-            screen_h,
-            w,
-            h,
-            self.config.halign,
-            self.config.valign,
-            x_margin_px,
-            y_margin_px,
-        )
-
-        color = QColor(*self.config.color)
-
-        painter.setPen(QPen(color, self.config.border_thickness))
-        painter.setBrush(Qt.NoBrush)
-        painter.drawRect(int(x), int(y), int(w), int(h))
-
-        pad_x = frac_to_margin_px(self.config.padding, screen_w)
-        pad_y = frac_to_margin_px(self.config.padding, screen_h)
-        inner_h = h - 2.0 * pad_y
-        inner_w = (w - 2.0 * pad_x) * self.volume
-        if inner_w > 0.0 and inner_h > 0.0:
-            painter.setPen(Qt.NoPen)
-            painter.setBrush(color)
-            painter.drawRect(int(x + pad_x), int(y + pad_y), int(inner_w), int(inner_h))
-
-
-def load_objects():
-    """
-    Load objects
-    """
-    objects = []
-
-    if os.path.exists(CONFIG_FILE_PATH):
-        with open(CONFIG_FILE_PATH, 'r') as f:
-            config_dict = json.load(f)
-            for obj in config_dict:
-                if 'type' not in obj:
-                    obj['type'] = 'StatusDisplay'
-                if obj['type'] == 'StatusDisplay':
-                    del obj['type']
-                    config = StatusDisplayConfig.model_validate(obj)
-                    objects.append(StatusDisplay(config))
-                elif obj['type'] == 'LogoDisplay':
-                    del obj['type']
-                    config = LogoDisplayConfig.model_validate(obj)
-                    objects.append(LogoDisplay(config))
-                elif obj['type'] == 'HybridDisplay':
-                    del obj['type']
-                    config_status = StatusDisplayConfig.model_validate(obj)
-                    config_logo = LogoDisplayConfig.model_validate(obj)
-                    status_osd = StatusDisplay(config_status)
-                    status_logo = LogoDisplay(config_logo)
-                    objects.append(status_logo)
-                    objects.append(status_osd)
-                elif obj['type'] == 'VolumeDisplay':
-                    del obj['type']
-                    config = VolumeDisplayConfig.model_validate(obj)
-                    objects.append(VolumeDisplay(config))
-                else:
-                    _logger.info('Unrecognized osd object type: {}'.format(obj['type']))
-    else:
-        config = StatusDisplayConfig()
-        objects.append(StatusDisplay(config))
-
-    # Always show a volume meter unless one was explicitly configured. Match its
-    # color to the first StatusDisplay so it blends with the rest of the OSD.
-    if not any(isinstance(obj, VolumeDisplay) for obj in objects):
-        volume_config = VolumeDisplayConfig()
-        for obj in objects:
-            if isinstance(obj, StatusDisplay):
-                volume_config.color = obj.config.text_color
-                break
-        objects.append(VolumeDisplay(volume_config))
-
-    return objects
+from fs42.tools.osd.display.status_display import StatusDisplay
 
 
 class OsdWindow(QWidget):
     """
-    OsdWindow
+    Host OSD elements in a transparent window and poll their state even while hidden
     """
 
     def __init__(self, objects):
         """
-        Initialize the instance
+        Create a screen-sized transparent window and start polling display elements
+
+        :param objects: (list) elements implementing update and draw, optionally is_visible
         """
         super(OsdWindow, self).__init__()
         self.objects = objects
@@ -402,7 +60,7 @@ class OsdWindow(QWidget):
 
     def _object_is_visible(self, obj):
         """
-        Object is visible
+        Check an element's visibility, assuming visible if its visibility hook is absent or fails
         """
         visible_fn = getattr(obj, 'is_visible', None)
         if visible_fn is None:
@@ -414,13 +72,16 @@ class OsdWindow(QWidget):
 
     def _object_is_animated(self, obj):
         """
-        Object is animated
+        Check whether an element is both visible and marked as animated
         """
         return bool(self._object_is_visible(obj) and getattr(obj, 'is_animated', False))
 
     def _tick(self):
         """
-        Tick
+        Update display state, hide an empty window, and adjust polling to visible content
+
+        Poll hidden content every 250 milliseconds, static content every 100 milliseconds,
+        and visible animation approximately thirty times per second.
         """
         now_ns = self._elapsed.nsecsElapsed()
         dt = (now_ns - self._last_ns) / 1e9
@@ -451,7 +112,9 @@ class OsdWindow(QWidget):
 
     def paintEvent(self, event):
         """
-        PaintEvent
+        Paint display elements with status text layered above the other elements
+
+        :param event: (QPaintEvent) Qt repaint notification; the whole window is redrawn
         """
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)

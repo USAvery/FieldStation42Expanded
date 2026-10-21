@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage reception
+Track simulated reception quality and produce MPV filters and transition effects for degraded
+signals and channel changes.
 """
 import time
 import random
@@ -17,7 +18,7 @@ debounce_fragment = 0.1
 
 def none_change_effect(player, reception):
     """
-    None change effect
+    Leave reception unchanged when channel-transition effects are disabled
     """
     _logger.info('No change effect applied.')
     pass
@@ -25,7 +26,7 @@ def none_change_effect(player, reception):
 
 def short_change_effect(player, reception):
     """
-    Short change effect
+    Briefly degrade reception before tuning by stepping the player's noise filter
     """
     _logger.info('Applying short change effect.')
     prev = reception.improve_amount
@@ -41,7 +42,7 @@ def short_change_effect(player, reception):
 
 def long_change_effect(player, reception):
     """
-    Long change effect
+    Play static between degradation and recovery phases to simulate analog channel tuning
     """
     _logger.info('Applying long change effect.')
     # add noise to current channel
@@ -65,7 +66,7 @@ def long_change_effect(player, reception):
 
 class ReceptionStatus(object):
     """
-    ReceptionStatus
+    Share simulated reception quality and derive the corresponding MPV video filter
     """
     __we_are_all_one = {}
     chaos = 0
@@ -76,7 +77,7 @@ class ReceptionStatus(object):
     # NOTE: This is the borg singleton pattern - __we_are_all_one
     def __new__(cls, *args, **kwargs):
         """
-        Create the shared instance
+        Attach each reception object to the common quality-state dictionary
         """
         obj = super(ReceptionStatus, cls).__new__(cls, *args, **kwargs)
         obj.__dict__ = cls.__we_are_all_one
@@ -84,31 +85,31 @@ class ReceptionStatus(object):
 
     def __init__(self):
         """
-        Initialize the instance
+        Reuse the reception state established by the shared instance allocation
         """
         pass
 
     def is_perfect(self):
         """
-        Is perfect
+        Check whether simulated reception has no remaining noise
         """
         return self.chaos == 0.0
 
     def is_degraded(self):
         """
-        Is degraded
+        Check whether reception noise exceeds the visible-effect threshold
         """
         return self.chaos > self.thresh
 
     def is_fully_degraded(self):
         """
-        Is fully degraded
+        Check whether reception has reached its maximum noise level
         """
         return self.chaos == 1.0
 
     def degrade(self, override=0):
         """
-        Degrade
+        Increase reception noise by the supplied step or default amount, capped at one
         """
         if override == 0:
             self.chaos += self.degrade_amount
@@ -120,7 +121,7 @@ class ReceptionStatus(object):
 
     def improve(self, override=0):
         """
-        Improve
+        Reduce reception noise and clear it when it falls below the effect threshold
         """
         if override == 0:
             self.chaos -= self.improve_amount
@@ -132,7 +133,7 @@ class ReceptionStatus(object):
 
     def filter(self):
         """
-        Filter
+        Build an MPV noise-and-scroll filter for degraded reception, or return an empty filter
         """
         if self.chaos > self.thresh:
             # between 0 and 100
@@ -146,37 +147,37 @@ class ReceptionStatus(object):
 
 class ScrambledVideoFilter(object):
     """
-    ScrambledVideoFilter
+    Provide a no-effect base interface for periodically updated video scrambling
     """
 
     def __init__(self):
         """
-        Initialize the instance
+        Create a stateless scrambling filter with no effect
         """
         pass
 
     def update_filter(self):
         """
-        Update filter
+        Return an empty MPV filter for the base scrambling implementation
         """
         return ''
 
 
 class HLScrambledVideoFilter(ScrambledVideoFilter):
     """
-    HLScrambledVideoFilter
+    Distort alternating horizontal video bands with a changing sinusoidal displacement
     """
 
     def __init__(self):
         """
-        Initialize the instance
+        Initialize horizontal-band distortion strength and wavelength
         """
         self.chaos = 50
         self.thrust = 20
 
     def update_filter(self):
         """
-        Update filter
+        Vary the horizontal-band distortion parameters and return its MPV filter expression
         """
 
         if random.random() > .95:
@@ -189,19 +190,19 @@ class HLScrambledVideoFilter(ScrambledVideoFilter):
 
 class DiagonalScrambledVideoFilter(ScrambledVideoFilter):
     """
-    DiagonalScrambledVideoFilter
+    Displace video rows horizontally to create a changing diagonal scrambling effect
     """
 
     def __init__(self):
         """
-        Initialize the instance
+        Initialize the amplitude and wavelength of row displacement
         """
         self.chaos = 50
         self.thrust = 20
 
     def update_filter(self):
         """
-        Update filter
+        Vary row-displacement strength and return the diagonal scrambling filter
         """
 
         if random.random() > .95:
@@ -213,19 +214,19 @@ class DiagonalScrambledVideoFilter(ScrambledVideoFilter):
 
 class ColorInvertedScrambledVideoFilter(ScrambledVideoFilter):
     """
-    ColorInvertedScrambledVideoFilter
+    Alternate normal and inverted pixel bands to simulate scrambled television
     """
 
     def __init__(self):
         """
-        Initialize the instance
+        Initialize the band spacing used by the inversion effect
         """
         self.chaos = 50
         self.thrust = 20
 
     def update_filter(self):
         """
-        Update filter
+        Occasionally vary band spacing and return the alternating inversion filter
         """
 
         if random.random() > .95:
@@ -236,17 +237,17 @@ class ColorInvertedScrambledVideoFilter(ScrambledVideoFilter):
 
 class ChunkyScrambledVideoFilter(ScrambledVideoFilter):
     """
-    ChunkyScrambledVideoFilter
+    Distort low-resolution color channels independently to create blocky scrambled video
     """
 
     def __init__(self):
         """
-        Initialize the instance
+        Create the stateless block-distortion filter
         """
         pass
 
     def update_filter(self):
         """
-        Update filter
+        Return the MPV filter chain that shifts low-resolution color bands independently
         """
         return "lavfi=[scale=320:240,split[base][aux];[aux]geq=r='p(X+floor((random(1000+floor(N*0.05)+floor(Y/16))-0.5)*W*0.4),Y)':g='p(X+floor((random(2000+floor(N*0.05)+floor(Y/16))-0.5)*W*0.4),Y)':b='p(X+floor((random(3000+floor(N*0.05)+floor(Y/16))-0.5)*W*0.4),Y)'[warped];[base][warped]overlay,scale=640:480]"

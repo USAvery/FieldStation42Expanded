@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage ticker
+Display a styled scrolling announcement in a separate Qt process and exit after the configured
+number of repetitions.
 """
 import os
 import sys
@@ -32,12 +33,15 @@ _logger = project_logger.setup('fs42.tools.overlay.ticker')
 
 class SingleApplication(QApplication):
     """
-    SingleApplication
+    Track an existing ticker process through a temporary PID file
     """
 
     def __init__(self, argv, key):
         """
-        Initialize the instance
+        Check a keyed PID file and claim it when no live process is recorded
+
+        :param argv: (list) command-line arguments forwarded to QApplication
+        :param key:  (str) identifier used to name the temporary lock file
         """
         super(SingleApplication, self).__init__(argv)
 
@@ -76,13 +80,13 @@ class SingleApplication(QApplication):
 
     def is_running(self):
         """
-        Is running
+        Report whether another live process already holds the ticker lock
         """
         return self._running
 
     def __del__(self):
         """
-        Del
+        Remove this application's PID file when it owns the ticker lock
         """
         # Clean up lock file on exit
         if hasattr(self, 'lock_file') and not self._running:
@@ -94,12 +98,14 @@ class SingleApplication(QApplication):
 
 class TickerWindow(QWidget):
     """
-    TickerWindow
+    Scroll a styled announcement across the screen and exit after its requested repeats
     """
 
     def __init__(self, parent=None):
         """
-        Initialize the instance
+        Create the transparent ticker window, visual themes, and animation timer
+
+        :param parent: (QWidget) optional Qt parent window
         """
         super(TickerWindow, self).__init__(parent)
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
@@ -208,7 +214,12 @@ class TickerWindow(QWidget):
 
     def show_message(self, text, title='FS42', style='fieldstation', iterations=2):
         """
-        Show message
+        Replace the ticker announcement and restart its scrolling repetition count
+
+        :param text:       (str) announcement text to scroll
+        :param title:      (str) fixed header text above the announcement
+        :param style:      (str) ticker color-scheme name
+        :param iterations: (int) number of complete scrolls before the application exits
         """
 
         self.message = text
@@ -225,7 +236,7 @@ class TickerWindow(QWidget):
 
     def scroll_text(self):
         """
-        Scroll text
+        Advance the announcement two pixels and exit after the last complete scroll
         """
         if self.message:
             font_metrics = QFontMetrics(self.font)
@@ -246,7 +257,9 @@ class TickerWindow(QWidget):
 
     def paintEvent(self, event):
         """
-        PaintEvent
+        Paint the ticker header, themed panel, and clipped scrolling announcement
+
+        :param event: (QPaintEvent) Qt repaint notification
         """
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
@@ -340,20 +353,20 @@ class TickerWindow(QWidget):
 
     def resizeEvent(self, event):
         """
-        ResizeEvent
+        Request a repaint so the ticker follows the resized window
         """
         self.update()
 
     def mousePressEvent(self, event):
         """
-        MousePressEvent
+        Ignore mouse presses on the ticker window
         """
         pass
 
 
 def signal_handler(sig, frame):
     """
-    Signal handler
+    Request a clean ticker event-loop exit when an interrupt signal arrives
     """
     _logger.info("\nShutting down...")
     QApplication.quit()
@@ -392,7 +405,7 @@ def run_ticker(text, title='FS42', style='fieldstation', iterations=2):
 
     def ticker_process():
         """
-        Ticker process
+        Run the announcement's Qt application inside the spawned ticker process
         """
         run_ticker_app(text, title, style, iterations)
 

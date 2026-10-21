@@ -18,7 +18,7 @@ router = APIRouter()
 
 class CommandPayload(BaseModel):
     """
-    CommandPayload
+    Validate the command and channel fields submitted by the standalone remote
     """
     command: str
     channel: int
@@ -26,7 +26,7 @@ class CommandPayload(BaseModel):
     @validator('command')
     def validate_command(cls, v):
         """
-        Validate command
+        Reject remote command names outside the supported command set
         """
         if v not in _constants.ALLOWED_COMMANDS:
             raise ValueError('Invalid command: {}'.format(v))
@@ -36,7 +36,10 @@ class CommandPayload(BaseModel):
 @router.post('/api/command')
 async def handle_command(payload: CommandPayload):
     """
-    Handle command
+    Forward a validated remote command and return the resulting compact player status
+
+    :param payload: (CommandPayload) validated remote action and optional channel
+    :response:      (jsn) acknowledgment and current player status
     """
     try:
         status = remote_commands.write_command(payload.dict())
@@ -52,6 +55,6 @@ async def handle_command(payload: CommandPayload):
 @router.get('/api/status')
 def get_status():
     """
-    Get status
+    Return the compact channel, network, and title status used by the standalone remote
     """
     return remote_commands.read_status()

@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage schedule hint
+Define temporal scheduling constraints for days, day parts, weeks, months, quarters, holidays, and
+date ranges. Match hint patterns and serialize registered hint types.
 """
 import re
 from datetime import datetime
@@ -171,31 +172,33 @@ def _create_range_from_json(json_data):
 # all temporal hints should implement this interface
 class TemporalHint(object):
     """
-    TemporalHint
+    Provide an unrestricted time predicate for media scheduling
     """
 
     def __init__(self):
         """
-        Initialize the instance
+        Create a time hint without any restrictions or stored state
         """
         pass
 
     # when is a datetime object for the time slot
     def hint(self, when):
         """
-        Hint
+        Allow the candidate at any supplied broadcast time
         """
         return True
 
 
 class DayofWeekHint(object):
     """
-    DayofWeekHint
+    Restrict media selection to a named weekday
     """
 
     def __init__(self, day_name):
         """
-        Initialize the instance
+        Normalize and validate the weekday required for media selection
+
+        :param day_name: (str) weekday name, matched without case or surrounding whitespace
         """
         self.day_name = str(day_name).strip().lower()
         if self.day_name not in timings.DAYS:
@@ -205,85 +208,89 @@ class DayofWeekHint(object):
 
     def hint(self, when):
         """
-        Hint
+        Check whether the broadcast time falls on the configured weekday
         """
         return when.strftime('%A').lower() == self.day_name
 
     def to_json(self):
         """
-        ToJSON
+        Serialize the weekday restriction with its scheduling-hint type
         """
         return {'type': self.type, 'day': self.day_name}
 
 
 class DayPartHint(object):
     """
-    DayPartHint
+    Restrict media selection to the hours in a configured day part
     """
 
     def __init__(self, part_name):
         """
-        Initialize the instance
+        Store the day-part name to resolve against shared station settings
+
+        :param part_name: (str) configured day-part key such as morning or evening
         """
         self.part_name = part_name
         self.type = 'day_part'
 
     def hint(self, when):
         """
-        Hint
+        Check whether the broadcast hour belongs to the configured day part
         """
         return when.hour in station_manager.StationManager().get_day_parts()[self.part_name]
 
     def __str__(self):
         """
-        Get the display text
+        Return the day-part name for catalog listings
         """
         return '{}'.format(self.part_name)
 
     def to_json(self):
         """
-        ToJSON
+        Serialize the named day-part restriction
         """
         return {'type': self.type, 'part': self.part_name}
 
 
 class BumpHint(object):
     """
-    BumpHint
+    Mark a bumper's placement within a break without restricting broadcast time
     """
     pre = 'pre'
     post = 'post'
 
     def __init__(self, where='pre'):
         """
-        Initialize the instance
+        Store the bump's requested position in a break
+
+        :param where: (str) placement marker such as pre, fill, or post
         """
         self.where = where
         self.type = 'bump'
 
     def hint(self, when):
         """
-        Hint
+        Allow the bump at any broadcast time because this hint controls placement only
         """
         # always return true, since it doesn't really matter when
         return True
 
     def __str__(self):
         """
-        Get the display text
+        Format the bump placement marker for catalog listings
         """
         return 'bump:{}'.format(self.where)
 
     def to_json(self):
         """
-        ToJSON
+        Serialize the bumper's break-position marker
         """
         return {'type': self.type, 'where': self.where}
 
 
 class WeekNumberHint(object):
     """
-    WeekNumberHint
+    Restrict media selection to an ISO calendar week number
     """
     pattern = re.compile('^week number ([1-9]|[1-4][0-9]|5[0-3])$', re.IGNORECASE)
     # meta_hints name the field explicitly, so they pass the number on its own
@@ -291,7 +298,9 @@ class WeekNumberHint(object):
 
     def __init__(self, week_name):
         """
-        Initialize the instance
+        Parse and store the ISO week requested by a scheduling hint
+
+        :param week_name: (str) week-number expression accepted by the hint parser
         """
         self.week_number = _parse_week_number(week_name)
         self.week_name = 'week number {}'.format(self.week_number)
@@ -300,25 +309,27 @@ class WeekNumberHint(object):
     # when should be a datetime object
     def hint(self, when):
         """
-        Hint
+        Check whether the broadcast date has the configured ISO week number
         """
         return when.isocalendar().week == self.week_number
 
     def to_json(self):
         """
-        ToJSON
+        Serialize the normalized week-number restriction
         """
         return {'type': self.type, 'week_number': self.week_name}
 
 
 class MonthHint(object):
     """
-    MonthHint
+    Restrict media selection to a named calendar month
     """
 
     def __init__(self, month_name):
         """
-        Initialize the instance
+        Parse a full month name and store its calendar number
+
+        :param month_name: (str) full month name accepted by datetime parsing
         """
         self.month_name = month_name
         self.month_number = datetime.strptime(self.month_name, '%B').month
@@ -327,32 +338,34 @@ class MonthHint(object):
     # when should be a datetime object
     def hint(self, when):
         """
-        Hint
+        Check whether the broadcast date falls in the configured month
         """
         return when.month == self.month_number
 
     def __str__(self):
         """
-        Get the display text
+        Return the month name for catalog listings
         """
         return self.month_name
 
     def to_json(self):
         """
-        ToJSON
+        Serialize the named month restriction
         """
         return {'type': self.type, 'month': self.month_name}
 
 
 class QuarterHint(object):
     """
-    QuarterHint
+    Restrict media selection to one three-month calendar quarter
     """
     pattern = re.compile('^[q|Q][1-4]$')
 
     def __init__(self, quarter_name):
         """
-        Initialize the instance
+        Validate and store a calendar-quarter restriction
+
+        :param quarter_name: (str) quarter marker Q1 through Q4, ignoring case
         """
         self.quarter_name = quarter_name.lower()
         self.quarter = 0
@@ -366,26 +379,26 @@ class QuarterHint(object):
     # when should be a datetime object
     def hint(self, when):
         """
-        Hint
+        Check whether the broadcast month belongs to the configured quarter
         """
         return (when.month - 1) // 3 + 1 == self.quarter
 
     def __str__(self):
         """
-        Get the display text
+        Return the normalized quarter marker for catalog listings
         """
         return self.quarter_name
 
     def to_json(self):
         """
-        ToJSON
+        Serialize the calendar-quarter restriction
         """
         return {'type': self.type, 'quarter': self.quarter_name}
 
 
 class CustomHolidayHint(object):
     """
-    CustomHolidayHint
+    Match a configured annual holiday with a fixed date or an ordinal weekday rule
     """
     fixed_pattern = re.compile('^ *({}) *([0-3]?[0-9])$'.format('|'.join(timings.MONTHS)), re.IGNORECASE)
     ordinal_pattern = re.compile(
@@ -394,7 +407,10 @@ class CustomHolidayHint(object):
 
     def __init__(self, holiday_name):
         """
-        Initialize the instance
+        Resolve a named holiday and parse its fixed-date or weekday-occurrence definition
+
+        :param holiday_name: (str) exact custom_holidays key in the global configuration
+        :raises ValueError:  if the holiday is unknown or its date expression cannot be parsed
         """
         self.holiday_name = holiday_name
 
@@ -427,7 +443,7 @@ class CustomHolidayHint(object):
 
     def hint(self, when):
         """
-        Hint
+        Calculate the holiday for the broadcast year and compare its month and day
         """
         year = when.year
         if self.day:
@@ -445,7 +461,12 @@ class CustomHolidayHint(object):
 
     def _nth_weekday(self, month, weekday_str, n):
         """
-        Nth weekday
+        Calculate an ordinal weekday occurrence within a calendar month
+
+        :param month:       (datetime) first day of the requested month
+        :param weekday_str: (str) weekday name to locate
+        :param n:           (int) one-based occurrence, or a negative number for the last occurrence
+        :return:            (datetime) matching date in the supplied month
         """
         # Assumes month is a datetime set to the 1st of the month.
         # Find the offset from the first
@@ -460,7 +481,7 @@ class CustomHolidayHint(object):
 
     def _find_last_day(self, when):
         """
-        Find last day
+        Return the final calendar date of the supplied datetime's month
         """
         if when.month == 12:
             next_first = when.replace(year=when.year + 1, month=1, day=1)
@@ -470,14 +491,14 @@ class CustomHolidayHint(object):
 
     def to_json(self):
         """
-        ToJSON
+        Serialize the custom holiday by its configured name
         """
         return {'type': self.type, 'custom_holiday': self.holiday_name}
 
 
 class RangeHint(object):
     """
-    RangeHint
+    Restrict media selection to an annual date interval, including intervals across New Year
     """
     # matches patterns like: December 1 - December 25
     pattern = re.compile(
@@ -488,7 +509,9 @@ class RangeHint(object):
 
     def __init__(self, range_string):
         """
-        Initialize the instance
+        Parse the start and end dates of an annual scheduling interval
+
+        :param range_string: (str) month-and-day range such as December 1 - December 25
         """
         self.start_date = None
         self.end_date = None
@@ -505,7 +528,7 @@ class RangeHint(object):
 
     def hint(self, when):
         """
-        Hint
+        Check whether a broadcast datetime lies within the inclusive annual date interval
         """
         # lets put stuff in the current years context first
 
@@ -536,13 +559,13 @@ class RangeHint(object):
 
     def __str__(self):
         """
-        Get the display text
+        Return the generic range-hint label used in catalog listings
         """
         return 'range_hint'
 
     def to_json(self):
         """
-        ToJSON
+        Serialize the original annual date-range expression
         """
         return {
             'type': self.type,
@@ -585,7 +608,11 @@ HINT_KLASS_BY_TYPE = {
 
 def hint_klass_matcher(to_test, klasses=MARATHON_HINT_KLASSES):
     """
-    Hint klass matcher
+    Find the first hint class whose syntax matches the supplied text
+
+    :param to_test: (str) folder name or configured hint expression
+    :param klasses: (list) hint classes to consider in priority order
+    :return:        (type) first matching hint class, or None
     """
     for klass in klasses:
         if test_pattern(klass, to_test):
@@ -602,7 +629,7 @@ def test_pattern(hint_class, value):
 
 def create_hint_from_json(hint_class, data):
     """
-    Create hint from json
+    Reconstruct a scheduling hint using the registered factory for its class
     """
     return JSON_FACTORIES[hint_class](data)
 

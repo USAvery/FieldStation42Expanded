@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Expose the package interface
+Serve the JSON station editor used to create configurations from templates or edit existing
+stations.
 """
 from fastapi import Request
 from fastapi import APIRouter

@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage liquid manager
+Load station schedules and locate the programming block and playback offset for a requested time.
+Provide schedule summaries, resets, and synthetic streaming play points.
 """
 import logging
 import datetime
@@ -28,12 +29,17 @@ class ScheduleNotFound(Exception):
 
 class PlayPoint(object):
     """
-    PlayPoint
+    Identify the active playback segment and elapsed offset within a scheduled program
     """
 
     def __init__(self, index, offset, plan, block_title='Unknown'):
         """
-        Initialize the instance
+        Store the segment position needed to join a program already in progress
+
+        :param index:       (int) zero-based active entry index in the playback plan
+        :param offset:      (float) elapsed seconds within that entry
+        :param plan:        (lst<BlockPlanEntry>) complete ordered playback plan
+        :param block_title: (str) scheduled program title for status reporting
         """
         self.index = index
         self.offset = offset
@@ -42,7 +48,7 @@ class PlayPoint(object):
 
     def __str__(self):
         """
-        Get the display text
+        Format the program title, active entry index, offset, and plan length for diagnostics
         """
         return 'PlayPoint: title={0} index={1} offet={2} plan_len={3}'.format(self.block_title, self.index,
                                                                               self.offset, len(self.plan))
@@ -50,7 +56,7 @@ class PlayPoint(object):
 
 class LiquidManager(object):
     """
-    LiquidManager
+    Share loaded schedules and resolve broadcast times into player starting positions
     """
     __we_are_all_one = {}
     _initialized = False
@@ -59,7 +65,7 @@ class LiquidManager(object):
     # NOTE: This is the borg singleton pattern - __we_are_all_one
     def __init__(self):
         """
-        Initialize the instance
+        Attach shared schedule state and load schedules on first initialization
         """
         self.__dict__ = self.__we_are_all_one
         if not self._initialized:
@@ -68,7 +74,7 @@ class LiquidManager(object):
 
     def reload_schedules(self):
         """
-        Reload schedules
+        Refresh the shared station list and reload saved schedules for non-guide, non-streaming stations
         """
         self.station_configs = StationManager().stations
         self.schedules = {}
@@ -79,7 +85,7 @@ class LiquidManager(object):
 
     def get_schedule_by_name(self, network_name):
         """
-        Get schedule by name
+        Return a network's loaded blocks, or None when the network is absent
         """
         if network_name in self.schedules:
             return self.schedules[network_name]
@@ -88,7 +94,7 @@ class LiquidManager(object):
 
     def reset_all_schedules(self):
         """
-        Reset all schedules
+        Rewind pending episode sequences, delete supported station schedules, and reload the registry
         """
         for station_config in self.station_configs:
             if station_config['_has_schedule']:
@@ -100,7 +106,7 @@ class LiquidManager(object):
 
     def reset_schedule(self, station_config):
         """
-        Reset schedule
+        Rewind a station's pending sequences and delete its schedule before reloading all schedules
         """
 
         if station_config['_has_schedule']:
@@ -111,7 +117,9 @@ class LiquidManager(object):
 
     def reset_sequences(self, station_config):
         """
-        Reset sequences
+        Rewind each pending sequence to its first scheduled episode from today onward
+
+        :param station_config: (dict) station whose future sequence positions are being discarded
         """
         logging.getLogger('liquid').info('Resetting sequences for {}'.format(station_config['network_name']))
         # get the catalog
@@ -161,7 +169,11 @@ class LiquidManager(object):
 
     def get_extents(self, network_name):
         """
-        Get extents
+        Return the first start and last end time of a loaded station schedule
+
+        :param network_name: (str) loaded network name
+        :return:             (tuple) schedule boundaries, or two None values for an empty schedule
+        :raises ValueError:  if the network has no loaded schedule entry
         """
         _id = network_name
         if _id not in self.schedules:
@@ -174,7 +186,7 @@ class LiquidManager(object):
 
     def get_summary(self):
         """
-        Get summary
+        Format the loaded networks' schedule boundaries as a multiline report
         """
         summary = ''
         for _id in self.schedules:
@@ -185,7 +197,10 @@ class LiquidManager(object):
 
     def get_summary_json(self, network_name=None):
         """
-        Get summary json
+        Serialize schedule boundaries for one network or all loaded networks
+
+        :param network_name: (str) optional network name restricting the summary
+        :return:             (obj) one summary dictionary or a list of summaries with ISO timestamps
         """
         if network_name:
             (s, e) = self.get_extents(network_name)
@@ -208,7 +223,13 @@ class LiquidManager(object):
 
     def get_programming_block(self, network_name, when):
         """
-        Get programming block
+        Find the loaded program containing the requested broadcast time
+
+        :param network_name:              (str) network whose schedule should be searched
+        :param when:                      (datetime) broadcast time to locate
+        :return:                          (LiquidBlock) first block containing the time, or None for a gap
+        :raises ScheduleNotFound:         if the loaded schedule is empty
+        :raises ScheduleQueryNotInBounds: if the time lies outside the schedule boundaries
         """
         (start, end) = self.get_extents(network_name)
 
@@ -230,7 +251,7 @@ class LiquidManager(object):
 
     def _build_stream_point(self, station_conf, when):
         """
-        Build stream point
+        Build a playback plan from configured stream URLs starting at its first entry
         """
         # get the station conf
 
@@ -247,7 +268,11 @@ class LiquidManager(object):
 
     def get_play_point(self, network_name, when):
         """
-        Get play point
+        Locate the playback entry and elapsed offset for a station at a broadcast time
+
+        :param network_name: (str) station to tune
+        :param when:         (datetime) requested broadcast time
+        :return:             (PlayPoint) active entry and offset, or None if no plan entry covers the time
         """
         station_conf = StationManager().station_by_name(network_name)
         if station_conf['network_type'] == 'streaming':
@@ -270,7 +295,10 @@ class LiquidManager(object):
 
     def print_schedule(self, network_name, go_deep=False):
         """
-        Print schedule
+        Log a station's blocks and optionally the timing of every playback segment
+
+        :param network_name: (str) loaded station schedule to display
+        :param go_deep:      (bool) whether to include individual plan entries and their start/end times
         """
         for _block in self.schedules[network_name]:
             _logger.info(_block)

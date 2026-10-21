@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage marathon agent
+Detect marathon rules that apply to a programming slot and fill marathon schedules with matching
+catalog content.
 """
 import random
 import logging
@@ -15,7 +16,11 @@ _l = logging.getLogger('MARATHONAGENT')
 
 def detect_marathon(slot, when):
     """
-    Detect marathon
+    Evaluate a slot's marathon probability and optional scheduling hint
+
+    :param slot: (dict) hourly settings with optional marathon count, chance, and hint
+    :param when: (datetime) broadcast time used to evaluate the hint
+    :return:     (bool) whether a marathon should start for this slot
     """
     if 'marathon' in slot and 'count' in slot['marathon']:
         marathon = slot['marathon']
@@ -45,7 +50,10 @@ def detect_marathon(slot, when):
 
 def fill_marathon(slot):
     """
-    Fill marathon
+    Remove the marathon trigger and repeat the slot for the remaining marathon entries
+
+    :param slot: (dict) slot modified in place by removing its marathon settings
+    :return:     (list) count minus one references to the same slot dictionary
     """
     buffer = []
     count = slot['marathon']['count']

@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage epg update
+Import configured XMLTV sources into the local guide database. Match source channels to stations and
+retain listings within the requested time window.
 """
 import os
 import glob
@@ -29,14 +30,14 @@ _logger = project_logger.setup('fs42.tools.epg.epg_update')
 
 def _local_name(tag):
     """
-    Local name
+    Remove an XML namespace prefix from an element tag
     """
     return tag.rsplit('}', 1)[-1]
 
 
 def _first_text(element, tag_name):
     """
-    First text
+    Return the first nonempty direct child's text matching an unqualified XML tag
     """
     for child in element:
         if _local_name(child.tag) == tag_name:
@@ -48,7 +49,7 @@ def _first_text(element, tag_name):
 
 def _rating_text(element):
     """
-    Rating text
+    Read the first nonempty rating value from an XMLTV programme element
     """
     for child in element:
         if _local_name(child.tag) != 'rating':
@@ -63,7 +64,10 @@ def _rating_text(element):
 
 def _parse_xmltv_time(value):
     """
-    Parse xmltv time
+    Convert an XMLTV timestamp and optional numeric timezone offset to Unix seconds
+
+    :param value: (str) XMLTV date with minute or second precision and optional offset
+    :return:      (int) Unix seconds, or None for missing or too-short timestamps
     """
     if not value:
         return None
@@ -98,7 +102,7 @@ def _parse_xmltv_time(value):
 
 def _load_station_mappings(config_dir):
     """
-    Load station mappings
+    Collect enabled XMLTV channel IDs by source from readable station JSON files
     """
     mappings = {}
 
@@ -132,7 +136,7 @@ def _load_station_mappings(config_dir):
 
 def _load_sources(config_dir):
     """
-    Load sources
+    Merge configured EPG source overrides with the built-in source definitions
     """
     sources = {name: dict(config) for name, config in DEFAULT_SOURCES.items()}
 
@@ -156,7 +160,10 @@ def _load_sources(config_dir):
 
 def _create_database(path):
     """
-    Create database
+    Create empty programme and source-status tables in a new EPG cache database
+
+    :param path: (str) destination SQLite filename
+    :return:     (Connection) open connection for importing programme batches
     """
     connection = sqlite3.connect(path)
 
@@ -193,7 +200,7 @@ def _create_database(path):
 
 def _insert_batch(connection, batch):
     """
-    Insert batch
+    Insert buffered XMLTV programme rows and clear the supplied batch list
     """
     if not batch:
         return
@@ -228,7 +235,17 @@ def _import_source(
     max_ts,
 ):
     """
-    Import source
+    Download an XMLTV source and import mapped channels within the retained time window
+
+    Stream XML parsing and insert programme batches without retaining the whole feed.
+
+    :param connection:      (Connection) destination cache database connection
+    :param source_name:     (str) configured source identifier
+    :param source_config:   (dict) feed URL and optional HTTP user agent
+    :param wanted_channels: (set) XMLTV channel IDs to retain
+    :param min_ts:          (int) earliest retained window boundary in Unix seconds
+    :param max_ts:          (int) latest retained window boundary in Unix seconds
+    :return:                (int) number of imported programmes
     """
     url = source_config.get('url')
     if not url:
@@ -340,7 +357,16 @@ def update_epg(
     future_days=DEFAULT_FUTURE_DAYS,
 ):
     """
-    Update epg
+    Build a fresh XMLTV cache and replace the previous database after a successful import
+
+    Keep the existing cache if downloading or importing fails, or if no programmes
+    are produced. Return without rebuilding when no stations enable EPG imports.
+
+    :param config_dir:  (str) directory containing station and EPG source settings
+    :param db_path:     (str) cache database to replace
+    :param past_hours:  (int) number of past hours to retain
+    :param future_days: (int) number of future days to retain
+    :return:            (int) total imported programmes
     """
     mappings = _load_station_mappings(config_dir)
 
@@ -413,7 +439,7 @@ def update_epg(
 
 def main():
     """
-    Main
+    Parse EPG update options and return a command-line exit status after rebuilding the cache
     """
     parser = argparse.ArgumentParser(description='Update the FieldStation42 cached XMLTV EPG database.')
     parser.add_argument(

@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage test meta hint validation
+Verify metadata-hint configuration rejects unknown fields and reports unmatched marathon hints
+without restricting the marathon.
 """
 import logging
 from datetime import datetime
@@ -16,7 +17,7 @@ from fs42.tools.schedule import marathon_agent
 
 def _config(meta_hints, content_dir):
     """
-    Config
+    Wrap metadata hints and a temporary content directory in a minimal station document
     """
     return {
         'station_conf': {
@@ -31,7 +32,7 @@ def _config(meta_hints, content_dir):
 
 class TestMetaHintFieldValidation(object):
     """
-    TestMetaHintFieldValidation
+    Verify station processing accepts known metadata hint fields and rejects unknown ones
     """
 
     # an unknown field is ignored at schedule time, leaving content less restricted
@@ -39,7 +40,7 @@ class TestMetaHintFieldValidation(object):
 
     def _process(self, meta_hints, content_dir):
         """
-        Process
+        Process a synthetic station document containing the supplied metadata rules
         """
         # content_dir has to exist on disk - StationIO.FILE_CHECKS verifies it
         return StationIO()._process_single_config(_config(meta_hints, content_dir), 'test_station.json')
@@ -116,7 +117,7 @@ class TestMetaHintFieldValidation(object):
 
 class TestMarathonHintWarning(object):
     """
-    TestMarathonHintWarning
+    Verify unrecognized marathon hints produce a warning without silently restricting selection
     """
 
     def test_unmatched_hint_warns_and_leaves_marathon_unrestricted(self, caplog):

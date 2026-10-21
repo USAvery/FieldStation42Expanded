@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage catalog entry
+Represent cataloged media and convert entries to and from stored rows or JSON, including scheduling
+hints and media-type information.
 """
 import os
 import json
@@ -16,7 +17,10 @@ _logger = project_logger.setup('fs42.tools.catalog.catalog_entry')
 
 def from_json_dict(json_data):
     """
-    From json dict
+    Reconstruct a catalog entry and its scheduling hints from serialized database fields
+
+    :param json_data: (dict) stored entry fields, including station, dbid, and serialized hints
+    :return:          (CatalogEntry) restored entry with defaults for legacy optional fields
     """
     # Create an entry from a JSON serializable dictionary
     tup = (
@@ -39,7 +43,13 @@ def from_json_dict(json_data):
 
 def from_db_row(row):
     """
-    From db row
+    Reconstruct a catalog entry from a current or legacy SQLite row
+
+    Default missing content and media types to feature and video. Restore recognized
+    scheduling hints and log invalid or unknown hint data.
+
+    :param row: (tuple) ordered catalog table values, including serialized hint JSON
+    :return:    (CatalogEntry) restored media record and database metadata
     """
 
     if len(row) == 13:  # New schema with realpath, content_type, and media_type
@@ -108,13 +118,21 @@ class NoFillerContentFound(Exception):
 
 class CatalogEntry(object):
     """
-    CatalogEntry
+    Represent cataloged media with its duration, selection tag, hints, and scheduling count
     """
 
     # CatalogEntry(row[2], row[3], float(row[4]), json.loads(row[6]) if row[6] else [])
     def __init__(self, path, duration, tag, hints=[], count=0, content_type='feature', media_type='video'):
         """
-        Initialize the instance
+        Create a media record ready for catalog storage and schedule selection
+
+        :param path:         (str) media filename or generated bump URL
+        :param duration:     (float) playback length in seconds
+        :param tag:          (str) content group used for schedule selection
+        :param hints:        (list) scheduling constraints attached to this media
+        :param count:        (int) number of recorded selections for scheduling
+        :param content_type: (str) playback category such as feature, commercial, or bump
+        :param media_type:   (str) media format category such as video or audio
         """
         self.path = path
         self.realpath = None
@@ -134,7 +152,7 @@ class CatalogEntry(object):
 
     def __str__(self):
         """
-        Get the display text
+        Format the media title, tag, duration, scheduling hints, and path for a text listing
         """
         hints = list(map(str, self.hints))
         return '{0:<20.20} | {1:<10.10} | {2:<8.1f} | {3} | {4}'.format(self.title, self.tag, self.duration, hints,
@@ -142,7 +160,7 @@ class CatalogEntry(object):
 
     def to_json(self):
         """
-        ToJSON
+        Return JSON-compatible catalog fields with serialized hints and ISO-format timestamps
         """
         # Convert the entry to a JSON serializable dictionary
         return {

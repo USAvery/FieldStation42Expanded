@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage constants
+Define XMLTV source defaults, cache location, import batch size, and the past and future time
+windows retained in the guide cache.
 """
 
 DEFAULT_DB_PATH = 'runtime/epg.sqlite'

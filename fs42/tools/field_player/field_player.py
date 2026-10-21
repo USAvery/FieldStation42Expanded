@@ -119,7 +119,12 @@ class FieldPlayer(object):
 
     def _check_input(self):
         """
-        Check input
+        Consume queued or file-based player commands and translate them into playback outcomes
+
+        Apply commands handled directly by the controller, such as schedule reloads and
+        tickers, and return state transitions for the active playback loop.
+
+        :return: (PlayerOutcome) pending playback command, or None when no transition is requested
         """
         if self._command_queue:
             q_message = None

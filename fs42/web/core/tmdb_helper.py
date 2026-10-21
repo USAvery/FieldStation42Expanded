@@ -26,7 +26,9 @@ class TMDBHelper(object):
 
     def __init__(self, api_key=None):
         """
-        Initialize the instance
+        Select a TMDB API key and create a reusable JSON HTTP session
+
+        :param api_key: (str) explicit API key, or None to use global station settings
         """
 
         if api_key:
@@ -124,7 +126,10 @@ class TMDBHelper(object):
 
     def search_movie(self, title):
         """
-        Search movie
+        Find the first TMDB movie match, using cached results before making an HTTP request
+
+        :param title: (str) movie title, optionally containing a release year
+        :return:      (dict) selected movie metadata, or None when unconfigured, unmatched, or unavailable
         """
 
         if not self.is_configured():
@@ -208,7 +213,10 @@ class TMDBHelper(object):
 
     def get_movie_details(self, tmdb_id):
         """
-        Get movie details
+        Request full TMDB details for a movie identifier
+
+        :param tmdb_id: (int) TMDB movie identifier
+        :return:        (dict) API movie details, or None if unconfigured or the request fails
         """
 
         if not self.is_configured():

@@ -10,7 +10,7 @@ import argparse
 
 def build_parser():
     """
-    Build parser
+    Define command-line options for catalog, sequence, schedule, and media-scan administration
     """
     parser = argparse.ArgumentParser(description='FieldStation42 Catalog and Liquid-Schedule Generation')
     parser.add_argument(

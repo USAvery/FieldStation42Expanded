@@ -3,7 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Manage sequence io
+Persist sequences, their ordered entries, playback positions, and active child-show selections in
+SQLite.
 """
 import sqlite3
 from contextlib import contextmanager
@@ -14,12 +15,12 @@ from fs42.tools.sequence.sequence import NamedSequence
 
 class SequenceIO(object):
     """
-    SequenceIO
+    Persist episode order, sequence positions, and active child-show selections in SQLite
     """
 
     def __init__(self):
         """
-        Initialize the instance
+        Select the configured database and create or upgrade sequence storage
         """
         self.db_path = StationManager().server_conf['db_path']
         self._init_sequence_table()
@@ -27,7 +28,9 @@ class SequenceIO(object):
     @contextmanager
     def _get_connection(self):
         """
-        Get connection
+        Yield a SQLite connection, commit successful sequence changes, and roll back failures
+
+        Close the connection when the context manager exits.
         """
         connection = sqlite3.connect(self.db_path)
         try:
@@ -112,7 +115,10 @@ class SequenceIO(object):
 
     def put_sequence(self, station_name, named_sequence):
         """
-        Put sequence
+        Save sequence state and replace its ordered episode rows in one transaction
+
+        :param station_name:   (str) network owning the sequence
+        :param named_sequence: (NamedSequence) range, position, and episode list to persist
         """
 
         with self._get_connection() as connection:
@@ -177,7 +183,12 @@ class SequenceIO(object):
 
     def get_sequence(self, station_name, sequence_name, tag_path):
         """
-        Get sequence
+        Restore a named station sequence and initialize its starting position if needed
+
+        :param station_name:  (str) network owning the sequence
+        :param sequence_name: (str) sequence identifier
+        :param tag_path:      (str) content tag or child-show path
+        :return:              (NamedSequence) restored sequence, or None if absent
         """
         with self._get_connection() as connection:
             cursor = connection.cursor()
@@ -212,7 +223,7 @@ class SequenceIO(object):
 
     def get_all_sequences_for_station(self, station_name):
         """
-        Get all sequences for station
+        Restore every sequence for a network, persisting any newly initialized state
         """
         with self._get_connection() as connection:
             cursor = connection.cursor()
@@ -249,7 +260,7 @@ class SequenceIO(object):
 
     def delete_sequences_for_station(self, station_name):
         """
-        Delete sequences for station
+        Delete a station's named sequence rows and their associated episode entries
         """
         with self._get_connection() as connection:
             cursor = connection.cursor()
@@ -266,7 +277,7 @@ class SequenceIO(object):
 
     def delete_sequence(self, station_name, sequence_name, tag_path):
         """
-        Delete sequence
+        Delete one named content sequence and its episodes if it exists
         """
         with self._get_connection() as connection:
             cursor = connection.cursor()
@@ -303,7 +314,7 @@ class SequenceIO(object):
 
     def update_current_index(self, station_name, sequence_name, tag_path, new_index):
         """
-        Update current index
+        Persist the next episode index for the identified station sequence
         """
         with self._get_connection() as connection:
             cursor = connection.cursor()
@@ -318,7 +329,7 @@ class SequenceIO(object):
 
     def update_initialized(self, station_name, sequence_name, tag_path, value):
         """
-        Update initialized
+        Persist whether a sequence has already chosen its initial playback position
         """
         with self._get_connection() as connection:
             cursor = connection.cursor()
@@ -333,7 +344,7 @@ class SequenceIO(object):
 
     def update_sequence_index_by_path(self, station_name, sequence_name, tag_path, episode_path):
         """
-        Update sequence index by path
+        Set a sequence's position to an exact episode path and report whether it was found
         """
         with self._get_connection() as connection:
             cursor = connection.cursor()
@@ -428,7 +439,7 @@ class SequenceIO(object):
 
     def get_active_sequence(self, station_name, sequence_name, parent_tag):
         """
-        Get active sequence
+        Read the active child-show tag for a sequence group, or return None
         """
         with self._get_connection() as connection:
             cursor = connection.cursor()
@@ -448,7 +459,7 @@ class SequenceIO(object):
 
     def set_active_sequence(self, station_name, sequence_name, parent_tag, active_tag_path):
         """
-        Set active sequence
+        Persist the child-show tag currently selected for a station's sequence group
         """
         with self._get_connection() as connection:
             cursor = connection.cursor()
@@ -468,7 +479,7 @@ class SequenceIO(object):
 
     def get_all_active_sequences(self, station_name):
         """
-        Get all active sequences
+        List active child-show tags across a station's sequence groups
         """
         with self._get_connection() as connection:
             cursor = connection.cursor()
@@ -484,7 +495,7 @@ class SequenceIO(object):
 
     def get_child_sequences(self, station_name, sequence_name, parent_tag):
         """
-        Get child sequences
+        List sequence tags beneath a parent content path using its slash-prefixed descendants
         """
         with self._get_connection() as connection:
             cursor = connection.cursor()
