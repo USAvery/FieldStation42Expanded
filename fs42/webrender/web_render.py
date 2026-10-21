@@ -117,6 +117,17 @@ class WebRenderApp(QApplication):
         self.window_x = None
         self.window_y = None
 
+        self.backdrop = None
+        if user_conf.get('playback_backdrop', False):
+            # A separate mapped surface survives MPV VO replacement. labwc
+            # places it below playback so an unavailable video reveals black.
+            self.backdrop = QMainWindow()
+            self.backdrop.setWindowTitle('FieldStation42 Playback Backdrop')
+            self.backdrop.setWindowFlags(Qt.FramelessWindowHint)
+            self.backdrop.setStyleSheet('background-color: black;')
+            self.backdrop.setCursor(Qt.BlankCursor)
+            self.backdrop.showFullScreen()
+
         self.window = WebRender(transparent=bool(user_conf.get("transparent", False)))
 
         # Set window properties
@@ -178,6 +189,8 @@ class WebRenderApp(QApplication):
         if hasattr(self, 'refresh_timer'):
             self.refresh_timer.stop()
         self.window.close()
+        if self.backdrop is not None:
+            self.backdrop.close()
         self.quit()
 
     def tick(self):

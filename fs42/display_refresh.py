@@ -195,7 +195,7 @@ def select_display_mode(wlr_output, fps=None):
     return None
 
 
-def enforce_display_resolution_policy(logger=None):
+def enforce_display_resolution_policy(logger=None, on_mode_change=None):
     """Enforce only the display resolution policy, preserving refresh cadence.
 
     This is used before loading a new video. It repairs HDMI/compositor
@@ -329,12 +329,15 @@ def enforce_display_resolution_policy(logger=None):
                 )
             return False
 
+        if on_mode_change is not None:
+            on_mode_change()
+
         return True
 
     return False
 
 
-def match_display_refresh_rate(fps=None, logger=None):
+def match_display_refresh_rate(fps=None, logger=None, on_mode_change=None):
     """Enforce display resolution policy and match refresh to source FPS."""
     try:
         result = subprocess.run(
@@ -442,5 +445,8 @@ def match_display_refresh_rate(fps=None, logger=None):
                 )
             )
         return False
+
+    if on_mode_change is not None:
+        on_mode_change()
 
     return True

@@ -32,6 +32,7 @@ fi
 
 python3 - "$rc_file" <<'PY'
 import sys
+import re
 from pathlib import Path
 
 
@@ -175,6 +176,33 @@ elif '</openbox_config>' in text:
     )
 else:
     raise SystemExit('Could not locate labwc keyboard/config closing tag')
+
+backdrop_start = '<!-- FS42 PLAYBACK BACKDROP START -->'
+backdrop_end = '<!-- FS42 PLAYBACK BACKDROP END -->'
+if backdrop_start in text and backdrop_end in text:
+    start = text.rfind('\n', 0, text.index(backdrop_start)) + 1
+    end = text.index(backdrop_end, start) + len(backdrop_end)
+    end = text.find('\n', end)
+    text = text[:start] + (text[end + 1:] if end >= 0 else '')
+
+backdrop_rule = '''    <!-- FS42 PLAYBACK BACKDROP START -->
+    <windowRule title="FieldStation42 Playback Backdrop"
+                serverDecoration="no" skipTaskbar="yes"
+                skipWindowSwitcher="yes" ignoreFocusRequest="yes">
+      <action name="Lower" />
+      <action name="ForEach">
+        <query identifier="mpv" />
+        <then><action name="Focus" /></then>
+      </action>
+    </windowRule>
+    <!-- FS42 PLAYBACK BACKDROP END -->'''
+if '</windowRules>' in text:
+    text = re.sub(r'(?m)^[ \t]*</windowRules>',
+                  lambda match: backdrop_rule + '\n  </windowRules>', text, count=1)
+else:
+    text = text.replace('</openbox_config>',
+                        '  <windowRules>\n' + backdrop_rule +
+                        '\n  </windowRules>\n</openbox_config>', 1)
 
 path.write_text(text)
 PY

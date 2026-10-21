@@ -164,186 +164,189 @@ def main_loop(transition_fn, shutdown_queue=None, api_proc=None, schedule_lock=N
     player.preload_guide_overlay()
 
     def signal_handler(sig, frame):
-        logger.critical("Received sig-int signal, attempting to exit gracefully...")
-        player._shutdown_guide_overlay()
-        player.shutdown()
-
-        update_status_socket("stopped", "", -1)
-        # Signal API server to shutdown if running
-        if shutdown_queue is not None:
-            shutdown_queue.put("shutdown")
-        if api_proc is not None:
-            api_proc.join(timeout=5)
-        logger.info("Shutdown completed as expected - exiting application")
-        exit(0)
+        # Unwind any in-flight IPC lock before cleanup sends more commands.
+        raise SystemExit(0)
 
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
 
-    channel_conf = manager.stations[channel_index]
+    try:
+        channel_conf = manager.stations[channel_index]
 
-    # this is actually the main loop
-    player_state = None
-    skip_play = False
-    stuck_timer = 0
-
-    while True:
-        if schedule_agent:
-            schedule_agent.tick()
-
-        logger.info(f"Playing station: {channel_conf['network_name']}")
-
-        if channel_conf["network_type"] == "guide" and not skip_play:
-            logger.info("Starting the guide channel")
-            player_state = player.show_guide(channel_conf)
-        elif channel_conf["network_type"] == "web" and not skip_play:
-            logger.info("Starting the web channel")
-            player_state = player.show_web(channel_conf)
-        elif channel_conf["network_type"] == "executable" and not skip_play:
-            logger.info("Starting an executable channel")
-            player.stop_player()
-            player_state =  execute_command(channel_conf, input_check)
-        elif not skip_play:
-            now = datetime.datetime.now()
-
-            week_day = DAYS[now.weekday()]
-            hour = now.hour
-            skip = now.minute * MIN_1 + now.second
-
-            logger.info(
-                f"Starting station {channel_conf['network_name']} at: {week_day} {hour} skipping={skip} "
-            )
-
-            player_state = player.play_slot(
-                channel_conf["network_name"], datetime.datetime.now()
-            )
-
-        logger.debug(f"Got player outcome:{player_state.status}")
-
-        # reset skip
+        # this is actually the main loop
+        player_state = None
         skip_play = False
+        stuck_timer = 0
 
-        if player_state.status == PlayerState.CHANNEL_CHANGE:
-            stuck_timer = 0
-            # Any real tune closes the guide overlay and restores normal full-screen
-            # video before the channel transition begins.
-            player._close_guide_overlay()
-            player.parental_unlocked_network = None
-            # Close any lingering pop-up overlay
-            player._close_now_playing()
-            # Cache stations to prevent race conditions during reload
-            station_cache = manager.stations
-            stations_len = len(station_cache)
-            #if we got anything, we'll tune up one channel
-            tune_up = True
-            # get the json payload
-            if player_state.payload:
-                try:
-                    as_obj = json.loads(player_state.payload)
-                    if "command" in as_obj:
-                        if as_obj["command"] == "direct":
-                            tune_up = False
-                            if "channel" in as_obj:
-                                logger.debug(
-                                    f"Got direct tune command for channel {as_obj['channel']}"
-                                )
-                                new_index = manager.index_from_channel(
-                                    as_obj["channel"]
-                                )
-                                if new_index is None:
-                                    logger.warning(
-                                        f"Got direct tune command but could not find station with channel {as_obj['channel']}"
+        while True:
+            if schedule_agent:
+                schedule_agent.tick()
+
+            logger.info(f"Playing station: {channel_conf['network_name']}")
+
+            if channel_conf["network_type"] == "guide" and not skip_play:
+                logger.info("Starting the guide channel")
+                player_state = player.show_guide(channel_conf)
+            elif channel_conf["network_type"] == "web" and not skip_play:
+                logger.info("Starting the web channel")
+                player_state = player.show_web(channel_conf)
+            elif channel_conf["network_type"] == "executable" and not skip_play:
+                logger.info("Starting an executable channel")
+                player.stop_player()
+                player_state =  execute_command(channel_conf, input_check)
+            elif not skip_play:
+                now = datetime.datetime.now()
+
+                week_day = DAYS[now.weekday()]
+                hour = now.hour
+                skip = now.minute * MIN_1 + now.second
+
+                logger.info(
+                    f"Starting station {channel_conf['network_name']} at: {week_day} {hour} skipping={skip} "
+                )
+
+                player_state = player.play_slot(
+                    channel_conf["network_name"], datetime.datetime.now()
+                )
+
+            logger.debug(f"Got player outcome:{player_state.status}")
+
+            # reset skip
+            skip_play = False
+
+            if player_state.status == PlayerState.CHANNEL_CHANGE:
+                stuck_timer = 0
+                # Any real tune closes the guide overlay and restores normal full-screen
+                # video before the channel transition begins.
+                player._close_guide_overlay()
+                player.parental_unlocked_network = None
+                # Close any lingering pop-up overlay
+                player._close_now_playing()
+                # Cache stations to prevent race conditions during reload
+                station_cache = manager.stations
+                stations_len = len(station_cache)
+                #if we got anything, we'll tune up one channel
+                tune_up = True
+                # get the json payload
+                if player_state.payload:
+                    try:
+                        as_obj = json.loads(player_state.payload)
+                        if "command" in as_obj:
+                            if as_obj["command"] == "direct":
+                                tune_up = False
+                                if "channel" in as_obj:
+                                    logger.debug(
+                                        f"Got direct tune command for channel {as_obj['channel']}"
                                     )
+                                    new_index = manager.index_from_channel(
+                                        as_obj["channel"]
+                                    )
+                                    if new_index is None:
+                                        logger.warning(
+                                            f"Got direct tune command but could not find station with channel {as_obj['channel']}"
+                                        )
+                                    else:
+                                        channel_index = new_index
+
                                 else:
-                                    channel_index = new_index
-
-                            else:
-                                logger.critical(
-                                    "Got direct tune command, but no channel specified"
-                                )
-                        elif as_obj["command"] == "up":
-                            tune_up = True
-                            logger.debug("Got channel up command")
-                        elif as_obj["command"] == "down":
-                            tune_up = False
-                            logger.debug("Got channel down command")
-                            found = False
-                            while not found:
-                                channel_index -= 1
+                                    logger.critical(
+                                        "Got direct tune command, but no channel specified"
+                                    )
+                            elif as_obj["command"] == "up":
+                                tune_up = True
+                                logger.debug("Got channel up command")
+                            elif as_obj["command"] == "down":
+                                tune_up = False
+                                logger.debug("Got channel down command")
+                                found = False
+                                while not found:
+                                    channel_index -= 1
                                 
-                                if channel_index < 0:
-                                    channel_index = stations_len-1
-                                if not station_cache[channel_index]["hidden"]:
-                                    found = True
+                                    if channel_index < 0:
+                                        channel_index = stations_len-1
+                                    if not station_cache[channel_index]["hidden"]:
+                                        found = True
 
 
-                except Exception as e:
-                    logger.exception(e)
-                    logger.warning(
-                        "Got payload on channel change, but JSON convert failed"
-                    )
+                    except Exception as e:
+                        logger.exception(e)
+                        logger.warning(
+                            "Got payload on channel change, but JSON convert failed"
+                        )
 
-            if tune_up:
-                logger.info("Starting channel change")
-                found = False
-                while not found:
-                    channel_index += 1
-                    channel_index = channel_index if channel_index < stations_len else 0
-                    found = not station_cache[channel_index]["hidden"]
+                if tune_up:
+                    logger.info("Starting channel change")
+                    found = False
+                    while not found:
+                        channel_index += 1
+                        channel_index = channel_index if channel_index < stations_len else 0
+                        found = not station_cache[channel_index]["hidden"]
 
-            # save the player state
-            with shelve.open(STATE_SHELVE) as s:
-                s["channel_index"] = channel_index
-            channel_conf = station_cache[channel_index]
-            player.station_config = channel_conf
+                # save the player state
+                with shelve.open(STATE_SHELVE) as s:
+                    s["channel_index"] = channel_index
+                channel_conf = station_cache[channel_index]
+                player.station_config = channel_conf
 
-            # long_change_effect(player, reception)
-            transition_fn(player, reception)
+                # long_change_effect(player, reception)
+                transition_fn(player, reception)
 
-        elif player_state.status == PlayerState.PARENTAL_CONTROLS:
-            stuck_timer = 0
-            player_state = player.prompt_parental_controls(channel_conf)
-            if player_state.status != PlayerState.SUCCESS:
+            elif player_state.status == PlayerState.PARENTAL_CONTROLS:
+                stuck_timer = 0
+                player_state = player.prompt_parental_controls(channel_conf)
+                if player_state.status != PlayerState.SUCCESS:
+                    skip_play = True
+
+            elif player_state.status == PlayerState.PLAY_FILE:
+                print("Got playfile!", player_state.payload )
                 skip_play = True
+                player_state = player.play_and_wait(player_state.payload)
 
-        elif player_state.status == PlayerState.PLAY_FILE:
-            print("Got playfile!", player_state.payload )
-            skip_play = True
-            player_state = player.play_and_wait(player_state.payload)
+            elif player_state.status == PlayerState.FAILED:
+                stuck_timer += 1
 
-        elif player_state.status == PlayerState.FAILED:
-            stuck_timer += 1
+                # only put it up once after 2 seconds of being stuck
+                if stuck_timer == 2:
+                    stand_by = channel_conf.get("standby_image", StationManager().server_conf.get("standby_image", "runtime/standby.png"))
+                    player.play_file(stand_by)
+                current_title_on_stuck = player.get_current_path()
+                update_status_socket(
+                    "stuck",
+                    channel_conf["network_name"],
+                    channel_conf["channel_number"],
+                    current_title_on_stuck,
+                )
 
-            # only put it up once after 2 seconds of being stuck
-            if stuck_timer == 2:
-                stand_by = channel_conf.get("standby_image", StationManager().server_conf.get("standby_image", "runtime/standby.png"))
-                player.play_file(stand_by)
-            current_title_on_stuck = player.get_current_path()
-            update_status_socket(
-                "stuck",
-                channel_conf["network_name"],
-                channel_conf["channel_number"],
-                current_title_on_stuck,
-            )
+                time.sleep(1)
+                logger.critical(
+                    "Player failed to start - resting for 1 second and trying again"
+                )
 
-            time.sleep(1)
-            logger.critical(
-                "Player failed to start - resting for 1 second and trying again"
-            )
+                # check for channel change so it doesn't stay stuck on a broken channel
+                new_state = input_check()
+                if new_state is not None:
+                    player_state = new_state
+                    # set skip play so outcome isn't overwritten
+                    # and the channel change can be processed next loop
+                    skip_play = True
+            elif player_state.status == PlayerState.SUCCESS:
+                stuck_timer = 0
+            elif player_state.status == PlayerState.EXIT_COMMAND:
+                signal_handler(None, None)
+            else:
+                stuck_timer = 0
 
-            # check for channel change so it doesn't stay stuck on a broken channel
-            new_state = input_check()
-            if new_state is not None:
-                player_state = new_state
-                # set skip play so outcome isn't overwritten
-                # and the channel change can be processed next loop
-                skip_play = True
-        elif player_state.status == PlayerState.SUCCESS:
-            stuck_timer = 0
-        elif player_state.status == PlayerState.EXIT_COMMAND:
-            signal_handler(None, None)
-        else:
-            stuck_timer = 0
+    finally:
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        logger.info('Shutting down player after leaving playback loop')
+        try:
+            player._shutdown_guide_overlay()
+        finally:
+            try:
+                player.shutdown()
+            finally:
+                update_status_socket('stopped', '', -1)
 
 
 def start_api_server_with_shutdown_queue(shutdown_queue, command_q):

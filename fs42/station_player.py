@@ -217,6 +217,9 @@ class StationPlayer:
         self.now_playing_process = None
         self.schedule_lock = None
         self._active_afx = None
+        self._audio_clock_sample = None
+        self._next_audio_clock_check = 0.0
+        self._last_audio_reload = 0.0
         self._pending_response = None
 
     def _create_mpv(self, prefer_dmabuf=True):
@@ -448,6 +451,7 @@ class StationPlayer:
         conf["transparent"] = True
         conf["persistent"] = True
         conf["start_hidden"] = True
+        conf["playback_backdrop"] = True
 
         conf["web_url"] = urlunsplit((
             parts.scheme,
@@ -481,6 +485,45 @@ class StationPlayer:
         finally:
             self._guide_video_layout = None
 
+    def _reload_audio_output(self):
+        """
+        Reopen audio after an HDMI mode change without reloading the media.
+        """
+        try:
+            if self.mpv.audio_params:
+                self.mpv.command('ao-reload')
+                self._last_audio_reload = time.monotonic()
+                self._audio_clock_sample = None
+                self._l.info('Reopened audio output after HDMI change or stalled audio clock')
+        except Exception as exc:
+            self._l.warning('Could not reopen audio output: {}'.format(exc))
+
+    def _check_audio_clock(self):
+        """
+        Recover an audio device whose clock stops while playback remains active.
+        """
+        now = time.monotonic()
+        if now < self._next_audio_clock_check:
+            return
+        self._next_audio_clock_check = now + 1.0
+        if now - self._last_audio_reload < 10.0:
+            return
+        sample = self._audio_clock_sample
+        try:
+            audio_pts = self.mpv.audio_pts
+            if audio_pts is None or self.mpv.pause or self.mpv.paused_for_cache:
+                self._audio_clock_sample = None
+                return
+            if sample and abs(audio_pts - sample[1]) < 0.001:
+                if now - sample[0] >= 3.0:
+                    self._l.warning('Audio clock stopped for %.1f seconds; reopening output',
+                                    now - sample[0])
+                    self._reload_audio_output()
+            else:
+                self._audio_clock_sample = (now, audio_pts)
+        except Exception:
+            self._audio_clock_sample = None
+
     def _current_video_fps(self):
         """Return MPV's best available estimate of the current video FPS."""
         try:
@@ -504,6 +547,7 @@ class StationPlayer:
         match_display_refresh_rate(
             self._current_video_fps(),
             logger=self._l,
+            on_mode_change=self._reload_audio_output,
         )
 
         if self.guide_process and self.guide_process.is_alive():
@@ -533,6 +577,7 @@ class StationPlayer:
         match_display_refresh_rate(
             self._current_video_fps(),
             logger=self._l,
+            on_mode_change=self._reload_audio_output,
         )
 
         if not self.preload_guide_overlay():
@@ -890,6 +935,7 @@ class StationPlayer:
 
             if path_available:
                 self._l.debug(f"%%%Attempting to play {file_path}")
+                self._audio_clock_sample = None
                 self.current_playing_file_path = file_path
 
                 if self.station_config:
@@ -971,7 +1017,10 @@ class StationPlayer:
                         )
 
                 if is_video_playback:
-                    enforce_display_resolution_policy(logger=self._l)
+                    enforce_display_resolution_policy(
+                        logger=self._l,
+                        on_mode_change=self._reload_audio_output,
+                    )
 
                 # Start live HLS inputs at the newest advertised segment.
                 # Reset the libavformat option for local/non-stream content.
@@ -1049,15 +1098,14 @@ class StationPlayer:
                                     media_type,
                                 )
                             return False
-                        if is_stream:
-                            response = self.input_check_fn()
-                            if (
-                                response
-                                and not self.handle_runtime_command_outcome(response)
-                                and not self.is_non_interrupting(response)
-                            ):
-                                self._pending_response = response
-                                return False
+                        response = self.input_check_fn()
+                        if (
+                            response
+                            and not self.handle_runtime_command_outcome(response)
+                            and not self.is_non_interrupting(response)
+                        ):
+                            self._pending_response = response
+                            return False
                         time.sleep(0.05)
                     except Exception as e:
                         if time.time() - start_time > timeout_seconds:
@@ -1103,6 +1151,7 @@ class StationPlayer:
                     match_display_refresh_rate(
                         self._current_video_fps(),
                         logger=self._l,
+                        on_mode_change=self._reload_audio_output,
                     )
 
                 # Show Now Playing overlay for audio feature files
@@ -1593,6 +1642,7 @@ class StationPlayer:
                     # this is our main event loop
                     keep_waiting = True
                     while keep_waiting:
+                        self._check_audio_clock()
                         if not self.skip_reception_check:
                             self.update_reception()
                         else:
