@@ -2,6 +2,8 @@ from enum import Enum
 import logging
 
 import multiprocessing
+import tempfile
+from queue import Empty
 import time
 import datetime
 import json
@@ -20,6 +22,8 @@ from fs42.display_refresh import (
     match_display_refresh_rate,
 )
 from fs42.guide_preview import apply_guide_preview, restore_guide_preview
+from fs42.playback_state import PlaybackState
+from fs42.metadata_worker import MetadataWorker
 
 # Try to import web_render_runner, but handle gracefully if PySide6 (with QtWebEngine)
 # isn't available -- web rendering is an optional feature.
@@ -197,6 +201,10 @@ class StationPlayer:
         else:
             self.mpv = mpv
 
+        self._playback_state = PlaybackState(self.mpv)
+        self._source_codec = None
+        self.mpv.bind_event('client-message', self._on_output_selected)
+
         self.station_config = station_config
         # self.playlist = self.read_json(runtime_filepath)
         self.input_check_fn = input_check_fn
@@ -208,6 +216,13 @@ class StationPlayer:
         self.web_queue = None
         self.guide_process = None
         self.guide_queue = None
+        self._guide_reply = None
+        self._preview_box = None
+        self._presentation_ready = False
+        self._transition_active = False
+        self._transition_token = 0
+        self._transition_ack = 0
+        self._frame_dir = tempfile.TemporaryDirectory(prefix='fs42-presentation-')
         self.guide_visible = False
         self._guide_video_layout = None
         self.parental_controls_process = None
@@ -221,9 +236,16 @@ class StationPlayer:
         self._next_audio_clock_check = 0.0
         self._last_audio_reload = 0.0
         self._pending_response = None
+        self._metadata_worker = MetadataWorker(self._nfo_overlay_data, self._l)
+        self._metadata_token = None
+        self._metadata_deadline = None
+
 
     def _create_mpv(self, prefer_dmabuf=True):
         """Create MPV using the fast Wayland path with a compatible fallback."""
+        wayland_available = os.path.exists(os.path.join(
+            os.environ.get('XDG_RUNTIME_DIR', '/run/user/{}'.format(getattr(os, 'getuid', lambda: 0)())),
+            os.environ.get('WAYLAND_DISPLAY', 'wayland-0')))
         common_options = {
             'start_mpv': self._start_mpv_managed,
             'ipc_socket': 'runtime/mpv.socket',
@@ -234,7 +256,10 @@ class StationPlayer:
             'keep_open': 'always',
             'keep_open_pause': False,
             'background': '#000000',
-            'script_opts': 'osc-idlescreen=no',
+            'gpu_context': 'wayland' if wayland_available else 'auto',
+            'script': os.path.join(os.path.dirname(__file__), 'playback.lua'),
+            'script_opts': 'osc-idlescreen=no,fs42-playback-direct={}'.format(
+                'yes' if wayland_available else 'no'),
             'hr_seek': 'no',
             'video_sync': 'display-resample',
             # Linear-TV playback never rewinds into a large back-cache. Keep
@@ -242,6 +267,7 @@ class StationPlayer:
             'demuxer_readahead_secs': 0,
             'demuxer_max_bytes': 32 * 1024 * 1024,
             'demuxer_max_back_bytes': 0,
+            'network_timeout': 8,
         }
 
         if not self._start_mpv_managed:
@@ -275,74 +301,120 @@ class StationPlayer:
             **common_options
         )
 
-    def _switch_mpv_output(self, prefer_dmabuf):
-        """Switch VO/decoder inside the existing managed MPV process."""
-        if not self._start_mpv_managed:
-            return False
-
-        if self._using_dmabuf_wayland == prefer_dmabuf:
-            return True
-
-        target_name = 'DMA-BUF Wayland' if prefer_dmabuf else 'GPU/copy-back'
-        self._l.info(
-            'Switching MPV output in place to {}'.format(target_name)
-        )
-
-        try:
-            # VO changes are reliable while MPV is idle. Keeping the same MPV
-            # process avoids channel-change startup cost and desktop flashes.
-            self.mpv.command('stop')
-            time.sleep(0.05)
-
-            if prefer_dmabuf:
-                self.mpv.vo = 'dmabuf-wayland'
-                self.mpv.hwdec = 'auto'
-            else:
-                self.mpv.vo = 'gpu'
-                self.mpv.hwdec = 'auto-copy'
-
-            self._using_dmabuf_wayland = prefer_dmabuf
-            return True
-        except Exception as exc:
-            self._l.error(
-                'Could not switch MPV output in place to {}: {}'.format(
-                    target_name,
-                    exc,
-                )
-            )
-            return False
-
-    @staticmethod
-    def _media_prefers_dmabuf(file_path, is_stream, media_type):
-        """Choose the fast VO only for formats that use Pi hardware decode.
-
-        The local AV1 library is stored primarily as MKV/WebM. Those files
-        cannot use the Pi 4 direct DMA-BUF decoder, so routing them directly to
-        GPU/copy-back avoids a guaranteed failed load and fallback cycle.
+    def _poll_metadata_overlay(self):
         """
-        if media_type == 'audio':
-            return False
+        Display completed metadata only if its source is still active
+        """
+        result = self._metadata_worker.poll()
+        if result is None:
+            return
+        token, data = result
+        if token != self._metadata_token or data is None:
+            return
+        duration = (self._metadata_deadline - time.monotonic()
+                    if self._metadata_deadline is not None else None)
+        if duration is not None and duration <= 0:
+            return
+        try:
+            from fs42.nfo_agent import NFOAgent
+            self.now_playing_process = NFOAgent.show_overlay(data, play_duration=duration)
+        except Exception as exc:
+            self._l.debug('Could not show optional metadata: {}'.format(exc))
 
-        if is_stream:
-            return True
+    def _drain_guide_events(self):
+        """
+        Consume renderer acknowledgements and output changes without blocking input
+        """
+        if self._guide_reply is None:
+            return
+        while True:
+            try:
+                message = self._guide_reply.get_nowait()
+            except Empty:
+                break
+            kind = message.get('type')
+            if kind == 'renderer_ready':
+                self._presentation_ready = True
+            elif kind == 'preview_box':
+                box = message['box']
+                if box != self._preview_box:
+                    self._preview_box = box
+                    self._l.info('Guide content bounds: {}'.format(box))
+                    if self.guide_visible and self._guide_video_layout is not None:
+                        apply_guide_preview(self.mpv, logger=self._l, box=box)
+            elif kind == 'frame_ready':
+                self._transition_ack = message['token']
+            elif kind == 'frame_failed':
+                self._transition_ack = message['token']
+                self._transition_active = False
+            elif kind == 'audio_reload':
+                self._reload_audio_output()
 
-        extension = os.path.splitext(str(file_path))[1].lower()
+    def _hold_previous_frame(self):
+        """
+        Retain the decoded picture above MPV before stopping the old decoder
+        """
+        self._drain_guide_events()
+        if self._transition_active or not self._presentation_ready or self.guide_queue is None:
+            return
+        try:
+            if not self.mpv.video_out_params:
+                return
+            self._transition_token += 1
+            path = os.path.join(self._frame_dir.name, 'frame-{}.jpg'.format(self._transition_token % 2))
+            self.mpv.command('screenshot-to-file', path, 'video')
+            self._transition_active = True
+            message = {'type': 'hold_frame', 'path': path, 'token': self._transition_token}
+            if self.guide_visible:
+                message['preview_box'] = self._preview_box
+            self.guide_queue.put(message)
+            deadline = time.monotonic() + 0.25
+            while self._transition_ack != self._transition_token and time.monotonic() < deadline:
+                self._drain_guide_events()
+                time.sleep(0.005)
+        except Exception as exc:
+            self._l.debug('Could not retain previous frame: {}'.format(exc))
 
-        if extension in {'.mkv', '.webm'}:
-            return False
+    def _release_transition(self):
+        """
+        Reveal the new native video after the first playback cycle is ready
+        """
+        if self._transition_active and self.guide_queue is not None:
+            self.guide_queue.put({'type': 'release_frame'})
+        self._transition_active = False
 
-        if media_type is not None:
-            return media_type == 'video'
+    def _on_output_selected(self, data):
+        """
+        Record the codec-aware output chosen by MPV before decoder creation
+        """
+        args = data.get('args', [])
+        if len(args) == 3 and args[0] == 'fs42-output':
+            self._using_dmabuf_wayland = args[1] == 'dmabuf-wayland'
+            self._source_codec = args[2]
 
-        return extension in {
-            '.m2ts',
-            '.m4v',
-            '.mp4',
-            '.ts',
-        }
+    def _refresh_output_state(self):
+        """
+        Synchronize recovery decisions with the actual MPV output
+        """
+        outputs = self.mpv.vo or []
+        self._using_dmabuf_wayland = any(
+            output.get('name') == 'dmabuf-wayland' for output in outputs)
+
+    def _prepare_playback_load(self):
+        """
+        Enter idle before clearing readiness for the next file
+        """
+        self._hold_previous_frame()
+        self.mpv.command('stop')
+        deadline = time.monotonic() + 0.5
+        while not self.mpv.idle_active and time.monotonic() < deadline:
+            time.sleep(0.005)
+        self._playback_state.begin()
+        self.mpv.command('script-message-to', 'playback', 'force-fallback',
+                         'yes' if self._fallback_retry_active else 'no')
 
     def _switch_to_mpv_fallback(self):
-        """Restart managed MPV on the compatible GPU/copy-back path."""
+        """Request compatible decoding for the next controlled load."""
         if not self._start_mpv_managed or not self._using_dmabuf_wayland:
             return False
 
@@ -350,7 +422,8 @@ class StationPlayer:
             'DMA-BUF playback failed; switching in place to GPU/copy-back fallback'
         )
 
-        return self._switch_mpv_output(prefer_dmabuf=False)
+        # The preloaded hook applies GPU/copy-back on the next controlled load.
+        return True
 
     def _retry_playback_with_fallback(
         self,
@@ -470,6 +543,7 @@ class StationPlayer:
         self._guide_video_layout = apply_guide_preview(
             self.mpv,
             logger=self._l,
+            box=self._preview_box,
         )
 
     def _restore_guide_video_layout(self):
@@ -562,6 +636,8 @@ class StationPlayer:
 
         ctx = multiprocessing.get_context("spawn")
         self.guide_queue = ctx.Queue()
+        self._guide_reply = ctx.Queue()
+        guide_conf['reply_queue'] = self._guide_reply
         self.guide_process = ctx.Process(
             target=web_render_runner,
             args=(guide_conf, self.guide_queue),
@@ -583,6 +659,8 @@ class StationPlayer:
         if not self.preload_guide_overlay():
             self._l.warning("Interactive web guide is not configured")
             return False
+
+        self._drain_guide_events()
 
         # Reuse the exact MPV instance that is already playing the channel.
         # Only its presentation changes; playback/audio continue uninterrupted.
@@ -877,6 +955,7 @@ class StationPlayer:
 
     def shutdown(self):
         self.current_playing_file_path = None
+        self._metadata_worker.stop()
         # Terminate any running web process
         if self.web_process and self.web_process.is_alive():
             self._l.info("Terminating web process")
@@ -905,6 +984,7 @@ class StationPlayer:
         self._close_now_playing()
 
         self.mpv.terminate()
+        self._frame_dir.cleanup()
 
     def update_filters(self):
         self.mpv.vf = self.reception.filter()
@@ -936,6 +1016,7 @@ class StationPlayer:
             if path_available:
                 self._l.debug(f"%%%Attempting to play {file_path}")
                 self._audio_clock_sample = None
+                self._metadata_token = None
                 self.current_playing_file_path = file_path
 
                 if self.station_config:
@@ -984,11 +1065,6 @@ class StationPlayer:
                     self.show_web(conf, blocking=False)
                     return True
 
-                prefer_dmabuf = self._media_prefers_dmabuf(
-                    file_path,
-                    is_stream,
-                    media_type,
-                )
                 extension = os.path.splitext(str(file_path))[1].lower()
                 is_video_playback = (
                     is_stream
@@ -1007,14 +1083,9 @@ class StationPlayer:
                     }
                 )
 
-                # A fallback retry must remain on the compatible GPU path for
-                # this playback attempt. The next video gets another chance to
-                # use the fast DMA-BUF path.
-                if not self._fallback_retry_active:
-                    if not self._switch_mpv_output(prefer_dmabuf):
-                        self._l.warning(
-                            'Could not select preferred MPV output; continuing with current output'
-                        )
+                # Flush decoder buffers before opening a different file or codec.
+                # The transition image stays visible while MPV is idle.
+                self._prepare_playback_load()
 
                 if is_video_playback:
                     enforce_display_resolution_policy(
@@ -1022,13 +1093,17 @@ class StationPlayer:
                         on_mode_change=self._reload_audio_output,
                     )
 
-                # Start live HLS inputs at the newest advertised segment.
-                # Reset the libavformat option for local/non-stream content.
+                # Stay behind the newest HLS segment and fill ahead in the background.
+                # Local files retain small reads and immediate network seeks.
                 self.mpv.command(
                     'set_property',
                     'options/demuxer-lavf-o',
-                    {'live_start_index': '-1'} if is_stream else {},
+                    {'live_start_index': '-3'} if is_stream else {},
                 )
+
+                self.mpv.command('set_property', 'options/demuxer-readahead-secs', 10 if is_stream else 0)
+                self.mpv.command('set_property', 'options/cache-pause-wait', 3 if is_stream else 1)
+                self.mpv.command('set_property', 'options/cache-pause-initial', bool(is_stream))
 
                 if "panscan" in self.station_config:
                     self.mpv.panscan = self.station_config["panscan"]
@@ -1069,6 +1144,7 @@ class StationPlayer:
                     "video_seek_timeout",
                     10,
                 )
+                buffered_start_timeout = timeout_seconds
                 if is_stream:
                     timeout_seconds = min(
                         timeout_seconds,
@@ -1077,17 +1153,20 @@ class StationPlayer:
                             5,
                         ),
                     )
-                start_time = time.time()
+                start_time = time.monotonic()
 
                 while True:
                     try:
-                        if self.mpv.time_pos is not None:
+                        self._drain_guide_events()
+                        if self._playback_state.ready and (not is_stream or not self.mpv.paused_for_cache):
                             break
-                        if time.time() - start_time > timeout_seconds:
+                        startup_limit = buffered_start_timeout if is_stream and self._playback_state.loaded else timeout_seconds
+                        if time.monotonic() - start_time > startup_limit:
                             self._l.error(
                                 'Timeout waiting for playback to start on {}'.format(file_path)
                             )
-                            if self._using_dmabuf_wayland and not is_stream:
+                            self._refresh_output_state()
+                            if self._using_dmabuf_wayland and (not is_stream or self._playback_state.loaded):
                                 return self._retry_playback_with_fallback(
                                     file_path,
                                     file_duration,
@@ -1108,9 +1187,11 @@ class StationPlayer:
                             return False
                         time.sleep(0.05)
                     except Exception as e:
-                        if time.time() - start_time > timeout_seconds:
+                        startup_limit = buffered_start_timeout if is_stream and self._playback_state.loaded else timeout_seconds
+                        if time.monotonic() - start_time > startup_limit:
                             self._l.error('Error waiting for playback: {}'.format(e))
-                            if self._using_dmabuf_wayland and not is_stream:
+                            self._refresh_output_state()
+                            if self._using_dmabuf_wayland and (not is_stream or self._playback_state.loaded):
                                 return self._retry_playback_with_fallback(
                                     file_path,
                                     file_duration,
@@ -1123,6 +1204,7 @@ class StationPlayer:
                             return False
                         time.sleep(0.05)
 
+                self._refresh_output_state()
                 if self._using_dmabuf_wayland:
                     try:
                         hwdec_current = self.mpv.hwdec_current
@@ -1154,24 +1236,21 @@ class StationPlayer:
                         on_mode_change=self._reload_audio_output,
                     )
 
+                if self.guide_queue is not None:
+                    self.guide_queue.put({'type': 'source_fps', 'fps': self._current_video_fps()})
+                self._release_transition()
+                self._l.info('Playback ready in {:.3f}s: codec {}, direct output {}'.format(
+                    time.monotonic() - start_time, self._source_codec, self._using_dmabuf_wayland))
+
                 # Show Now Playing overlay for audio feature files
                 self._l.info(f"Media type: {media_type}, Content type: {content_type}")
                 if media_type == 'audio' and content_type == 'feature':
                     self._show_now_playing(file_path)
                 elif media_type == 'video':
-                    # Always close any existing overlay when a new video starts,
-                    # then spawn a new one only if this video has an NFO sidecar.
                     self._close_now_playing()
-                    try:
-                        nfo_data = self._nfo_overlay_data(file_path)
-                        if nfo_data:
-                            play_duration = None
-                            if file_duration is not None:
-                                play_duration = file_duration - (offset_seconds or 0)
-                            from fs42.nfo_agent import NFOAgent
-                            self.now_playing_process = NFOAgent.show_overlay(nfo_data, play_duration=play_duration)
-                    except Exception as e:
-                        self._l.warning(f"Could not start NFO overlay: {e}")
+                    self._metadata_deadline = (time.monotonic() + file_duration - (offset_seconds or 0)
+                                               if file_duration else None)
+                    self._metadata_token = self._metadata_worker.submit(file_path)
 
                 return True
             else:
@@ -1197,6 +1276,10 @@ class StationPlayer:
                     media_type,
                 )
             return False
+
+        finally:
+            if not self._pending_response and not self._fallback_retry_active:
+                self._release_transition()
 
     def _seek_with_verify(self, file_path, offset_seconds, timeout_seconds,
                           tolerance=1.0, verify_window=2.0, retry_delay=0.2):
@@ -1241,26 +1324,25 @@ class StationPlayer:
         )
 
     def play_and_wait(self, file_path):
-        self._l.info(f"Play and wait on file {file_path}")
+        """
+        Play an on-demand file through the same retained-frame and decoder path
+        """
         self._close_now_playing()
-        self.mpv.vf = ""
-        self.mpv.af = ""
-        self.mpv.command("playlist-clear")
-        self.mpv.command("loadfile", file_path, "replace")
-        self.mpv.loop_playlist = "inf"
-        self.current_playing_file_path = file_path
-
-        # show NFO overlay if the file has overlay-eligible cached metadata
-        try:
-            nfo_data = self._nfo_overlay_data(file_path)
-            if nfo_data:
-                from fs42.nfo_agent import NFOAgent
-                self.now_playing_process = NFOAgent.show_overlay(nfo_data)
-        except Exception as e:
-            self._l.warning(f"Could not start NFO overlay: {e}")
+        self.mpv.vf = ''
+        self.mpv.af = ''
+        if not self.play_file(file_path, offset_seconds=0, media_type='video'):
+            if self._pending_response:
+                response = self._pending_response
+                self._pending_response = None
+                return response
+            return PlayerOutcome(PlayerState.FAILED)
+        self.mpv.loop_playlist = 'inf'
 
         # this will keep going until channel change or other interrupt
         while True:
+            self._poll_metadata_overlay()
+            self._drain_guide_events()
+            self._check_audio_clock()
             time.sleep(0.05)
             response = self.input_check_fn()
             if response:
@@ -1614,6 +1696,7 @@ class StationPlayer:
                     return response
                 stream_is_down = False
                 last_osd_refresh = 0.0
+                next_stream_retry = time.monotonic() + 10.0
                 if not worked:
                     if is_stream:
                         self._l.warning(f"Stream unavailable, activating fallback: {entry.path}")
@@ -1642,6 +1725,8 @@ class StationPlayer:
                     # this is our main event loop
                     keep_waiting = True
                     while keep_waiting:
+                        self._poll_metadata_overlay()
+                        self._drain_guide_events()
                         self._check_audio_clock()
                         if not self.skip_reception_check:
                             self.update_reception()
@@ -1651,6 +1736,31 @@ class StationPlayer:
 
                         # Calculate time remaining based on wall clock
                         time_remaining = (target_end_time - datetime.datetime.now()).total_seconds()
+
+                        # Recover a stalled decoder or connection without replacing MPV.
+                        if worked and media_type == 'video' and time_remaining > 3.0:
+                            action = self._playback_state.check_health(self.mpv, is_stream=is_stream)
+                            if action:
+                                self._l.warning('Recovering stalled playback: {} ({})'.format(entry.path, action))
+                                if is_stream:
+                                    worked = self.play_file(entry.path, file_duration=entry.duration,
+                                                            offset_seconds=0, is_stream=True, title=title,
+                                                            content_type=content_type, media_type=media_type)
+                                else:
+                                    elapsed = (entry.duration - initial_skip) - time_remaining
+                                    worked = self._retry_playback_with_fallback(
+                                        entry.path, entry.duration, total_skip + max(0.0, elapsed),
+                                        False, title, content_type, media_type)
+                                if self._pending_response:
+                                    response = self._pending_response
+                                    self._pending_response = None
+                                    return response
+                                if not worked:
+                                    if not is_stream:
+                                        return PlayerOutcome(PlayerState.FAILED)
+                                    stream_is_down = True
+                                    next_stream_retry = time.monotonic() + 10.0
+                                    self._show_stream_down()
 
                         # Determine clipping shortly before it matters. At this
                         # point MPV has been playing long enough for duration to
@@ -1715,6 +1825,23 @@ class StationPlayer:
                                 except Exception:
                                     pass
                                 last_osd_refresh = _now
+
+                        # Retry unavailable live sources while continuing to service input.
+                        if (is_stream and stream_is_down and time_remaining > 3.0
+                                and time.monotonic() >= next_stream_retry):
+                            next_stream_retry = time.monotonic() + 10.0
+                            worked = self.play_file(entry.path, file_duration=entry.duration, offset_seconds=0,
+                                                    is_stream=True, title=title, content_type=content_type,
+                                                    media_type=media_type)
+                            if self._pending_response:
+                                response = self._pending_response
+                                self._pending_response = None
+                                return response
+                            if worked:
+                                stream_is_down = False
+                                self.mpv.command('show-text', '', 1)
+                            else:
+                                self._show_stream_down()
 
                         if time_remaining <= 0:
                             if self.web_process:

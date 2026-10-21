@@ -133,65 +133,55 @@ def _fit_inside(box, aspect):
     }
 
 
-def _trigger_labwc_preview(key_name, logger=None):
+def _trigger_labwc_geometry(x, y, logger=None):
+    """
+    Position a client-sized window with bounded binary compositor moves
+
+    :param x: (int) absolute horizontal position on the active output
+    :param y: (int) absolute vertical position on the active output
+    :return:   (bool) whether the compositor command completed
+    """
     wtype = shutil.which('wtype')
-    if not wtype:
-        if logger:
-            logger.warning(
-                'wtype is not installed; cannot resize the MPV Wayland window '
-                'for the guide preview'
-            )
+    if not wtype or not (0 <= x < 4096 and 0 <= y < 4096):
         return False
-
-    command = [
-        wtype,
-        '-M', 'logo',
-        '-k', key_name,
-        '-m', 'logo',
-    ]
-
+    command = [wtype, '-M', 'logo', '-k', 'F20']
+    for value, modifier in [(x, 'ctrl'), (y, 'shift')]:
+        command.extend(['-M', modifier])
+        for bit in range(12):
+            if value & (1 << bit):
+                command.extend(['-k', 'F{}'.format(bit + 1)])
+        command.extend(['-m', modifier])
+    command.extend(['-m', 'logo'])
     try:
-        result = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            timeout=2,
-            env=_wayland_environment(),
-            check=False,
-        )
+        result = subprocess.run(command, capture_output=True, text=True, timeout=2,
+                                env=_wayland_environment(), check=False)
+        if result.returncode == 0:
+            return True
+        if logger:
+            logger.warning('Compositor geometry command failed: {}'.format(result.stderr.strip()))
     except (OSError, subprocess.SubprocessError) as exc:
         if logger:
-            logger.warning(
-                'Could not trigger labwc guide preview action: {}'.format(exc)
-            )
-        return False
-
-    if result.returncode != 0:
-        if logger:
-            logger.warning(
-                'labwc guide preview action failed: {}'.format(
-                    result.stderr.strip()
-                )
-            )
-        return False
-
-    return True
+            logger.warning('Could not position guide preview: {}'.format(exc))
+    return False
 
 
-def apply_guide_preview(mpv, logger=None):
+def apply_guide_preview(mpv, logger=None, box=None):
     """Resize and center the existing MPV Wayland surface in the guide."""
     selection = _query_display_selection(logger=logger)
     if selection is None:
         return None
 
-    description = selection.get('description', '')
-    is_crt = CRT_DISPLAY_IDENTIFIER in description
-    display_type = 'crt' if is_crt else 'normal'
-    box = CRT_PREVIEW if is_crt else NORMAL_PREVIEW
-
+    width, height, _refresh = selection['current']
+    valid_box = (box and box.get('output_width') == width and box.get('output_height') == height
+                 and box.get('width', 0) > 0 and box.get('height', 0) > 0)
+    if not valid_box:
+        is_crt = CRT_DISPLAY_IDENTIFIER in selection.get('description', '')
+        default_box = CRT_PREVIEW if is_crt else NORMAL_PREVIEW
+        reference = (640, 480) if is_crt else (1920, 1080)
+        box = {key: int(round(value * (float(width) / reference[0] if key in ('x', 'width')
+                                      else float(height) / reference[1])))
+               for key, value in default_box.items()}
     aspect = _video_aspect(mpv)
-    profile_name, profile_aspect = _closest_aspect_profile(aspect)
-    key_name = PREVIEW_KEYS[(display_type, profile_name)]
     geometry = _fit_inside(box, aspect)
 
     try:
@@ -203,10 +193,7 @@ def apply_guide_preview(mpv, logger=None):
             'video_margin_ratio_top': mpv.video_margin_ratio_top,
             'video_margin_ratio_bottom': mpv.video_margin_ratio_bottom,
             'preview_geometry': {
-                'left_pct': geometry['bar_x_percent'],
-                'right_pct': geometry['bar_x_percent'],
-                'top_pct': geometry['bar_y_percent'],
-                'bottom_pct': geometry['bar_y_percent'],
+                'left_pct': 0.0, 'right_pct': 0.0, 'top_pct': 0.0, 'bottom_pct': 0.0,
             },
         }
 
@@ -222,9 +209,9 @@ def apply_guide_preview(mpv, logger=None):
             geometry['height'],
         )
         mpv.fullscreen = False
-        time.sleep(0.05)
+        time.sleep(0.03)
 
-        if not _trigger_labwc_preview(key_name, logger=logger):
+        if not _trigger_labwc_geometry(geometry['x'], geometry['y'], logger=logger):
             mpv.geometry = state['geometry']
             mpv.video_margin_ratio_left = state['video_margin_ratio_left']
             mpv.video_margin_ratio_right = state['video_margin_ratio_right']
@@ -234,19 +221,8 @@ def apply_guide_preview(mpv, logger=None):
             return None
 
         if logger:
-            logger.info(
-                'Placed MPV window in {} guide preview: source aspect {:.3f}, '
-                'profile {} ({:.3f}), target {},{} {}x{}'.format(
-                    'CRT' if is_crt else '1080p',
-                    aspect,
-                    profile_name,
-                    profile_aspect,
-                    geometry['x'],
-                    geometry['y'],
-                    geometry['width'],
-                    geometry['height'],
-                )
-            )
+            logger.info('Placed native preview: aspect {:.5f}, {},{} {}x{}'.format(
+                aspect, geometry['x'], geometry['y'], geometry['width'], geometry['height']))
 
         return state
     except Exception as exc:
