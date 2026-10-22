@@ -117,6 +117,27 @@ class FieldPlayer(object):
             self._display_client.close()
             self._display_client = None
 
+    def _stop_playback(self):
+        """
+        Release the guide, metadata worker, and persistent MPV client before stopping other services
+        """
+        if self._player is None:
+            return
+        player = self._player
+        self._player = None
+        handlers = {signum: signal.signal(signum, signal.SIG_IGN) for signum in (signal.SIGINT, signal.SIGTERM)}
+        try:
+            try:
+                player._shutdown_guide_overlay()
+            finally:
+                try:
+                    player.shutdown()
+                finally:
+                    update_status_socket('stopped', '', -1)
+        finally:
+            for signum, handler in handlers.items():
+                signal.signal(signum, handler)
+
     def _run_ticker(self, message, header, style, iterations):
         """
         Start the optional ticker overlay
@@ -135,9 +156,14 @@ class FieldPlayer(object):
             # Run the station playback loop
             self._play_stations()
         finally:
-            # Release the display service and child server process
-            self._stop_display()
-            self._stop_server()
+            # Release playback even if the input or schedule loop failed
+            try:
+                self._stop_playback()
+            finally:
+                try:
+                    self._stop_display()
+                finally:
+                    self._stop_server()
 
     def _check_input(self):
         """
@@ -263,16 +289,8 @@ class FieldPlayer(object):
         """
         Stop playback and the API process
         """
-        self._logger.critical('Received sig-int signal, attempting to exit gracefully...')
-        self._player._shutdown_guide_overlay()
-        self._player.shutdown()
-        update_status_socket('stopped', '', -1)
-        if self._shutdown_queue is not None:
-            self._shutdown_queue.put('shutdown')
-        if self._api_proc is not None:
-            self._api_proc.join(timeout=5)
-        self._logger.info('Shutdown completed as expected - exiting application')
-        exit(0)
+        self._logger.critical('Received shutdown signal, attempting to exit gracefully')
+        raise SystemExit(0)
 
     def _play_current_station(self):
         """

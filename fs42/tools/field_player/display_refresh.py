@@ -21,7 +21,7 @@ def _wayland_environment():
     Copy the process environment and supply missing Wayland runtime and display defaults
     """
     env = os.environ.copy()
-    env.setdefault('XDG_RUNTIME_DIR', '/run/user/{}'.format(os.getuid()))
+    env.setdefault('XDG_RUNTIME_DIR', '/run/user/{}'.format(getattr(os, 'getuid', lambda: 0)()))
     env.setdefault('WAYLAND_DISPLAY', 'wayland-0')
     return env
 
@@ -214,14 +214,17 @@ def select_display_mode(wlr_output, fps=None):
     return None
 
 
-def enforce_display_resolution_policy(logger=None):
+def enforce_display_resolution_policy(logger=None, on_mode_change=None, fps=None):
     """
-    Enforce only the display resolution policy, preserving refresh cadence
+    Repair invalid display resolution while preserving the cadence of an already valid mode
 
-    This is used before loading a new video. It repairs HDMI/compositor
-    fallbacks to native 4K without unnecessarily changing a valid 1080p/CRT
-    refresh rate. The normal refresh matcher can then select cadence once MPV
-    knows the new video's FPS.
+    Use source cadence only when selecting a repaired resolution. Notify audio recovery
+    after an actual successful mode change, and leave valid modes untouched.
+
+    :param logger:         (Logger) optional destination for display diagnostics
+    :param on_mode_change: (callable) optional callback after a successful mode change
+    :param fps:            (float) source cadence used when repairing an invalid resolution
+    :return:               (bool) whether a valid output mode is available after the check
     """
     try:
         result = subprocess.run(
@@ -274,10 +277,8 @@ def enforce_display_resolution_policy(logger=None):
 
         # Keep the current refresh as closely as the target resolution allows.
         # This avoids 50 -> 60 -> 50 churn during an ordinary channel change.
-        target_refresh = min(
-            candidates,
-            key=lambda refresh: abs(refresh - current_refresh),
-        )
+        target_refresh = (_best_refresh(fps, candidates) if fps and fps > 0 else min(
+            candidates, key=lambda refresh: abs(refresh - current_refresh)))
 
         mode = '{}x{}@{:.6f}Hz'.format(
             target_width,
@@ -328,14 +329,21 @@ def enforce_display_resolution_policy(logger=None):
                 ))
             return False
 
+        if on_mode_change is not None:
+            on_mode_change()
         return True
 
     return False
 
 
-def match_display_refresh_rate(fps=None, logger=None):
+def match_display_refresh_rate(fps=None, logger=None, on_mode_change=None):
     """
-    Enforce display resolution policy and match refresh to source FPS
+    Select a display mode matching source cadence and notify audio recovery after changing it
+
+    :param fps:            (float) source frame rate, or None to retain the preferred refresh
+    :param logger:         (Logger) optional destination for display diagnostics
+    :param on_mode_change: (callable) optional callback after a successful mode change
+    :return:               (bool) whether a suitable display mode is active after the check
     """
     try:
         result = subprocess.run(
@@ -427,4 +435,6 @@ def match_display_refresh_rate(fps=None, logger=None):
             ))
         return False
 
+    if on_mode_change is not None:
+        on_mode_change()
     return True

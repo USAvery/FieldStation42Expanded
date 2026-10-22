@@ -6,6 +6,7 @@
 Render a station URL in a Qt WebEngine window, retry failed loads, and respond to queue messages
 controlling window visibility and shutdown.
 """
+import json
 import signal
 
 from PySide6.QtCore import Qt
@@ -20,6 +21,9 @@ from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWebEngineCore import QWebEngineSettings
 
 from fs42.core import logger as project_logger
+
+from fs42.tools.web_channel.display_guard import DisplayGuard
+from fs42.tools.web_channel.transition import TransitionWindow
 
 _logger = project_logger.setup('fs42.tools.web_channel.web_render')
 
@@ -168,7 +172,28 @@ class WebRenderApp(QApplication):
         self.window_x = None
         self.window_y = None
 
+        self.backdrop = None
+        if user_conf.get('playback_backdrop', False):
+            # A separate mapped surface survives MPV VO replacement. labwc
+            # places it below playback so an unavailable video reveals black.
+            self.backdrop = QMainWindow()
+            self.backdrop.setWindowTitle('FieldStation42 Playback Backdrop')
+            self.backdrop.setWindowFlags(Qt.FramelessWindowHint)
+            self.backdrop.setStyleSheet('background-color: black;')
+            self.backdrop.setCursor(Qt.BlankCursor)
+            self.backdrop.showFullScreen()
+
         self.window = WebRender(transparent=bool(user_conf.get('transparent', False)))
+        self.reply_queue = user_conf.get('reply_queue')
+        self.transition = TransitionWindow() if self.backdrop is not None else None
+        self.display_guard = DisplayGuard(self, self._notify_player) if self.backdrop is not None else None
+        if self.backdrop is not None:
+            self.window.setWindowTitle('FieldStation42 Guide Overlay')
+            self.window.resize(self.primaryScreen().geometry().size())
+            self.window.browser.loadFinished.connect(self._on_guide_loaded)
+            self.primaryScreen().geometryChanged.connect(self._on_screen_geometry)
+            self.screenAdded.connect(self._on_preview_screen_added)
+
 
         # Set window properties
         if self.windowed:
@@ -195,6 +220,7 @@ class WebRenderApp(QApplication):
         self.timer = QTimer()
         self.timer.timeout.connect(self.tick)
         self.timer.start(50)  # Keep guide overlay commands responsive
+        QTimer.singleShot(0, lambda: self._notify_player({'type': 'renderer_ready'}))
 
         # Set up page refresh timer if configured
         if user_conf.get('refresh_interval', 0) > 0:
@@ -215,16 +241,25 @@ class WebRenderApp(QApplication):
 
         self.window.raise_()
         self.window.activateWindow()
+        if self.backdrop is not None:
+            self._preview_retries = 0
+            QTimer.singleShot(50, self._query_preview_box)
 
         # Let cached web UIs update themselves after they are already visible.
-        self.window.browser.page().runJavaScript("window.dispatchEvent(new CustomEvent('fs42-guide-show'));")
+        self.window.browser.page().runJavaScript(
+            "window.dispatchEvent(new CustomEvent('fs42-guide-show'));"
+        )
 
     def hide_window(self):
         """
         Hide the browser window and notify page scripts that the guide is hidden
         """
         self.window.hide()
-        self.window.browser.page().runJavaScript("window.dispatchEvent(new CustomEvent('fs42-guide-hide'));")
+        if self.transition is not None:
+            self.transition.set_preview(None)
+        self.window.browser.page().runJavaScript(
+            "window.dispatchEvent(new CustomEvent('fs42-guide-hide'));"
+        )
 
     def shutdown_window(self):
         """
@@ -234,6 +269,10 @@ class WebRenderApp(QApplication):
         if hasattr(self, 'refresh_timer'):
             self.refresh_timer.stop()
         self.window.close()
+        if self.transition is not None:
+            self.transition.close()
+        if self.backdrop is not None:
+            self.backdrop.close()
         self.quit()
 
     def tick(self):
@@ -242,6 +281,8 @@ class WebRenderApp(QApplication):
         """
         if self.queue and self.queue.qsize() > 0:
             msg = self.queue.get_nowait()
+            if isinstance(msg, dict) and self._handle_presentation_message(msg):
+                return
             _logger.info('WebRender received message: {}'.format(msg))
             # Persistent renderers stay alive between open/close operations so
             # QtWebEngine/Chromium only pays its startup cost once.
@@ -297,6 +338,103 @@ class WebRenderApp(QApplication):
                     key_name, key_name)
                 self.window.browser.page().runJavaScript(js)
                 return
+
+
+    def _notify_player(self, message):
+        """
+        Send presentation acknowledgements without blocking the Qt event loop
+        """
+        if self.reply_queue is not None:
+            self.reply_queue.put(message)
+
+    def _on_guide_loaded(self, success):
+        """
+        Cache the actual transparent panel bounds after the guide loads
+        """
+        if success:
+            self._preview_retries = 0
+            self._query_preview_box()
+
+    def _on_preview_screen_added(self, screen):
+        """
+        Reconnect preview layout after an HDMI output is replaced
+        """
+        screen.geometryChanged.connect(self._on_screen_geometry)
+        self._on_screen_geometry(screen.geometry())
+
+    def _on_screen_geometry(self, geometry):
+        """
+        Reflow a hidden guide after HDMI resolution changes
+        """
+        if not self.window.isVisible():
+            self.window.resize(min(geometry.width(), 1920), min(geometry.height(), 1080))
+        QTimer.singleShot(50, self._query_preview_box)
+
+    def _query_preview_box(self):
+        """
+        Read panel content coordinates from the rendered guide rather than fixed ratios
+        """
+        self._preview_retries = getattr(self, '_preview_retries', 0) + 1
+        script = """
+        (function() {
+            const panel = document.getElementById('video-panel');
+            if (!panel) return null;
+            const rect = panel.getBoundingClientRect();
+            const style = getComputedStyle(panel);
+            const left = parseFloat(style.borderLeftWidth) || 0;
+            const top = parseFloat(style.borderTopWidth) || 0;
+            const right = parseFloat(style.borderRightWidth) || 0;
+            const bottom = parseFloat(style.borderBottomWidth) || 0;
+            return JSON.stringify({x:Math.round(rect.left + left), y:Math.round(rect.top + top),
+                    width:Math.round(rect.width - left - right),
+                    height:Math.round(rect.height - top - bottom),
+                    output_width:window.innerWidth, output_height:window.innerHeight});
+        })();
+        """
+        self.window.browser.page().runJavaScript(script, 0, self._on_preview_box)
+
+    def _on_preview_box(self, box):
+        """
+        Publish valid panel geometry to the player and retained-frame surface
+        """
+        if isinstance(box, str):
+            try:
+                box = json.loads(box)
+            except (ValueError, TypeError):
+                box = None
+        if not isinstance(box, dict) or box.get('width', 0) <= 0 or box.get('height', 0) <= 0:
+            if self._preview_retries < 40:
+                QTimer.singleShot(100, self._query_preview_box)
+            return
+        self._notify_player({'type': 'preview_box', 'box': box})
+        if self.transition is not None and self.window.isVisible():
+            self.transition.set_preview(box)
+
+    def _handle_presentation_message(self, msg):
+        """
+        Process native frame and display-control messages before browser commands
+        """
+        if not isinstance(msg, dict):
+            return False
+        kind = msg.get('type')
+        if kind == 'hold_frame' and self.transition is not None:
+            token = msg['token']
+            callback = lambda: self._notify_player({'type': 'frame_ready', 'token': token})
+            if not self.transition.show_frame(msg['path'], callback):
+                self._notify_player({'type': 'frame_failed', 'token': token})
+            elif msg.get('preview_box'):
+                self.transition.set_preview(msg['preview_box'])
+            return True
+        if kind == 'release_frame' and self.transition is not None:
+            self.transition.hide()
+            return True
+        if kind == 'source_fps' and self.display_guard is not None:
+            self.display_guard.set_fps(msg.get('fps'))
+            return True
+        if kind == 'query_geometry':
+            self._query_preview_box()
+            return True
+        return False
 
 
 def web_render_runner(user_conf, queue):
