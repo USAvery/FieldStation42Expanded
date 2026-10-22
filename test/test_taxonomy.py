@@ -33,9 +33,9 @@ def test_source_root_has_only_responsibility_packages():
 @pytest.mark.parametrize('module', [
     'fs42.tools.osd.main',
     'fs42.tools.osd.display.logo_display',
-    'fs42.tools.overlay.now_playing',
-    'fs42.tools.overlay.parental_controls',
-    'fs42.tools.overlay.ticker',
+    'fs42.tools.overlay.display.now_playing_display',
+    'fs42.tools.overlay.display.parental_controls_display',
+    'fs42.tools.overlay.display.ticker_display',
     'fs42.tools.diagnostics.diagnostic_tk',
     'fs42.tools.web_channel.web_render',
     'fs42.tools.cable_box.main',

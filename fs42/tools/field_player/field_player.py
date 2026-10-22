@@ -101,7 +101,7 @@ class FieldPlayer(object):
         """
         Start the optional ticker overlay
         """
-        from fs42.tools.overlay.ticker import run_ticker
+        from fs42.tools.overlay import run_ticker
         run_ticker(message, header, style, iterations)
 
     def run(self):

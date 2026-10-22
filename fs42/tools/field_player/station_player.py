@@ -671,7 +671,7 @@ class StationPlayer(object):
         self._close_parental_controls_overlay()
 
         try:
-            from fs42.tools.overlay.parental_controls import run_parental_controls
+            from fs42.tools.overlay import run_parental_controls
 
             self.parental_controls_queue = multiprocessing.Queue()
             self.parental_controls_process = run_parental_controls(
@@ -898,7 +898,7 @@ class StationPlayer(object):
 
         # Start new overlay
         try:
-            from fs42.tools.overlay.now_playing import run_now_playing
+            from fs42.tools.overlay import run_now_playing
             db_path = StationManager().server_conf['db_path']
             self.now_playing_process = run_now_playing(file_path, db_path)
             self._l.info('Started Now Playing overlay for {}'.format(file_path))
