@@ -12,7 +12,6 @@ from PySide6.QtCore import QTimer
 from PySide6.QtCore import Signal
 from PySide6.QtCore import QObject
 
-from fs42.display_refresh import match_display_refresh_rate
 from fs42.display_refresh import enforce_display_resolution_policy
 
 
@@ -104,11 +103,8 @@ class DisplayGuard(QObject):
             self._wake.clear()
             if self._stopped.is_set():
                 return
-            fps = self._fps
-            if fps and fps > 0:
-                success = match_display_refresh_rate(fps, logger=self._logger,
-                                                     on_mode_change=self._on_mode_changed)
-            else:
-                success = enforce_display_resolution_policy(logger=self._logger,
-                                                             on_mode_change=self._on_mode_changed)
+            # The player owns cadence changes. A queued guard check may still
+            # hold the previous channel's FPS, so never replace a valid mode.
+            success = enforce_display_resolution_policy(
+                logger=self._logger, on_mode_change=self._on_mode_changed, fps=self._fps)
             self._finished.emit(success)

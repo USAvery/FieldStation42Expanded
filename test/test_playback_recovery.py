@@ -82,6 +82,36 @@ class PlaybackRecoveryTests(unittest.TestCase):
             self.assertFalse(display_refresh.match_display_refresh_rate(25, on_mode_change=callback))
         callback.assert_not_called()
 
+    def test_resolution_guard_ignores_stale_cadence_in_valid_mode(self):
+        callback = Mock()
+        query = SimpleNamespace(returncode=0, stdout=MODES, stderr='')
+        with patch.object(display_refresh.subprocess, 'run', return_value=query) as run:
+            self.assertTrue(display_refresh.enforce_display_resolution_policy(
+                fps=25, on_mode_change=callback))
+        run.assert_called_once()
+        callback.assert_not_called()
+
+    def test_resolution_repair_uses_source_cadence_once(self):
+        callback = Mock()
+        modes = MODES.replace('(preferred, current)', '(preferred)')
+        modes += '    3840x2160 px, 30.000000 Hz (current)\n'
+        query = SimpleNamespace(returncode=0, stdout=modes, stderr='')
+        changed = SimpleNamespace(returncode=0, stdout='', stderr='')
+        with patch.object(display_refresh.subprocess, 'run', side_effect=[query, changed]) as run:
+            self.assertTrue(display_refresh.enforce_display_resolution_policy(
+                fps=25, on_mode_change=callback))
+        self.assertIn('1920x1080@50.000000Hz', run.call_args_list[1].args[0])
+        callback.assert_called_once_with()
+
+    def test_resolution_repair_without_source_preserves_refresh(self):
+        modes = MODES.replace('(preferred, current)', '(preferred)')
+        modes += '    3840x2160 px, 50.000000 Hz (current)\n'
+        query = SimpleNamespace(returncode=0, stdout=modes, stderr='')
+        changed = SimpleNamespace(returncode=0, stdout='', stderr='')
+        with patch.object(display_refresh.subprocess, 'run', side_effect=[query, changed]) as run:
+            self.assertTrue(display_refresh.enforce_display_resolution_policy())
+        self.assertIn('1920x1080@50.000000Hz', run.call_args_list[1].args[0])
+
 
 if __name__ == '__main__':
     unittest.main()

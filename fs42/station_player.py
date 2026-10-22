@@ -246,6 +246,11 @@ class StationPlayer:
         wayland_available = os.path.exists(os.path.join(
             os.environ.get('XDG_RUNTIME_DIR', '/run/user/{}'.format(getattr(os, 'getuid', lambda: 0)())),
             os.environ.get('WAYLAND_DISPLAY', 'wayland-0')))
+        try:
+            with open('/proc/device-tree/model', 'r') as model:
+                pi4 = 'Raspberry Pi 4' in model.read()
+        except OSError:
+            pi4 = False
         common_options = {
             'start_mpv': self._start_mpv_managed,
             'ipc_socket': 'runtime/mpv.socket',
@@ -258,8 +263,8 @@ class StationPlayer:
             'background': '#000000',
             'gpu_context': 'wayland' if wayland_available else 'auto',
             'script': os.path.join(os.path.dirname(__file__), 'playback.lua'),
-            'script_opts': 'osc-idlescreen=no,fs42-playback-direct={}'.format(
-                'yes' if wayland_available else 'no'),
+            'script_opts': 'osc-idlescreen=no,fs42-playback-direct={},fs42-playback-pi4={}'.format(
+                'yes' if wayland_available else 'no', 'yes' if pi4 else 'no'),
             'hr_seek': 'no',
             'video_sync': 'display-resample',
             # Linear-TV playback never rewinds into a large back-cache. Keep

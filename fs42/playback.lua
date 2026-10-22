@@ -1,7 +1,7 @@
 -- Select the video output after demuxing, before opening any decoder.
 local mp = require('mp')
 local options = require('mp.options')
-local settings = {direct = false}
+local settings = {direct = false, pi4 = false}
 local force_fallback = false
 
 options.read_options(settings, 'fs42-playback')
@@ -20,7 +20,12 @@ mp.add_hook('on_preloaded', 10, function()
     end
 
     local filters = mp.get_property_native('vf', {})
-    local direct = settings.direct and not force_fallback
+    -- MPV 0.35 on Pi 4 can keep decoding HEVC while its DMA-BUF surface
+    -- stops updating. Copy-back retains the hardware decoder and presents
+    -- through the native Wayland GPU path without replacing MPV.
+    local legacy_pi4_hevc = settings.pi4 and codec == 'hevc'
+        and mp.get_property('mpv-version', ''):match('^mpv 0%.35%.')
+    local direct = settings.direct and not force_fallback and not legacy_pi4_hevc
         and (codec == 'h264' or codec == 'hevc') and #filters == 0
     local output = direct and 'dmabuf-wayland' or 'gpu'
     local decoder = direct and 'auto' or 'auto-copy'

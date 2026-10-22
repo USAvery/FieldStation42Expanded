@@ -195,13 +195,14 @@ def select_display_mode(wlr_output, fps=None):
     return None
 
 
-def enforce_display_resolution_policy(logger=None, on_mode_change=None):
+def enforce_display_resolution_policy(logger=None, on_mode_change=None, fps=None):
     """Enforce only the display resolution policy, preserving refresh cadence.
 
     This is used before loading a new video. It repairs HDMI/compositor
     fallbacks to native 4K without unnecessarily changing a valid 1080p/CRT
     refresh rate. The normal refresh matcher can then select cadence once MPV
-    knows the new video's FPS.
+    knows the new video's FPS. If fps is supplied, use it when repairing an
+    invalid resolution; a valid resolution never changes cadence here.
     """
     try:
         result = subprocess.run(
@@ -269,10 +270,10 @@ def enforce_display_resolution_policy(logger=None, on_mode_change=None):
 
         # Keep the current refresh as closely as the target resolution allows.
         # This avoids 50 -> 60 -> 50 churn during an ordinary channel change.
-        target_refresh = min(
+        target_refresh = (_best_refresh(fps, candidates) if fps and fps > 0 else min(
             candidates,
             key=lambda refresh: abs(refresh - current_refresh),
-        )
+        ))
 
         mode = '{}x{}@{:.6f}Hz'.format(
             target_width,
