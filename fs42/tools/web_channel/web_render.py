@@ -8,6 +8,7 @@ controlling window visibility and shutdown.
 """
 import json
 import signal
+from queue import Empty
 
 from PySide6.QtCore import Qt
 from PySide6.QtCore import QUrl
@@ -279,8 +280,11 @@ class WebRenderApp(QApplication):
         """
         Handle a queued browser-control message, including guide geometry, visibility, and input
         """
-        if self.queue and self.queue.qsize() > 0:
-            msg = self.queue.get_nowait()
+        if self.queue is not None:
+            try:
+                msg = self.queue.get_nowait()
+            except Empty:
+                return
             if isinstance(msg, dict) and self._handle_presentation_message(msg):
                 return
             _logger.info('WebRender received message: {}'.format(msg))

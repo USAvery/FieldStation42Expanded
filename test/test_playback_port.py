@@ -95,6 +95,21 @@ def test_rendered_guide_geometry_reaches_player_and_transition_surface():
     app.transition.set_preview.assert_called_once_with(box)
 
 
+def test_guide_queue_waits_for_delivery_without_raising_or_losing_commands():
+    """
+    Tolerate an empty multiprocessing pipe and handle the next delivered browser command
+    """
+    from queue import Empty
+    commands = Mock()
+    commands.get_nowait.side_effect = [Empty, 'show_window']
+    app = SimpleNamespace(queue=commands, show_window=Mock())
+    WebRenderApp.tick(app)
+    app.show_window.assert_not_called()
+    WebRenderApp.tick(app)
+    app.show_window.assert_called_once_with()
+    commands.qsize.assert_not_called()
+
+
 def test_guide_cleanup_failure_still_releases_playback_and_shared_services():
     """
     Release MPV, publish stopped status, and close other services even if guide cleanup raises

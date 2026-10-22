@@ -51,6 +51,12 @@ The combined OSD had no active timer while idle.
 These are offscreen measurements, not a guarantee about the playback device's compositor or GPU.
 Repeat the comparison on the target device, using its actual graphical session:
 
+A Raspberry Pi 4 comparison on October 22, 2026 used the actual Wayland session at 640×480,
+with ten-second samples while playback continued. Resident memory fell from 70.66 to 57.38 MiB
+idle and from 240.48 to 64.49 MiB with the same three panels active. Active CPU use fell from
+8.6% to 6.1% of one core. The shared service measured 0.0% CPU idle and had no active OSD timer.
+These short samples establish the measured workload, rather than a long-term CPU guarantee.
+
 ```sh
 python -m pip install psutil
 python -m fs42.tools.diagnostics.display_resources --baseline-ref 4959e73 --seconds 30 --output runtime/display-resources.json
