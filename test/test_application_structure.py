@@ -146,6 +146,8 @@ def test_player_releases_server_when_playback_fails():
     """
     from fs42.tools.field_player.field_player import FieldPlayer
     player = FieldPlayer(no_server=True)
+    player._start_display = Mock()
+    player._stop_display = Mock()
     player._start_server = Mock()
     player._stop_server = Mock()
     player._play_stations = Mock(side_effect=RuntimeError('playback failed'))

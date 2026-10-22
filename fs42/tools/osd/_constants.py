@@ -5,7 +5,8 @@
 """
 Define display settings, content-type tags, status-file paths, and the fallback OSD font
 """
-from pydantic import BaseModel
+from dataclasses import field
+from dataclasses import dataclass
 
 from fs42.tools.osd.osd_layout import HAlignment
 from fs42.tools.osd.osd_layout import VAlignment
@@ -19,7 +20,21 @@ CONFIG_FILE_PATH = 'osd/osd.json'
 DEFAULT_FONT = '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
 
 
-class LogoDisplayConfig(BaseModel):
+class _DisplayConfig(object):
+    """
+    Normalize lightweight display settings without loading a general-purpose validation runtime
+    """
+
+    def __post_init__(self):
+        """
+        Convert JSON-compatible setting values and reject malformed display options
+        """
+        from fs42.tools.osd._utils import normalize_config
+        normalize_config(self)
+
+
+@dataclass
+class LogoDisplayConfig(_DisplayConfig):
     """
     Define default logo placement, visibility timing, and fallback image settings
     """
@@ -30,7 +45,7 @@ class LogoDisplayConfig(BaseModel):
     height: float = 0.15
     x_margin: float = 0.05
     y_margin: float = 0.05
-    logo_mapping: dict[str, str] = {}
+    logo_mapping: dict[str, str] = field(default_factory=dict)
     default_logo: str | None = None
     always_show: bool = False
     display_time: float = 5.0
@@ -39,7 +54,8 @@ class LogoDisplayConfig(BaseModel):
     default_logo_alpha: float = 1.0
 
 
-class StatusDisplayConfig(BaseModel):
+@dataclass
+class StatusDisplayConfig(_DisplayConfig):
     """
     Define the status file, text format, font, placement, and visibility duration
     """
@@ -57,7 +73,8 @@ class StatusDisplayConfig(BaseModel):
     delay: float = 0.0
 
 
-class VolumeDisplayConfig(BaseModel):
+@dataclass
+class VolumeDisplayConfig(_DisplayConfig):
     """
     Define volume-meter dimensions, color, edge spacing, and visibility duration
     """

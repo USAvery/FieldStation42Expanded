@@ -5,6 +5,8 @@
 """
 Register display fonts once and resolve a fallback when a font file cannot be loaded
 """
+from dataclasses import fields
+
 from PySide6.QtGui import QFont
 from PySide6.QtGui import QFontDatabase
 
@@ -45,3 +47,55 @@ def resolve_font(font_path, pixel_size):
     font = QFont(family)
     font.setPixelSize(pixel_size)
     return font
+
+
+def create_config(config_type, values):
+    """
+    Build one display configuration while ignoring fields belonging to another hybrid component
+
+    :param config_type: (type) status, logo, or volume settings class
+    :param values:      (dict) decoded JSON display options
+    :return:            (obj) normalized display configuration
+    """
+    names = {setting.name for setting in fields(config_type)}
+    return config_type(**{name: value for name, value in values.items() if name in names})
+
+
+def normalize_config(config):
+    """
+    Normalize numeric values, booleans, alignments, and colors in lightweight display settings
+
+    :param config: (obj) mutable dataclass containing OSD configuration fields
+    """
+    from fs42.tools.osd.osd_layout import HAlignment
+    from fs42.tools.osd.osd_layout import VAlignment
+    for setting in fields(config):
+        value = getattr(config, setting.name)
+        if setting.name == 'halign':
+            value = HAlignment(value)
+        elif setting.name == 'valign':
+            value = VAlignment(value)
+        elif setting.name in ('color', 'text_color'):
+            if not isinstance(value, (list, tuple)) or len(value) != 4:
+                raise ValueError('{} must contain four color channels'.format(setting.name))
+            value = tuple(int(channel) for channel in value)
+        elif setting.type is bool:
+            if value in (True, 1, 'true', 'True', '1', 'yes', 'on'):
+                value = True
+            elif value in (False, 0, 'false', 'False', '0', 'no', 'off'):
+                value = False
+            else:
+                raise ValueError('{} must be a boolean'.format(setting.name))
+        elif setting.type in (int, float):
+            converted = setting.type(value)
+            if setting.type is int and isinstance(value, float) and value != converted:
+                raise ValueError('{} must be a whole number'.format(setting.name))
+            value = converted
+        elif setting.type is str or setting.name in ('font', 'default_logo'):
+            if not isinstance(value, str) and not (value is None and setting.name in ('font', 'default_logo')):
+                raise ValueError('{} must be text'.format(setting.name))
+        elif setting.name == 'logo_mapping':
+            if not isinstance(value, dict) or not all(isinstance(key, str) and isinstance(path, str)
+                                                     for key, path in value.items()):
+                raise ValueError('logo_mapping must map names to image paths')
+        setattr(config, setting.name, value)

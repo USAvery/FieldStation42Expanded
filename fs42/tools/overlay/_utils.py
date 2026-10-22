@@ -7,9 +7,8 @@ Read audio display metadata and convert configured RGBA values to Qt drawing col
 """
 import os
 
-from PySide6.QtGui import QColor
 
-from fs42.tools.media import metadata_io
+_font_families = {}
 
 
 class OverlayError(Exception):
@@ -24,6 +23,7 @@ def read_metadata(file_path, db_path):
     :param db_path:   (str) metadata database filename
     :return:          (dict) title, artist, album, year, and genre fields for display
     """
+    from fs42.tools.media import metadata_io
     metadata = metadata_io.read(file_path, db_path)
     if metadata:
         return {'title': metadata.get('title', 'Unknown Track'),
@@ -42,4 +42,23 @@ def create_colors(theme):
     :param theme: (dict) color names mapped to channel-value tuples
     :return:      (dict) color names mapped to QColor instances
     """
+    from PySide6.QtGui import QColor
     return {name: QColor(*channels) for name, channels in theme.items()}
+
+
+def load_font_family(path, default='Arial'):
+    """
+    Register a custom font once and reuse its family for later metadata presentations
+
+    :param path:    (str) custom font filename, or None for the default family
+    :param default: (str) family to use when the font cannot be registered
+    :return:        (str) resolved Qt font family
+    """
+    if not path:
+        return default
+    if path not in _font_families:
+        from PySide6.QtGui import QFontDatabase
+        identifier = QFontDatabase.addApplicationFont(path) if os.path.exists(path) else -1
+        families = QFontDatabase.applicationFontFamilies(identifier) if identifier >= 0 else []
+        _font_families[path] = families[0] if families else default
+    return _font_families[path]

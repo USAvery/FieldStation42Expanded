@@ -49,6 +49,7 @@ class FieldPlayer(object):
         self._shutdown_queue = None
         self._command_queue = None
         self._api_proc = None
+        self._display_client = None
         self._schedule_lock = None
         self._manager = None
         self._reception = None
@@ -97,6 +98,25 @@ class FieldPlayer(object):
         if self._api_proc is not None:
             self._api_proc.join(timeout=5)
 
+    def _start_display(self):
+        """
+        Connect to the shared display service or start it without loading Qt into this process
+        """
+        from fs42.tools.display.client import get_client
+        try:
+            self._display_client = get_client()
+            self._display_client.connect()
+        except Exception as err:
+            logging.getLogger('field_player').warning('Display service unavailable: {}'.format(err))
+
+    def _stop_display(self):
+        """
+        Release player-owned panels and stop the service when this player started it
+        """
+        if self._display_client is not None:
+            self._display_client.close()
+            self._display_client = None
+
     def _run_ticker(self, message, header, style, iterations):
         """
         Start the optional ticker overlay
@@ -111,10 +131,12 @@ class FieldPlayer(object):
         # Start the API process
         self._start_server()
         try:
+            self._start_display()
             # Run the station playback loop
             self._play_stations()
         finally:
-            # Release the child server process
+            # Release the display service and child server process
+            self._stop_display()
             self._stop_server()
 
     def _check_input(self):

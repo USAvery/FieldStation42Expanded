@@ -285,11 +285,10 @@ class StationPlayer(object):
         self.guide_queue = None
         self.guide_visible = False
         self._guide_video_layout = None
-        self.parental_controls_process = None
-        self.parental_controls_queue = None
+        self.parental_controls_panel = None
         self.parental_unlocked_network = None
         self.scrambler = None
-        self.now_playing_process = None
+        self.now_playing_panel = None
         self.schedule_lock = None
         self._active_afx = None
         self._pending_response = None
@@ -673,49 +672,33 @@ class StationPlayer(object):
         try:
             from fs42.tools.overlay import run_parental_controls
 
-            self.parental_controls_queue = multiprocessing.Queue()
-            self.parental_controls_process = run_parental_controls(
+            self.parental_controls_panel = run_parental_controls(
                 network_name,
-                self.parental_controls_queue,
                 self._parental_controls_theme(),
             )
             self._update_parental_controls_overlay()
         except Exception as e:
             self._l.warning('Could not start parental controls overlay: {}'.format(e))
-            self.parental_controls_process = None
-            self.parental_controls_queue = None
+            self.parental_controls_panel = None
 
     def _update_parental_controls_overlay(self, digits=0, error=False):
         """
-        Send the masked digit count and error flag to the PIN-prompt process
+        Update the shared PIN prompt with the masked digit count and error flag
         """
-        if self.parental_controls_queue:
-            self.parental_controls_queue.put({'digits': digits, 'error': error})
+        if self.parental_controls_panel:
+            try:
+                self.parental_controls_panel.update(digits=digits, error=error)
+            except Exception as err:
+                self._l.warning('Could not update the PIN prompt: {}'.format(err))
+                self.parental_controls_panel = None
 
     def _close_parental_controls_overlay(self):
         """
-        Request PIN-prompt closure and terminate the process if it does not exit promptly
+        Hide the shared PIN prompt without stopping the display service
         """
-        if self.parental_controls_queue:
-            try:
-                self.parental_controls_queue.put({'close': True})
-            except Exception:
-                pass
-
-        if self.parental_controls_process and self.parental_controls_process.is_alive():
-            try:
-                self.parental_controls_process.join(timeout=0.2)
-                if self.parental_controls_process.is_alive():
-                    self.parental_controls_process.terminate()
-                    self.parental_controls_process.join(timeout=0.2)
-                if self.parental_controls_process.is_alive():
-                    self.parental_controls_process.kill()
-                    self.parental_controls_process.join(timeout=0.1)
-            except Exception as e:
-                self._l.warning('Error terminating parental controls overlay: {}'.format(e))
-
-        self.parental_controls_process = None
-        self.parental_controls_queue = None
+        if self.parental_controls_panel is not None:
+            self.parental_controls_panel.hide()
+            self.parental_controls_panel = None
 
     def _parental_controls_pin(self):
         """
@@ -854,24 +837,11 @@ class StationPlayer(object):
 
     def _close_now_playing(self):
         """
-        Terminate the active now-playing overlay and clear its process reference
+        Hide the active media-information panel and clear its presentation handle
         """
-        # terminate the Now Playing overlay if it's running
-        if self.now_playing_process and self.now_playing_process.is_alive():
-            try:
-                self.now_playing_process.terminate()
-                self.now_playing_process.join(timeout=0.2)
-
-                # Force kill if still alive
-                if self.now_playing_process.is_alive():
-                    self.now_playing_process.kill()
-                    self.now_playing_process.join(timeout=0.1)
-
-                self._l.debug('Closed Now Playing overlay')
-            except Exception as e:
-                self._l.warning('Error terminating overlay: {}'.format(e))
-
-            self.now_playing_process = None
+        if self.now_playing_panel is not None:
+            self.now_playing_panel.hide()
+            self.now_playing_panel = None
 
     def _nfo_overlay_data(self, file_path):
         """
@@ -888,19 +858,16 @@ class StationPlayer(object):
 
     def _show_now_playing(self, file_path):
         """
-        Replace the current now-playing process with an overlay for the requested media file
+        Replace the current now-playing panel with metadata for the requested media file
         """
         # show the Now Playing overlay for an audio file
-        import time
         self._close_now_playing()
-        # give a brief moment for cleanup
-        time.sleep(0.1)
 
         # Start new overlay
         try:
             from fs42.tools.overlay import run_now_playing
             db_path = StationManager().server_conf['db_path']
-            self.now_playing_process = run_now_playing(file_path, db_path)
+            self.now_playing_panel = run_now_playing(file_path, db_path)
             self._l.info('Started Now Playing overlay for {}'.format(file_path))
         except Exception as e:
             self._l.error('Failed to start Now Playing overlay: {}'.format(e))
@@ -1215,7 +1182,7 @@ class StationPlayer(object):
                             if file_duration is not None:
                                 play_duration = file_duration - (offset_seconds or 0)
                             from fs42.tools.media import nfo_agent
-                            self.now_playing_process = nfo_agent.show_overlay(nfo_data,
+                            self.now_playing_panel = nfo_agent.show_overlay(nfo_data,
                                                                               play_duration=play_duration)
                     except Exception as e:
                         self._l.warning('Could not start NFO overlay: {}'.format(e))
@@ -1320,7 +1287,7 @@ class StationPlayer(object):
             nfo_data = self._nfo_overlay_data(file_path)
             if nfo_data:
                 from fs42.tools.media import nfo_agent
-                self.now_playing_process = nfo_agent.show_overlay(nfo_data)
+                self.now_playing_panel = nfo_agent.show_overlay(nfo_data)
         except Exception as e:
             self._l.warning('Could not start NFO overlay: {}'.format(e))
 

@@ -7,6 +7,7 @@ Share transparent window setup, screen scaling, drawing, and timer cleanup betwe
 """
 from PySide6.QtCore import Qt
 from PySide6.QtCore import QRect
+from PySide6.QtCore import QPoint
 from PySide6.QtCore import QTimer
 from PySide6.QtCore import Signal
 from PySide6.QtGui import QPainter
@@ -32,6 +33,7 @@ class BaseDisplay(QWidget):
         """
         super(BaseDisplay, self).__init__(parent)
         self._timer = QTimer(self)
+        self._draw_offset = QPoint(0, 0)
         screen = QApplication.primaryScreen()
         self._screen_geometry = screen.geometry() if screen else QRect(0, 0, REFERENCE_WIDTH, REFERENCE_HEIGHT)
         self._scale_factor = self._screen_geometry.height() / float(REFERENCE_HEIGHT)
@@ -43,6 +45,16 @@ class BaseDisplay(QWidget):
         self.setFocusPolicy(Qt.NoFocus)
         self.setCursor(Qt.BlankCursor)
         self.setGeometry(self._screen_geometry)
+
+    def _set_content_rect(self, rect):
+        """
+        Allocate only the screen region covered by this panel while retaining screen-relative drawing
+
+        :param rect: (QRect) content bounds relative to the primary screen
+        """
+        bounds = rect.intersected(QRect(0, 0, self._screen_geometry.width(), self._screen_geometry.height()))
+        self._draw_offset = bounds.topLeft()
+        self.setGeometry(bounds.translated(self._screen_geometry.topLeft()))
 
     def scaled(self, value):
         """
@@ -88,6 +100,7 @@ class BaseDisplay(QWidget):
         painter.setRenderHint(QPainter.Antialiasing)
         painter.setRenderHint(QPainter.TextAntialiasing)
         try:
+            painter.translate(-self._draw_offset)
             self._draw(painter)
         finally:
             painter.end()
@@ -98,5 +111,6 @@ class BaseDisplay(QWidget):
 
         :param event: (QCloseEvent) window-close request
         """
-        self._timer.stop()
+        for timer in self.findChildren(QTimer):
+            timer.stop()
         super(BaseDisplay, self).closeEvent(event)

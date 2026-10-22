@@ -31,6 +31,7 @@ class BaseDisplay(object):
         """
         self.config = config
         self.time_since_change = 0
+        self._status_reader = None
 
         self._socket_file = getattr(config, 'socket_file', None)
 
@@ -43,6 +44,8 @@ class BaseDisplay(object):
 
         :return: (dict) status dictionary, or None for missing, unreadable, empty, or invalid status
         """
+        if self._status_reader is not None:
+            return self._status_reader(self._socket_file)
         if not self._socket_file:
             return
 
@@ -91,7 +94,14 @@ class BaseDisplay(object):
         :param dt: (float) elapsed time since the previous update in seconds
         """
         self.time_since_change += dt
-        self.check_status()
+        if self._status_reader is None:
+            self.check_status()
+
+    def get_remaining_time(self):
+        """
+        Return the seconds until this presentation expires, without polling its status file
+        """
+        return max(0.0, self.config.display_time - self.time_since_change)
 
     def is_visible(self):
         """

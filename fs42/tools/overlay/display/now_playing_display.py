@@ -20,7 +20,7 @@ from fs42.tools.overlay.display.display import BaseDisplay
 
 class NowPlayingDisplay(BaseDisplay):
     """
-    Show track title, artist, and album until the player closes the overlay process
+    Show track title, artist, and album until the player hides or replaces the panel
     """
 
     def __init__(self, file_path, db_path, parent=None):
@@ -45,6 +45,7 @@ class NowPlayingDisplay(BaseDisplay):
                                  QFont.Bold)
         self._info_font = QFont(_constants.FONT_FAMILY, self.scaled(_constants.NOW_PLAYING_INFO_SIZE),
                                 QFont.Normal)
+        self._set_content_rect(self._get_box_rect())
 
     def _get_box_rect(self):
         """
@@ -60,7 +61,7 @@ class NowPlayingDisplay(BaseDisplay):
                 text_width = max(text_width, info_metrics.horizontalAdvance(self._metadata[field]))
         fade_width = self.scaled(_constants.NOW_PLAYING_FADE_WIDTH)
         width = max(self._box_width, text_width + self._padding * 2 + fade_width)
-        return QRect(self._margin_x, self.height() - self._box_height - self._margin_y,
+        return QRect(self._margin_x, self._screen_geometry.height() - self._box_height - self._margin_y,
                      width, self._box_height)
 
     def _draw_background(self, painter, rect):

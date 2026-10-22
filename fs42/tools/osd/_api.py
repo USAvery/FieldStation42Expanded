@@ -10,11 +10,11 @@ import json
 
 from fs42.core import logger as project_logger
 
+from fs42.tools.osd._utils import create_config
 from fs42.tools.osd._constants import CONFIG_FILE_PATH
 from fs42.tools.osd._constants import LogoDisplayConfig
 from fs42.tools.osd._constants import StatusDisplayConfig
 from fs42.tools.osd._constants import VolumeDisplayConfig
-from fs42.tools.osd.display.logo_display import LogoDisplay
 from fs42.tools.osd.display.status_display import StatusDisplay
 from fs42.tools.osd.display.volume_display import VolumeDisplay
 
@@ -22,42 +22,46 @@ from fs42.tools.osd.display.volume_display import VolumeDisplay
 _logger = project_logger.setup('fs42.tools.osd._api')
 
 
-def load_objects():
+def load_objects(config_path=None):
     """
     Build display elements from the OSD configuration and ensure a volume meter exists
 
     Use a default status display when the configuration file is absent. Expand a
     HybridDisplay into separate logo and status elements; log unrecognized types.
 
-    :return: (list) configured elements to update and draw in the OSD window
+    :param config_path: (str) optional configuration filename; None uses the standard OSD configuration
+    :return:            (list) configured elements to update and draw in the OSD window
     """
+    config_path = CONFIG_FILE_PATH if config_path is None else config_path
     objects = []
 
-    if os.path.exists(CONFIG_FILE_PATH):
-        with open(CONFIG_FILE_PATH, 'r') as f:
+    if os.path.exists(config_path):
+        with open(config_path, 'r') as f:
             config_dict = json.load(f)
             for obj in config_dict:
                 if 'type' not in obj:
                     obj['type'] = 'StatusDisplay'
                 if obj['type'] == 'StatusDisplay':
                     del obj['type']
-                    config = StatusDisplayConfig.model_validate(obj)
+                    config = create_config(StatusDisplayConfig, obj)
                     objects.append(StatusDisplay(config))
                 elif obj['type'] == 'LogoDisplay':
+                    from fs42.tools.osd.display.logo_display import LogoDisplay
                     del obj['type']
-                    config = LogoDisplayConfig.model_validate(obj)
+                    config = create_config(LogoDisplayConfig, obj)
                     objects.append(LogoDisplay(config))
                 elif obj['type'] == 'HybridDisplay':
+                    from fs42.tools.osd.display.logo_display import LogoDisplay
                     del obj['type']
-                    config_status = StatusDisplayConfig.model_validate(obj)
-                    config_logo = LogoDisplayConfig.model_validate(obj)
+                    config_status = create_config(StatusDisplayConfig, obj)
+                    config_logo = create_config(LogoDisplayConfig, obj)
                     status_osd = StatusDisplay(config_status)
                     status_logo = LogoDisplay(config_logo)
                     objects.append(status_logo)
                     objects.append(status_osd)
                 elif obj['type'] == 'VolumeDisplay':
                     del obj['type']
-                    config = VolumeDisplayConfig.model_validate(obj)
+                    config = create_config(VolumeDisplayConfig, obj)
                     objects.append(VolumeDisplay(config))
                 else:
                     _logger.info('Unrecognized osd object type: {}'.format(obj['type']))

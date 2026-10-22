@@ -13,7 +13,7 @@ from fs42.tools.overlay.overlay import Overlay
 
 def main():
     """
-    Parse the selected overlay's inputs and run it in the current process
+    Parse the selected panel's inputs and keep its shared-service presentation alive
     """
     parser = argparse.ArgumentParser(description='Display an on-demand FieldStation42 overlay')
     commands = parser.add_subparsers(dest='overlay_type', required=True)

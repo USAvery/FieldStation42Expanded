@@ -4,8 +4,11 @@
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
 Build the persistent transparent display window and its configured status, volume, and logo
-elements. Poll runtime state and hide the window when no element is visible.
+elements. Observe runtime updates and hide the window when no element is visible.
 """
+import os
+import math
+
 from PySide6.QtCore import Qt
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QPainter
@@ -21,14 +24,18 @@ class OsdWindow(QWidget):
     Host OSD elements in a transparent window and poll their state even while hidden
     """
 
-    def __init__(self, objects):
+    def __init__(self, objects, event_driven=False):
         """
         Create a screen-sized transparent window and start polling display elements
 
-        :param objects: (list) elements implementing update and draw, optionally is_visible
+        :param objects:      (list) configured display elements
+        :param event_driven: (bool) use filesystem notifications and visibility deadlines instead of polling
         """
         super(OsdWindow, self).__init__()
         self.objects = objects
+        self._event_driven = event_driven
+        self._watcher = None
+        self._visible_signature = ()
         self._window_visible = False
 
         self.setWindowFlags(Qt.FramelessWindowHint
@@ -56,7 +63,16 @@ class OsdWindow(QWidget):
         self.timer.timeout.connect(self._tick)
         # Poll status at 10 Hz. The old code repainted a full-screen transparent
         # surface at 30 FPS even while every OSD element was hidden.
-        self.timer.start(100)
+        if event_driven:
+            from fs42.tools.osd._watcher import StatusWatcher
+            self.timer.setSingleShot(True)
+            self._watcher = StatusWatcher([obj._socket_file for obj in objects], self)
+            for obj in objects:
+                obj._status_reader = self._watcher.read
+            self._watcher.changed.connect(self._status_changed)
+            self._status_changed({os.path.abspath(obj._socket_file) for obj in objects if obj._socket_file})
+        else:
+            self.timer.start(100)
 
     def _object_is_visible(self, obj):
         """
@@ -90,6 +106,10 @@ class OsdWindow(QWidget):
         for obj in self.objects:
             obj.update(dt)
 
+        if self._event_driven:
+            self._render_state()
+            return
+
         any_visible = any(self._object_is_visible(obj) for obj in self.objects)
         any_animated = any(self._object_is_animated(obj) for obj in self.objects)
 
@@ -109,6 +129,50 @@ class OsdWindow(QWidget):
                 self.hide()
                 self._window_visible = False
             self.timer.setInterval(250)
+
+    def _status_changed(self, paths):
+        """
+        Apply new cached status after advancing old timers to the notification time
+
+        :param paths: (set) absolute status paths whose documents changed
+        """
+        self._tick()
+        for obj in self.objects:
+            if obj._socket_file and os.path.abspath(obj._socket_file) in paths:
+                obj.check_status()
+        self._render_state(repaint=True)
+
+    def _render_state(self, repaint=False):
+        """
+        Draw changed or animated content and schedule only animation frames or visibility expiry
+
+        :param repaint: (bool) whether a newly received status requires repainting static content
+        """
+        visible = [obj for obj in self.objects if obj.is_visible()]
+        was_visible = self._window_visible
+        signature = tuple(id(obj) for obj in visible)
+        changed = signature != self._visible_signature
+        self._visible_signature = signature
+        animated = any(getattr(obj, 'is_animated', False) for obj in visible)
+        self._window_visible = bool(visible)
+        self.setVisible(self._window_visible)
+        self.timer.stop()
+        if not visible:
+            return
+        if repaint or animated or changed or not was_visible:
+            self.update()
+        remaining = min(obj.get_remaining_time() for obj in visible)
+        if animated:
+            self.timer.start(33)
+        elif math.isfinite(remaining):
+            self.timer.start(min(2147483647, max(1, math.ceil(remaining * 1000))))
+
+    def closeEvent(self, event):
+        """
+        Stop pending visibility updates before the shared service closes the OSD
+        """
+        self.timer.stop()
+        super(OsdWindow, self).closeEvent(event)
 
     def paintEvent(self, event):
         """

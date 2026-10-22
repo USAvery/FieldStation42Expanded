@@ -81,3 +81,6 @@ Bug reports, feature requests, and pull requests are welcome. Please open an iss
 
 
 
+
+See [Shared display service](docs/display-service.md) for automatic display startup, existing OSD
+service migration, and repeatable resource measurements.

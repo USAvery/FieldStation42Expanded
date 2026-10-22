@@ -1,5 +1,5 @@
 [Unit]
-Description=FieldStation42 On-Screen Display
+Description=FieldStation42 Shared Display Service (standalone)
 After=graphical-session.target fs42.service
 Requires=graphical-session.target
 PartOf=fs42.service
@@ -8,9 +8,8 @@ PartOf=fs42.service
 Type=simple
 WorkingDirectory=__INSTALL_DIR__
 Environment="DISPLAY=:0"
-ExecStartPre=/bin/sleep 10
-ExecStart=__INSTALL_DIR__/env/bin/python3 -m fs42.tools.osd.main
-Restart=always
+ExecStart=__INSTALL_DIR__/env/bin/python3 -m fs42.tools.display.main
+Restart=on-failure
 RestartSec=5
 StandardOutput=null
 StandardError=null

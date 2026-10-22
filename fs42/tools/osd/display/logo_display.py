@@ -695,6 +695,21 @@ class LogoDisplay(BaseDisplay):
 
         return True
 
+    def get_remaining_time(self):
+        """
+        Return the station or fallback logo's remaining visibility, including permanent display
+        """
+        if self.is_displaying_osd_default_logo:
+            permanent = self.config.default_logo_permanent
+            duration = self.config.display_time
+        else:
+            permanent = self.channel_config.get('logo_permanent', False)
+            duration = self.channel_config.get('logo_display_time', self.config.display_time)
+        if permanent or self.config.always_show:
+            return float('inf')
+        duration = self.config.display_time if duration is None else float(duration)
+        return max(0.0, duration - self.time_since_change)
+
     def draw(self, painter, screen_w, screen_h):
         """
         Paint the current logo frame when feature content and visibility settings allow it

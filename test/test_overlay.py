@@ -8,7 +8,6 @@ Verify overlay drawing, metadata fallback, queue handling, ticker completion, an
 import os
 import sys
 import json
-import queue
 import sqlite3
 import subprocess
 from unittest.mock import Mock
@@ -70,26 +69,22 @@ def test_audio_metadata_and_filename_fallback(qt_app, metadata_db, tmp_path):
         fallback.close()
 
 
-def test_parental_messages_update_prompt_and_finish(qt_app):
+def test_parental_state_updates_prompt_and_finishes(qt_app):
     """
-    Drain digit and error updates, then stop polling and signal completion on a close request
+    Apply digit and error updates and signal completion on a close request
     """
-    messages = queue.Queue()
-    display = ParentalControlsDisplay('Station', messages, 'unknown')
+    display = ParentalControlsDisplay('Station', 'unknown')
     finished = Mock()
     display.finished.connect(finished)
     try:
-        messages.put({'digits': 2})
-        display._poll_queue()
+        display.apply_state(digits=2)
         assert display._digits == 2
         assert not display._error
-        messages.put({'digits': 0, 'error': True})
-        display._poll_queue()
+        display.apply_state(digits=0, error=True)
         assert display._digits == 0
         assert display._error
         assert display._theme['box'].getRgb() == _constants.PARENTAL_THEMES['classic']['box']
-        messages.put({'close': True})
-        display._poll_queue()
+        display.apply_state(close=True)
         finished.assert_called_once_with()
         assert not display._timer.isActive()
     finally:
@@ -163,7 +158,7 @@ def test_displays_render_and_preserve_player_input(qt_app, metadata_db, kind, th
     if kind == 'ticker':
         display = TickerDisplay('A scrolling announcement', style=theme)
     elif kind == 'parental_controls':
-        display = ParentalControlsDisplay('Station', queue.Queue(), theme)
+        display = ParentalControlsDisplay('Station', theme)
     else:
         display = NowPlayingDisplay(*metadata_db)
     try:
@@ -180,106 +175,12 @@ def test_displays_render_and_preserve_player_input(qt_app, metadata_db, kind, th
     assert not display._timer.isActive()
 
 
-def test_ticker_lock_is_exclusive_and_released(qt_app, tmp_path, monkeypatch):
-    """
-    Reject a second ticker while allowing independent overlays and reclaim the lock after cleanup
-    """
-    monkeypatch.setattr('fs42.tools.overlay.overlay.tempfile.gettempdir', lambda: str(tmp_path))
-    first = Overlay('ticker', text='First')
-    second = Overlay('ticker', text='Second')
-    other = Overlay('now_playing')
-    try:
-        assert first._acquire_lock()
-        assert not second._acquire_lock()
-        second._cleanup()
-        assert not second._acquire_lock()
-        assert other._acquire_lock()
-        first._cleanup()
-        assert second._acquire_lock()
-    finally:
-        first._cleanup()
-        second._cleanup()
-        other._cleanup()
-
-
 def test_unknown_overlay_is_rejected_before_launch():
     """
     Report an invalid overlay selection before allocating a window or child process
     """
     with pytest.raises(OverlayError, match='Unknown overlay type'):
         Overlay('missing')
-
-
-def test_spawned_overlays_follow_their_expected_lifetimes(tmp_path):
-    """
-    Launch real spawned processes and verify PIN closure, ticker exclusion, and persistent audio display
-    """
-    code = r'''
-import os
-import time
-import tempfile
-import multiprocessing
-from fs42.tools.overlay import run_ticker
-from fs42.tools.overlay import run_now_playing
-from fs42.tools.overlay import run_parental_controls
-from fs42.tools.overlay._constants import TICKER_LOCK_KEY
-
-if __name__ == '__main__':
-    multiprocessing.set_start_method('spawn')
-    children = []
-    messages = multiprocessing.Queue()
-    try:
-        ticker = run_ticker('')
-        children.append(ticker)
-        ticker.join(10)
-        assert ticker.exitcode == 0, ('empty ticker', ticker.exitcode)
-        audio = run_now_playing('Track.mp3', os.path.join(tempfile.gettempdir(), 'metadata.db'))
-        children.append(audio)
-        time.sleep(2)
-        assert audio.is_alive(), ('audio exited early', audio.exitcode)
-        prompt = run_parental_controls('Station', messages)
-        children.append(prompt)
-        messages.put({'digits': 2})
-        messages.put({'error': True, 'digits': 0})
-        messages.put({'close': True})
-        prompt.join(10)
-        assert prompt.exitcode == 0, ('prompt did not close', prompt.exitcode)
-        ticker = run_ticker('Keep this ticker running')
-        children.append(ticker)
-        lock = os.path.join(tempfile.gettempdir(), TICKER_LOCK_KEY + '.lock')
-        deadline = time.monotonic() + 10
-        while not os.path.exists(lock) and time.monotonic() < deadline:
-            time.sleep(0.05)
-        assert os.path.exists(lock), 'ticker did not claim its lock'
-        duplicate = run_ticker('')
-        children.append(duplicate)
-        duplicate.join(10)
-        assert duplicate.exitcode == 1, ('duplicate ticker', duplicate.exitcode)
-        assert ticker.is_alive()
-        assert audio.is_alive()
-        ticker.terminate()
-        ticker.join(5)
-        assert not ticker.is_alive()
-        replacement = run_ticker('')
-        children.append(replacement)
-        replacement.join(10)
-        assert replacement.exitcode == 0, ('ticker lock was not reclaimed', replacement.exitcode)
-    finally:
-        for child in children:
-            if child.is_alive():
-                child.terminate()
-            child.join(5)
-            if child.is_alive():
-                child.kill()
-                child.join(5)
-        messages.close()
-        messages.join_thread()
-print('Overlay processes completed their lifecycle checks')
-'''
-    environment = dict(os.environ, QT_QPA_PLATFORM='offscreen', TMP=str(tmp_path), TEMP=str(tmp_path))
-    result = subprocess.run([sys.executable, '-c', code], cwd=PROJECT_ROOT, env=environment,
-                            capture_output=True, text=True, timeout=50)
-    assert result.returncode == 0, result.stdout + result.stderr
 
 
 @pytest.mark.parametrize('arguments', [['--help'], ['ticker', '--help'], ['now_playing', '--help']])

@@ -52,6 +52,7 @@ class TickerDisplay(BaseDisplay):
         theme = _constants.TICKER_THEMES.get(style, _constants.TICKER_THEMES[_constants.DEFAULT_TICKER_STYLE])
         self._colors = create_colors(theme)
         self._logo = self._load_logo()
+        self._set_content_rect(self._get_panel_rect())
         self._start_timer(_constants.TICKER_INTERVAL_MS, self._scroll_text)
 
     def _load_logo(self):
@@ -155,15 +156,21 @@ class TickerDisplay(BaseDisplay):
         painter.setPen(self._text_color)
         painter.drawText(x, y, self._text)
 
+    def _get_panel_rect(self):
+        """
+        Locate the ticker panel near the bottom center of the primary screen
+        """
+        x = (self._screen_geometry.width() - _constants.TICKER_WIDTH) // 2
+        y = self._screen_geometry.height() - _constants.TICKER_HEIGHT - _constants.TICKER_BOTTOM_MARGIN
+        return QRect(x, y, _constants.TICKER_WIDTH, _constants.TICKER_HEIGHT)
+
     def _draw(self, painter):
         """
         Paint the bottom-centered ticker panel, fixed header, and scrolling message
 
         :param painter: (QPainter) active window painter
         """
-        x = (self.width() - _constants.TICKER_WIDTH) // 2
-        y = self.height() - _constants.TICKER_HEIGHT - _constants.TICKER_BOTTOM_MARGIN
-        rect = QRect(x, y, _constants.TICKER_WIDTH, _constants.TICKER_HEIGHT)
+        rect = self._get_panel_rect()
         main_rect = rect.adjusted(2, _constants.TICKER_HEADER_HEIGHT, -2, -2)
         painter.setBrush(self._colors['background'])
         painter.setPen(Qt.NoPen)

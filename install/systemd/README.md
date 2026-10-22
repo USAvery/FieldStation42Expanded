@@ -21,7 +21,8 @@ The installer will prompt you to select which services to enable:
 - **Field Player** (fs42) - Core service, enabled by default
 - **Cable Box** (fs42-cable-box) - Optional, for cable box interface
 - **Remote Controller** (fs42-remote-controller) - Optional
-- **OSD** (fs42-osd) - Optional, on-screen display overlay
+The field player starts one shared process for the OSD, volume, logos, now-playing information,
+PIN prompts, and ticker. A separate OSD service is no longer required.
 
 Services are enabled but not started immediately. They will start automatically on next login, or you can start them manually.
 
@@ -72,7 +73,18 @@ journalctl --user -u fs42-* -f
 - `fs42` - Field Player (main content playback)
 - `fs42-cable-box` - Cable Box interface
 - `fs42-remote-controller` - Remote Controller
-- `fs42-osd` - On-Screen Display (waits 30s before starting)
+- `fs42-osd` - Optional standalone display service; normally managed by the field player
+
+Existing `fs42-osd` installations can disable the redundant unit:
+
+```bash
+systemctl --user disable --now fs42-osd
+systemctl --user restart fs42
+```
+
+The service also runs manually with `python -m fs42.tools.display.main`. The old
+`python -m fs42.tools.osd.main` command starts the same service. Both use one instance
+lock, so they cannot create duplicate OSD windows.
 
 ## Uninstall
 

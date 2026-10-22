@@ -83,13 +83,10 @@ if [[ "$enable_rc" =~ ^[Yy]$ ]]; then
     SERVICES_TO_ENABLE+=("fs42-remote-controller.service")
 fi
 
-# OSD
+# The field player owns the shared OSD and overlay service.
+# Keep the standalone unit available for installations running displays independently.
 echo ""
-echo -e "${BLUE}On-Screen Display${NC} - Visual overlay (starts 30s after login)"
-read -p "Enable fs42-osd.service? (y/N): " enable_osd
-if [[ "$enable_osd" =~ ^[Yy]$ ]]; then
-    SERVICES_TO_ENABLE+=("fs42-osd.service")
-fi
+echo -e "${INFO} The field player starts the shared display service automatically."
 
 # EPG Updater
 echo ""

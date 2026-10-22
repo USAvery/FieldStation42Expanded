@@ -5,8 +5,6 @@
 """
 Draw the station PIN prompt and apply digit-count, error, and close messages from the player
 """
-from queue import Empty
-
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPen
 from PySide6.QtGui import QFont
@@ -20,7 +18,6 @@ from fs42.tools.overlay.display.display import BaseDisplay
 from fs42.tools.overlay._constants import PARENTAL_BOX_WIDTH
 from fs42.tools.overlay._constants import PARENTAL_BOX_HEIGHT
 from fs42.tools.overlay._constants import DEFAULT_PARENTAL_THEME
-from fs42.tools.overlay._constants import QUEUE_POLL_INTERVAL_MS
 
 
 class ParentalControlsDisplay(BaseDisplay):
@@ -28,18 +25,16 @@ class ParentalControlsDisplay(BaseDisplay):
     Show a station PIN prompt while the player validates input and controls its lifetime
     """
 
-    def __init__(self, network_name, queue, theme_name=DEFAULT_PARENTAL_THEME, parent=None):
+    def __init__(self, network_name, theme_name=DEFAULT_PARENTAL_THEME, parent=None):
         """
-        Center the PIN prompt and start polling its player message queue
+        Center the PIN prompt and initialize its player-controlled digit and error indicators
 
         :param network_name: (str) locked station name shown in the prompt
-        :param queue:        (Queue) incoming digit-count, error-state, and close messages
         :param theme_name:   (str) visual theme name, falling back to classic
         :param parent:       (QWidget) optional Qt parent window
         """
         super(ParentalControlsDisplay, self).__init__(parent)
         self._network_name = network_name
-        self._queue = queue
         self._theme_name = theme_name
         self._theme = create_colors(PARENTAL_THEMES.get(theme_name, PARENTAL_THEMES[DEFAULT_PARENTAL_THEME]))
         self._digits = 0
@@ -49,23 +44,22 @@ class ParentalControlsDisplay(BaseDisplay):
         rect = self._screen_geometry
         self.setGeometry(rect.x() + (rect.width() - width) // 2,
                          rect.y() + (rect.height() - height) // 2, width, height)
-        self._start_timer(QUEUE_POLL_INTERVAL_MS, self._poll_queue)
 
-    def _poll_queue(self):
+    def apply_state(self, digits=None, error=False, close=False):
         """
-        Apply pending PIN indicators and finish when the player requests closure
+        Update PIN indicators directly from a shared-service command without queue polling
+
+        :param digits: (int) masked digit count, or None to keep the existing count
+        :param error:  (bool) whether to show the incorrect-PIN message
+        :param close:  (bool) whether to finish this presentation
         """
-        while True:
-            try:
-                message = self._queue.get_nowait()
-            except Empty:
-                return
-            if message.get('close'):
-                self._finish()
-                return
-            self._digits = int(message.get('digits', self._digits))
-            self._error = bool(message.get('error', False))
-            self.update()
+        if close:
+            self._finish()
+            return
+        if digits is not None:
+            self._digits = int(digits)
+        self._error = bool(error)
+        self.update()
 
     def _draw_line(self, painter, y, height, text, color):
         """

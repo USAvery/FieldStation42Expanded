@@ -188,3 +188,6 @@ web_urls/
 .fuse_hidden*
 
 */preview.mp4
+
+# Local display-service discovery and diagnostics
+runtime/display-service.json*
