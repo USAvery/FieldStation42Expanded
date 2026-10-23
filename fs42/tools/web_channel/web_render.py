@@ -114,6 +114,7 @@ class WebRender(QMainWindow):
 
             # Inject JavaScript to simulate user interaction and enable autoplay
             js_code = """
+            (function() {
             // Simulate user interaction to enable autoplay
             document.body.click();
 
@@ -123,12 +124,13 @@ class WebRender(QMainWindow):
             }
 
             // Find and try to play any media elements
-            const mediaElements = document.querySelectorAll('video, audio');
-            mediaElements.forEach(element => {
+            const media_elements = document.querySelectorAll('video, audio');
+            media_elements.forEach(element => {
                 if (element.paused) {
                     element.play().catch(e => console.log('Autoplay failed:', e));
                 }
             });
+            })();
             """
             self.browser.page().runJavaScript(js_code)
         else:
