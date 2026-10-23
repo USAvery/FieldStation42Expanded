@@ -16,6 +16,7 @@ from .summary import router as summary_router
 from .catalogs import router as catalogs_router
 from .stations import router as stations_router
 from .schedules import router as schedules_router
+from .on_demand import router as on_demand_router
 
 # Create a list of all routers to be included
 routers = [
@@ -28,4 +29,5 @@ routers = [
     stations_router,
     ppv_router,
     media_router,
+    on_demand_router,
 ]

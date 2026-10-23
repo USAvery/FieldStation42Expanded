@@ -74,3 +74,4 @@ class PlayerState(object):
     EXIT_COMMAND = 5
     PLAY_FILE = 6
     PARENTAL_CONTROLS = 7
+    ON_DEMAND = 8

@@ -114,7 +114,7 @@ def custom_guide_is_active():
         if not response.ok:
             return False
         status = response.json()
-        return status.get('channel_number') == guide_channel
+        return bool(status.get('guide_visible') or status.get('channel_number') == guide_channel)
     except Exception:
         return False
 
@@ -307,6 +307,19 @@ def show_guide_pressed():
             _logger.error('Guide command failed')
     except Exception as e:
         _logger.error('Guide error: {}'.format(e))
+
+
+def show_on_demand_pressed():
+    """
+    Open the On Demand menu from its dedicated, configurable remote button
+    """
+    if not should_allow_press('show_on_demand'):
+        return
+    try:
+        response = requests.post('{}/on-demand/open'.format(FS42_BASE_URL), timeout=2)
+        response.raise_for_status()
+    except requests.RequestException as error:
+        _logger.error('On Demand command failed: {}'.format(error))
 
 
 def volume_up_pressed():
@@ -700,8 +713,8 @@ def handle_key_name(key_name):
     """
     if custom_guide_is_active():
         guide_keys = {
-            'up': 'PageUp',
-            'down': 'PageDown',
+            'up': 'ArrowUp',
+            'down': 'ArrowDown',
             'left': 'ArrowLeft',
             'right': 'ArrowRight',
             'enter': 'Enter',
@@ -716,6 +729,8 @@ def handle_key_name(key_name):
             _logger.info('DEBUG: Matched function: {}'.format(function_name))
             if function_name == 'show_guide':
                 show_guide_pressed()
+            elif function_name == 'show_on_demand':
+                show_on_demand_pressed()
             elif function_name == 'volume_up':
                 volume_up_pressed()
             elif function_name == 'volume_down':

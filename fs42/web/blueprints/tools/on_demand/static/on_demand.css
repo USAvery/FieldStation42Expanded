@@ -1,0 +1,271 @@
+/*
+ * This Source Code Form is subject to the Mozilla Public License, v. 2.0.
+ * See https://mozilla.org/MPL/2.0/.
+ */
+
+/* -------- Comcast On Demand -------- */
+
+:root {
+    --od-height: min(100vh, 75vw);
+    --od-font: min(3vw, 4vh);
+    --live-preview-left: 0%;
+    --live-preview-right: 0%;
+    --live-preview-top: 0%;
+    --live-preview-bottom: 0%;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: transparent;
+    color: white;
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+[hidden] {
+    display: none !important;
+}
+
+#od-wrapper {
+    width: 100vw;
+    height: var(--od-height);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    text-shadow: min(0.2vw, 0.27vh) min(0.2vw, 0.27vh) min(0.16vw, 0.22vh) black;
+}
+
+#od-top {
+    display: flex;
+    height: 40.6%;
+    flex: 0 0 40.6%;
+}
+
+#od-info {
+    width: 58.6%;
+    height: 100%;
+    overflow: hidden;
+}
+
+#od-brand {
+    height: 45%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 4.3% 0 9%;
+    background: hsl(216.164384, 56.589147%, 25.294118%);
+    border-bottom: min(0.35vw, 0.47vh) solid hsl(214.285714, 43.750000%, 25.098039%);
+}
+
+#od-brand img {
+    width: 44%;
+    height: auto;
+    object-fit: contain;
+}
+
+#od-clock {
+    font-size: var(--od-font);
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+#od-heading {
+    height: 55%;
+    padding: 4.8% 9% 0 13%;
+    background: linear-gradient(hsl(210.697674, 46.739130%, 36.078431%), hsl(213.076923, 38.235294%, 60.000000%));
+    overflow: hidden;
+}
+
+h1 {
+    margin: 0 0 4%;
+    font-size: var(--od-font);
+    white-space: nowrap;
+}
+
+.od-mark {
+    display: inline-block;
+    font-weight: 900;
+    font-style: italic;
+    letter-spacing: -0.16em;
+    margin-right: 0.35em;
+}
+
+.od-mark::before {
+    content: '';
+    display: inline-block;
+    width: 0;
+    height: 0;
+    border-top: 0.26em solid transparent;
+    border-bottom: 0.26em solid transparent;
+    border-left: 0.35em solid white;
+    margin-right: 0.12em;
+}
+
+#od-selection {
+    margin: 0;
+    font-size: calc(var(--od-font) * 0.94);
+    font-weight: 700;
+    color: hsl(60.000000, 100.000000%, 81.764706%);
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+#video-panel {
+    width: 41.4%;
+    height: 100%;
+    border-left: 0.59vh solid hsl(215.000000, 52.173913%, 9.019608%);
+    background: linear-gradient(black, black) top left / 100% var(--live-preview-top) no-repeat,
+        linear-gradient(black, black) bottom left / 100% var(--live-preview-bottom) no-repeat,
+        linear-gradient(black, black) left var(--live-preview-top) / var(--live-preview-left)
+            calc(100% - var(--live-preview-top) - var(--live-preview-bottom)) no-repeat,
+        linear-gradient(black, black) right var(--live-preview-top) / var(--live-preview-right)
+            calc(100% - var(--live-preview-top) - var(--live-preview-bottom)) no-repeat;
+}
+
+#od-content {
+    flex: 1;
+    min-height: 0;
+    padding: 3.7% 7.5% 0;
+    background: hsl(216.164384, 56.589147%, 25.294118%);
+    border-top: min(0.4vw, 0.53vh) solid hsl(216.206897, 69.047619%, 16.470588%);
+    overflow: hidden;
+}
+
+#od-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: min(0.85vw, 1.13vh) min(1.45vw, 1.93vh);
+}
+
+.od-choice {
+    width: 100%;
+    height: calc(var(--od-height) * 0.063);
+    padding: 0 0.65em;
+    border: min(0.45vw, 0.6vh) solid hsl(120.000000, 6.796117%, 79.803922%);
+    border-radius: 2em;
+    background: linear-gradient(hsl(214.455446, 50.753769%, 39.019608%), hsl(214.897959, 55.056180%, 34.901961%));
+    box-shadow: inset 0 min(0.16vw, 0.21vh) min(0.2vw, 0.27vh) hsl(212.631579, 27.272727%, 59.019608%), 0 min(0.2vw, 0.27vh) min(0.25vw, 0.33vh) hsl(216.000000, 56.701031%, 19.019608%);
+    color: white;
+    font: 700 var(--od-font)/1 Arial, Helvetica, sans-serif;
+    text-shadow: inherit;
+    cursor: pointer;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.od-choice.is-selected, .od-choice:focus-visible {
+    background: hsl(56.400000, 100.000000%, 80.392157%);
+    color: hsl(0.000000, 0.000000%, 6.274510%);
+    text-shadow: none;
+    border-color: hsl(58.571429, 72.413793%, 88.627451%);
+    outline: none;
+}
+
+#od-navigation {
+    flex: 0 0 8.2%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6%;
+    background: hsl(216.164384, 56.589147%, 25.294118%);
+}
+
+#od-navigation button {
+    border: none;
+    background: transparent;
+    color: white;
+    font: 700 var(--od-font) Arial, Helvetica, sans-serif;
+    text-shadow: inherit;
+    cursor: pointer;
+}
+
+#od-navigation button.is-selected {
+    color: hsl(60.000000, 100.000000%, 81.764706%);
+    outline: none;
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+}
+
+#od-footer {
+    flex: 0 0 8%;
+    background: linear-gradient(hsl(212.307692, 39.000000%, 60.784314%), hsl(212.413793, 34.661355%, 49.215686%) 40%, hsl(213.600000, 51.724138%, 28.431373%));
+    border-top: min(0.35vw, 0.47vh) solid hsl(211.621622, 35.576923%, 40.784314%);
+}
+
+#od-status {
+    font-size: calc(var(--od-font) * 0.85);
+    min-height: 0;
+}
+
+#od-status:not(:empty) {
+    margin-bottom: 0.7em;
+}
+
+#od-search {
+    margin-bottom: 1.1%;
+}
+
+#od-search label {
+    font-size: calc(var(--od-font) * 0.75);
+}
+
+#od-query {
+    width: 100%;
+    border: 2px solid hsl(210.000000, 34.545455%, 78.431373%);
+    border-radius: 0.2em;
+    background: hsl(214.687500, 64.000000%, 19.607843%);
+    color: white;
+    font: 700 calc(var(--od-font) * 0.9) Arial, Helvetica, sans-serif;
+    padding: 0.2em 0.4em;
+}
+
+#od-options.od-keyboard {
+    grid-template-columns: repeat(8, 1fr);
+    gap: 0.35em;
+}
+
+.od-keyboard .od-choice {
+    height: calc(var(--od-height) * 0.045);
+    font-size: calc(var(--od-font) * 0.7);
+    padding: 0;
+}
+
+#od-details {
+    height: calc(var(--od-height) * 0.26);
+    overflow: hidden;
+}
+
+#od-title {
+    font-size: calc(var(--od-font) * 1.1);
+    color: hsl(60.000000, 100.000000%, 81.764706%);
+    margin: 0 0 0.25em;
+}
+
+#od-meta {
+    font-size: calc(var(--od-font) * 0.72);
+    margin: 0 0 0.5em;
+}
+
+#od-description {
+    font-size: calc(var(--od-font) * 0.8);
+    line-height: 1.25;
+    margin: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}

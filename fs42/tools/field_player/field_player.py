@@ -206,6 +206,10 @@ class FieldPlayer(object):
                     case 'play_file':
                         file_path = q_message.get('file_path', None)
                         return PlayerOutcome(PlayerState.PLAY_FILE, file_path)
+                    case 'on_demand':
+                        return PlayerOutcome(PlayerState.ON_DEMAND, q_message.get('entry_id'))
+                    case 'on_demand_menu':
+                        return PlayerOutcome(PlayerState.SUCCESS, 'on_demand_menu')
                     case 'web_key':
                         key = q_message.get('key', '')
                         return PlayerOutcome(PlayerState.SUCCESS, 'web_key:{}'.format(key))
@@ -222,6 +226,12 @@ class FieldPlayer(object):
             contents = r_sock.read()
         if len(contents):
             with open(channel_socket, 'w'):
+                pass
+            try:
+                message = json.loads(contents)
+                if message.get('command') == 'on_demand_menu':
+                    return PlayerOutcome(PlayerState.SUCCESS, 'on_demand_menu')
+            except (ValueError, AttributeError):
                 pass
             return PlayerOutcome(PlayerState.CHANNEL_CHANGE, contents)
         return None
@@ -416,6 +426,9 @@ class FieldPlayer(object):
             self._player_state = self._player.prompt_parental_controls(self._channel_conf)
             if self._player_state.status != PlayerState.SUCCESS:
                 self._skip_play = True
+        elif self._player_state.status == PlayerState.ON_DEMAND:
+            self._skip_play = True
+            self._player_state = self._player.play_on_demand(self._player_state.payload)
         elif self._player_state.status == PlayerState.PLAY_FILE:
             self._logger.info('Play file: {}'.format(self._player_state.payload))
             self._skip_play = True

@@ -26,6 +26,7 @@ USE_SYSTEMCTL = True
 DEFAULT_KEY_MAPPINGS = {
     # Remote control functions
     'show_guide': 'home',  # Show program guide
+    'show_on_demand': 'o',  # Open On Demand (remap to the remote's dedicated button)
     'volume_up': 'right',  # Increase volume
     'volume_down': 'left',  # Decrease volume
     'channel_up': 'up',  # Next channel

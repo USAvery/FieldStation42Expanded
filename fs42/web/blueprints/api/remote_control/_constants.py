@@ -5,4 +5,4 @@
 """
 Define commands accepted by the standalone remote API
 """
-ALLOWED_COMMANDS = {'up', 'down', 'direct'}
+ALLOWED_COMMANDS = {'up', 'down', 'direct', 'on_demand_menu'}

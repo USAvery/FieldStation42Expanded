@@ -35,6 +35,7 @@ app.tools.remote = (function () {
         // Mirrors the player status: while a station is locked, digits enter the
         // PIN instead of changing channel (same rule as fs42/tools/remote_control/remote_control.py).
         let awaiting_pin = false;
+        let guide_visible = false;
         let pin_digits_entered = 0;
         const number_pad = document.getElementById('number-pad');
         const nav_pad = document.getElementById('nav-pad');
@@ -91,6 +92,7 @@ app.tools.remote = (function () {
          * Update Now Playing From Status
          */
         function updateNowPlayingFromStatus(status) {
+            guide_visible = !!status.guide_visible;
             awaiting_pin = !!status.awaiting_pin;
             pin_digits_entered = status.pin_digits_entered || 0;
             if (info_mode === 'playing') {
@@ -513,10 +515,10 @@ app.tools.remote = (function () {
                     togglePad();
                     break;
                 case 'nav_up':
-                    await sendPpvKey('PageUp', 'NEXT');
+                    await sendPpvKey(guide_visible ? 'ArrowUp' : 'PageUp', 'UP');
                     break;
                 case 'nav_down':
-                    await sendPpvKey('PageDown', 'PREV');
+                    await sendPpvKey(guide_visible ? 'ArrowDown' : 'PageDown', 'DOWN');
                     break;
                 case 'nav_left':
                     await sendPpvKey('ArrowLeft', 'LEFT');
@@ -600,6 +602,20 @@ app.tools.remote = (function () {
                     }
                     catch (error) {
                         console.error('Guide command failed:', error);
+                        display.textContent = 'ERROR';
+                    }
+                    break;
+                case 'on_demand':
+                    try {
+                        await window.fs42Api.post('on-demand/open');
+                        guide_visible = true;
+                        if (pad_mode !== 'nav') {
+                            togglePad();
+                        }
+                        display.textContent = 'ON DEMAND';
+                    }
+                    catch (error) {
+                        console.error('On Demand command failed:', error);
                         display.textContent = 'ERROR';
                     }
                     break;

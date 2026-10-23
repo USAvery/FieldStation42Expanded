@@ -291,6 +291,9 @@ class WebRenderApp(QApplication):
             # Persistent renderers stay alive between open/close operations so
             # QtWebEngine/Chromium only pays its startup cost once.
             if isinstance(msg, dict) and msg.get('type') == 'show_window':
+                if msg.get('page') == 'on_demand':
+                    url = QUrl(self.window.current_url).resolved(QUrl('/on-demand'))
+                    self.window.navigate(url.toString())
                 geometry = msg.get('preview_geometry') or {}
                 if geometry:
                     left = float(geometry.get('left_pct', 0.0))
@@ -334,7 +337,8 @@ class WebRenderApp(QApplication):
             if isinstance(msg, str) and msg.startswith('key:'):
                 key_name = msg[4:]
                 if key_name not in {
-                        'PageUp', 'PageDown', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter'
+                        'PageUp', 'PageDown', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter',
+                        'Escape', 'Backspace', 'Home'
                 }:
                     _logger.info("WebRender: rejected disallowed key '{}'".format(key_name))
                     return

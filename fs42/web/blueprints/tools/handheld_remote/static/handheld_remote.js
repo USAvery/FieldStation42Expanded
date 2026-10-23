@@ -89,6 +89,13 @@ app.tools.handheld_remote = (function () {
         });
     };
     self.sendCommand = sendCommand;
+    /**
+     * Open the television's On Demand menu without changing the tuned channel
+     */
+    self.openOnDemand = function() {
+        clearEntry();
+        sendCommand('on_demand_menu');
+    };
     self.appendDigit = appendDigit;
     self.clearEntry = clearEntry;
     self.sendDirect = sendDirect;

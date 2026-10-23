@@ -317,7 +317,8 @@ async def send_key(channel_number: int, key_name: str, request: Request):
     """
     Send a keypress to the PPV web channel
     """
-    allowed_keys = {'PageUp', 'PageDown', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter'}
+    allowed_keys = {'PageUp', 'PageDown', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter',
+                    'Escape', 'Backspace', 'Home'}
     if key_name not in allowed_keys:
         raise HTTPException(status_code=400, detail='Key must be one of: {}'.format(allowed_keys))
     command_queue = request.app.state.player_command_queue

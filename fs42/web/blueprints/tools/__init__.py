@@ -15,6 +15,7 @@ from fs42.web.blueprints.tools.catalog import router as catalog_router
 from fs42.web.blueprints.tools.schedule import router as schedule_router
 from fs42.web.blueprints.tools.stations import router as stations_router
 from fs42.web.blueprints.tools.customguide import router as customguide_router
+from fs42.web.blueprints.tools.on_demand import router as on_demand_router
 from fs42.web.blueprints.tools.diagnostics import router as diagnostics_router
 from fs42.web.blueprints.tools.guide_frame import router as guide_frame_router
 from fs42.web.blueprints.tools.station_editor import router as station_editor_router
@@ -22,5 +23,5 @@ from fs42.web.blueprints.tools.station_editor import router as station_editor_ro
 routers = [
     about_router, catalog_router, diagnostics_router, guide_router, guide_frame_router, index_router,
     remote_router, schedule_router, stations_router, station_editor_router, bump_router, customguide_router,
-    ppv_router
+    ppv_router, on_demand_router
 ]

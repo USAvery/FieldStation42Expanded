@@ -85,6 +85,12 @@ def update_status_socket(
     :param awaiting_pin:       (bool) whether playback is waiting for parental authorization
     :param pin_digits_entered: (int) number of masked PIN digits entered
     """
+    status_socket = StationManager().server_conf['status_socket']
+    try:
+        with open(status_socket) as f_in:
+            guide_visible = bool(json.load(f_in).get('guide_visible', False))
+    except (OSError, ValueError, AttributeError):
+        guide_visible = False
     status_obj = {
         'status': status,
         'network_name': network_name,
@@ -92,6 +98,7 @@ def update_status_socket(
         'timestamp': datetime.datetime.now().strftime(timestamp),
         'awaiting_pin': awaiting_pin,
         'pin_digits_entered': pin_digits_entered,
+        'guide_visible': guide_visible if status != 'stopped' else False,
     }
     if title is not None:
         status_obj['title'] = title
@@ -101,7 +108,6 @@ def update_status_socket(
         status_obj['file_path'] = file_path
     if content_type is not None:
         status_obj['content_type'] = content_type
-    status_socket = StationManager().server_conf['status_socket']
     as_str = json.dumps(status_obj)
     with open(status_socket, 'w') as fp:
         fp.write(as_str)
@@ -285,6 +291,7 @@ class StationPlayer(object):
         self._metadata_worker = MetadataWorker(self._nfo_overlay_data, self._l)
         self._metadata_token = None
         self._metadata_deadline = None
+        self._publish_guide_visibility()
 
     def _create_mpv(self, prefer_dmabuf=True):
         """
@@ -449,6 +456,10 @@ class StationPlayer(object):
             self._toggle_guide_overlay()
             return True
 
+        if response.payload == 'on_demand_menu':
+            self._open_guide_overlay(page='on_demand')
+            return True
+
         if response.payload.startswith('web_key:'):
             key_name = response.payload.split(':', 1)[1]
             if self.guide_visible and self.guide_process and self.guide_process.is_alive() and self.guide_queue:
@@ -574,7 +585,7 @@ class StationPlayer(object):
         self._l.info('Preloading interactive guide renderer in background')
         return True
 
-    def _open_guide_overlay(self):
+    def _open_guide_overlay(self, page=None):
         """
         Show the preloaded guide, arrange its video preview, and report whether it opened
         """
@@ -598,6 +609,8 @@ class StationPlayer(object):
 
         if self.guide_queue:
             message = {'type': 'show_window'}
+            if page is not None:
+                message['page'] = page
             if self._guide_video_layout:
                 message['preview_geometry'] = (
                     self._guide_video_layout.get('preview_geometry')
@@ -605,9 +618,26 @@ class StationPlayer(object):
             self.guide_queue.put(message)
 
         self.guide_visible = True
+        self._publish_guide_visibility()
         network_name = self.station_config.get('network_name', 'unknown') if self.station_config else 'unknown'
         self._l.info('Opened preloaded guide overlay over station: {0}'.format(network_name))
         return True
+
+    def _publish_guide_visibility(self):
+        """
+        Publish menu visibility without changing the tuned channel or restarting playback
+        """
+        try:
+            path = StationManager().server_conf['status_socket']
+            with open(path) as f_in:
+                status = json.load(f_in)
+            status['guide_visible'] = self.guide_visible
+            temporary = path + '.tmp'
+            with open(temporary, 'w') as f_out:
+                json.dump(status, f_out)
+            os.replace(temporary, path)
+        except (OSError, ValueError, TypeError) as error:
+            self._l.debug('Could not publish guide visibility: {}'.format(error))
 
     def _close_guide_overlay(self):
         """
@@ -620,6 +650,7 @@ class StationPlayer(object):
                 pass
 
         self.guide_visible = False
+        self._publish_guide_visibility()
         self._restore_guide_video_layout()
 
     def _shutdown_guide_overlay(self):
@@ -627,6 +658,7 @@ class StationPlayer(object):
         Terminate the persistent guide renderer during application shutdown
         """
         self.guide_visible = False
+        self._publish_guide_visibility()
         self._restore_guide_video_layout()
 
         if self.guide_queue:
@@ -1298,29 +1330,63 @@ class StationPlayer(object):
             'Seek to {0} on {1} failed to land within {2}s; playback may be starting from the wrong position'.
             format(offset_seconds, file_path, timeout_seconds))
 
-    def play_and_wait(self, file_path):
+    def play_on_demand(self, entry_id):
         """
-        Loop a media file until an interrupting command arrives, handling runtime commands meanwhile
+        Authorize a local catalog title, play it once, and restore the library when it finishes
 
-        :param file_path: (str) media file to loop
+        :param entry_id: (int) catalog record requested by the On Demand menu
+        :return:         (PlayerOutcome) normal completion or a command interrupting playback
+        """
+        from fs42.tools.on_demand import OnDemand
+        try:
+            selection = OnDemand().get_selection(entry_id)
+        except ValueError as error:
+            self._l.warning('On Demand selection unavailable: {}'.format(error))
+            return PlayerOutcome(PlayerState.SUCCESS)
+
+        self._close_guide_overlay()
+        network = selection['network_name']
+        if self._parental_controls_required(network) and self.parental_unlocked_network != network:
+            response = self.prompt_parental_controls(StationManager().station_by_name(network))
+            if response.status != PlayerState.SUCCESS:
+                return response
+
+        try:
+            response = self.play_and_wait(selection['file_path'], loop=False, title=selection['title'])
+        finally:
+            self.parental_unlocked_network = None
+        if response.status in (PlayerState.SUCCESS, PlayerState.FAILED):
+            self._open_guide_overlay()
+        return response
+
+    def play_and_wait(self, file_path, loop=True, title='Unknown'):
+        """
+        Play a media file until interrupted, or until completion when looping is disabled
+
+        :param file_path: (str) media file to play
+        :param loop:      (bool) whether to repeat playback until interrupted
+        :param title:     (str) title published to the playback status display
         :return:          (PlayerOutcome) command that interrupted playback
         """
         self._close_now_playing()
+        self.mpv.loop_playlist = 'inf' if loop else 'no'
         self.mpv.vf = ''
         self.mpv.af = ''
-        if not self.play_file(file_path, offset_seconds=0, media_type='video'):
+        if not self.play_file(file_path, offset_seconds=0, media_type='video', title=title):
             if self._pending_response:
                 response = self._pending_response
                 self._pending_response = None
                 return response
             return PlayerOutcome(PlayerState.FAILED)
-        self.mpv.loop_playlist = 'inf'
 
-        # this will keep going until channel change or other interrupt
+        # Monitor playback until completion or an interrupting command
         while True:
             self._poll_metadata_overlay()
             self._drain_guide_events()
             self._check_audio_clock()
+            if not loop and self.mpv.eof_reached:
+                self._close_now_playing()
+                return PlayerOutcome(PlayerState.SUCCESS)
             time.sleep(0.05)
             response = self.input_check_fn()
             if response:
