@@ -19,87 +19,6 @@ app.menu.customguide = (function () {
     let guide_toast_timer = null;
 
     /**
-     * Read a guide display setting from the page stylesheet
-     */
-    self.getCSSVar = function(name) {
-        return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-    };
-    /**
-     * Format a half-hour heading with a compact AM/PM suffix
-     */
-    self.formatTime = function(date, short_suffix = false) {
-        const parts = date
-            .toLocaleTimeString('en-US', {
-                hour: 'numeric',
-                minute: '2-digit',
-                hour12: true
-            })
-            .replace(' ', '')
-            .toLowerCase();
-        if (!short_suffix) {
-            return parts;
-        }
-        return parts.replace('am', 'a').replace('pm', 'p');
-    };
-    /**
-     * Format a selected program's start and end times for the details panel
-     */
-    self.formatProgramTime = function(start_ms, end_ms) {
-        const start = new Date(Number(start_ms));
-        const end = new Date(Number(end_ms));
-        const start_hour = start.getHours() % 12 || 12;
-        const start_minutes = start.getMinutes();
-        const start_text =
-            start_minutes === 0
-                ? '' + start_hour
-                : '' + start_hour + ':' + String(start_minutes).padStart(2, '0');
-        const end_minutes = end.getMinutes();
-        const end_hour = end.getHours() % 12 || 12;
-        const end_suffix = end.getHours() >= 12 ? 'p' : 'a';
-        const end_text =
-            end_minutes === 0
-                ? '' + end_hour + end_suffix
-                : '' + end_hour + ':' + String(end_minutes).padStart(2, '0') + end_suffix;
-        return '' + start_text + '-' + end_text;
-    };
-    /**
-     * Format local schedule boundaries without converting them to UTC
-     */
-    self.formatDateForAPI = function(date) {
-        const y = date.getFullYear();
-        const mo = String(date.getMonth() + 1).padStart(2, '0');
-        const d = String(date.getDate()).padStart(2, '0');
-        const h = String(date.getHours()).padStart(2, '0');
-        const mi = String(date.getMinutes()).padStart(2, '0');
-        const s = String(date.getSeconds()).padStart(2, '0');
-        return '' + y + '-' + mo + '-' + d + 'T' + h + ':' + mi + ':' + s;
-    };
-    /**
-     * Build half-hour columns for the current or selected time window
-     */
-    self.computeSlotTimes = function(offset_slots = 0) {
-        const now = new Date();
-        const base = new Date(
-            now.getFullYear(),
-            now.getMonth(),
-            now.getDate(),
-            now.getHours(),
-            Math.floor(now.getMinutes() / 30) * 30,
-            0,
-            0
-        );
-        base.setMinutes(base.getMinutes() + offset_slots * 30);
-        const slots = [];
-        for (let i = 0; i < SLOT_COUNT; i++) {
-            const start = new Date(base.getTime() + i * 30 * 60 * 1000);
-            slots.push({
-                start,
-                end: new Date(start.getTime() + 30 * 60 * 1000)
-            });
-        }
-        return slots;
-    };
-    /**
      * Load visible stations from the channel API
      */
     self.fetchStations = async function() {
@@ -119,8 +38,8 @@ app.menu.customguide = (function () {
         const overall_end = slots[slots.length - 1].end;
         try {
             return await fetchGuideSchedules(
-                self.formatDateForAPI(overall_start),
-                self.formatDateForAPI(overall_end),
+                formatLocalDateTime(overall_start),
+                formatLocalDateTime(overall_end),
                 include_meta
             );
         }
@@ -151,7 +70,7 @@ app.menu.customguide = (function () {
         for (const slot of slots) {
             const slot_el = document.createElement('div');
             slot_el.className = 'grid-time-slot';
-            slot_el.textContent = self.formatTime(slot.start, true);
+            slot_el.textContent = formatTime(slot.start, {short_suffix:true});
             header.appendChild(slot_el);
         }
     };
@@ -238,7 +157,7 @@ app.menu.customguide = (function () {
         const guide_end_ms = slots[slots.length - 1].end.getTime();
         const total_ms = guide_end_ms - guide_start_ms;
         const now = new Date();
-        const offair_text = self.getCSSVar('--offair-text').replace(/^["']|["']$/g, '') || 'No Info';
+        const offair_text = getCSSVar('--offair-text').replace(/^["']|["']$/g, '') || 'No Info';
         for (let station_index = 0; station_index < stations.length; station_index++) {
             const station = stations[station_index];
             const row = document.createElement('div');
@@ -303,7 +222,7 @@ app.menu.customguide = (function () {
      * Refresh the visible time headings and program rows
      */
     self.buildGrid = async function() {
-        const slots = self.computeSlotTimes(interactive_slot_offset);
+        const slots = computeTimeSlots(new Date(), {count:SLOT_COUNT, offset:interactive_slot_offset});
         self.updateGridHeader(slots);
         const schedules = await self.fetchAllSchedules(slots, USE_META);
         const grid_listings = document.getElementById('grid-listings');
@@ -438,7 +357,7 @@ app.menu.customguide = (function () {
             channel_el.textContent = ('' + channel_num + ' ' + channel_name).trim();
         }
         if (time_el) {
-            time_el.textContent = self.formatProgramTime(program.dataset.startMs, program.dataset.endMs);
+            time_el.textContent = formatTimeRange(new Date(Number(program.dataset.startMs)), new Date(Number(program.dataset.endMs)));
         }
         if (desc_el) {
             desc_el.textContent =
@@ -548,7 +467,7 @@ app.menu.customguide = (function () {
         const program_start_ms = Number(current_program.dataset.startMs);
 
         // The leftmost visible grid slot is the start of the current guide window.
-        const slots = self.computeSlotTimes(interactive_slot_offset);
+        const slots = computeTimeSlots(new Date(), {count:SLOT_COUNT, offset:interactive_slot_offset});
         const leftmost_grid_time_ms = slots[0].start.getTime();
 
         // Normally preserve the selected program's actual start time.

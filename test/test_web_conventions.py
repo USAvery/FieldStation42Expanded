@@ -431,7 +431,8 @@ def test_menu_clock_ticks_replaces_instances_and_releases_timers(app):
     node = shutil.which('node')
     if not node:
         pytest.skip('Node is required for browser utility checks')
-    source = Path(_constants.WEB_DIR, 'blueprints/menu_widgets/menu_clock/static/menu_clock.js').read_text()
+    source = Path(_constants.WEB_DIR, 'static/utils/datetime.js').read_text() + '\n' + Path(
+        _constants.WEB_DIR, 'blueprints/menu_widgets/menu_clock/static/menu_clock.js').read_text()
     script = r"""
 const vm=require('vm'),assert=require('assert');
 const elements={one:{isConnected:true},two:{isConnected:true}};
@@ -561,12 +562,45 @@ def test_menu_widgets_have_separate_discovery_settings_and_page_assets(app):
         assert '/static/menu_widgets/menu_top_panel/menu_top_panel.css' in menu
 
 
+def test_shared_datetime_and_css_helpers():
+    """Preserve local timestamps, compact display, interval boundaries, and element CSS values."""
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('Node is required for browser utility checks')
+    source = '\n'.join(Path(_constants.WEB_DIR, 'static/utils', name).read_text()
+                       for name in ('datetime.js', 'css.js'))
+    script = r"""
+const assert=require('assert');
+const root={},child={};const document={documentElement:root};
+function getComputedStyle(element){return {getPropertyValue:name=>element===root?'  blue  ':'  red  '}}
+__SOURCE__
+const date=new Date(2026,0,2,13,5,9);
+assert.equal(formatLocalDateTime(date),'2026-01-02T13:05:09');
+assert.equal(formatTime(date),'1:05pm');
+assert.equal(formatTime(date,{short_suffix:true}),'1:05p');
+assert.equal(formatTime(date,{compact:false}),'1:05 PM');
+assert.equal(formatTimeRange(new Date(2026,0,2,13),new Date(2026,0,2,14,30)),'1-2:30p');
+assert.equal(formatTimeRange(date,new Date(2026,0,2,14),
+    {hide_zero_minutes:false,short_suffix:false,start_suffix:true}),'1:05pm-2:00pm');
+const slots=computeTimeSlots(new Date(2026,0,2,23,50),{interval:15,count:2,offset:1});
+assert.equal(formatLocalDateTime(slots[0].start),'2026-01-03T00:00:00');
+assert.equal(formatLocalDateTime(slots[1].end),'2026-01-03T00:30:00');
+assert.equal(date.getHours(),13);
+assert.equal(computeTimeSlots(date,{count:0}).length,0);
+assert.throws(()=>computeTimeSlots(date,{interval:0}),RangeError);
+assert.equal(getCSSVar('--color'),'blue');assert.equal(getCSSVar('--color',child),'red');
+"""
+    result = subprocess.run([node, '-'], input=script.replace('__SOURCE__', source),
+                            capture_output=True, encoding='utf8', timeout=20)
+    assert result.returncode == 0, result.stderr
+
+
 def test_customguide_starts_and_builds_its_grid():
     """Exercise guide startup so missing method references cannot leave an empty guide."""
     node = shutil.which('node')
     if not node:
         pytest.skip('Node is required for browser utility checks')
-    source = Path(_constants.WEB_DIR, 'blueprints/menu/customguide/static/customguide.js').read_text()
+    source = Path(_constants.WEB_DIR, 'static/utils/datetime.js').read_text() + '\n' + Path(_constants.WEB_DIR, 'blueprints/menu/customguide/static/customguide.js').read_text()
     script = r"""
 const vm=require('vm'),assert=require('assert');
 const app={},events=[],strip={},listings={appendChild:node=>assert.equal(node,strip)};

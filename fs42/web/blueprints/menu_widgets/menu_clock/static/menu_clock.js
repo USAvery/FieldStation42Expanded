@@ -8,8 +8,7 @@ app.menu_widgets.menu_clock = (function() {
         constructor(config) {
             this.element = document.getElementById(config.attributes.id);
             if (!this.element) throw new Error('Menu clock element was not found: ' + config.attributes.id);
-            this.formatter = new Intl.DateTimeFormat(config.locale, config.options);
-            this.compact = config.compact;
+            this.time_options = {...config.options, locale:config.locale, compact:config.compact};
             this.timer = null;
             this.render = this.render.bind(this);
         }
@@ -21,9 +20,7 @@ app.menu_widgets.menu_clock = (function() {
                 return;
             }
             const now = new Date();
-            let text = this.formatter.format(now);
-            if (this.compact) text = text.replace(/\s/g, '').toLowerCase();
-            this.element.textContent = text;
+            this.element.textContent = formatTime(now, this.time_options);
             this.element.dateTime = now.toISOString();
         }
 

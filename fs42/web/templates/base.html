@@ -12,6 +12,8 @@
     <script>window.fs42Routes = {{ browser_config(request)|tojson }};</script>
     <script src="{{ request.url_for('static', path='utils/routing.js').path }}"></script>
     <script src="{{ request.url_for('static', path='utils/errors.js').path }}"></script>
+    <script src="{{ request.url_for('static', path='utils/datetime.js').path }}"></script>
+    <script src="{{ request.url_for('static', path='utils/css.js').path }}"></script>
     {% if shared_utils %}
     <script src="{{ request.url_for('static', path='utils/general.js').path }}"></script>
     {% endif %}
