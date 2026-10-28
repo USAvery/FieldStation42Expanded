@@ -14,6 +14,7 @@ VIDEO_ID = re.compile(r'[A-Za-z0-9_-]{11}')
 UPLOAD_LIMIT = 30
 PAGE_SIZE = 10
 CACHE_SECONDS = 600
+CACHE_VERSION = 2
 
 
 class YouTubeError(RuntimeError):
@@ -105,9 +106,11 @@ class YouTubeLibrary:
         if channel is None:
             raise ValueError('This YouTube channel is no longer saved.')
         if cached and time.time() - cached['fetched_at'] < CACHE_SECONDS:
-            return json.loads(cached['payload'])
-        # The channel uploads playlist is newest first and excludes other tabs and playlists.
-        info = self._extract('https://www.youtube.com/playlist?list=UU' + channel_id[2:]) or {}
+            payload = json.loads(cached['payload'])
+            if isinstance(payload, dict) and payload.get('version') == CACHE_VERSION:
+                return payload['items']
+        # YouTube's Videos tab excludes Shorts; the combined uploads playlist includes them.
+        info = self._extract(channel['url'] + '/videos') or {}
         items = []
         seen = set()
         for entry in info.get('entries') or []:
@@ -130,7 +133,7 @@ class YouTubeLibrary:
             if connection.execute('SELECT 1 FROM youtube_channels WHERE id = ?', (channel_id,)).fetchone() is None:
                 raise ValueError('This YouTube channel is no longer saved.')
             connection.execute('INSERT OR REPLACE INTO youtube_uploads VALUES (?, ?, ?)',
-                               (channel_id, time.time(), json.dumps(items)))
+                               (channel_id, time.time(), json.dumps({'version': CACHE_VERSION, 'items': items})))
         return items
 
     def get_uploads(self, channel_id, page=0):

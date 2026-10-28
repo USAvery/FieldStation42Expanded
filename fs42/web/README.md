@@ -416,7 +416,8 @@ an upload. Its details appear in the shared top panel. Open the upload and choos
 **Play** to play it once through the existing MPV instance. The remote Back button
 returns through the menus; no on-screen Back button is added.
 
-The latest 30 public uploads are listed newest first in pages of 10. Metadata is
+The latest 30 public videos from the channel's Videos tab are listed newest first
+in pages of 10. YouTube Shorts are excluded. Metadata is
 cached for 10 minutes across the web and player processes; revisiting a channel
 after that refreshes it. Removing a channel also removes its upload cache.
 

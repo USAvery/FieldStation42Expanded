@@ -1,5 +1,7 @@
 """Verify saved YouTube channels, bounded upload caching, and validated playback dispatch."""
 import queue
+import json
+import time
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -20,7 +22,7 @@ def youtube(tmp_path, monkeypatch):
     manager = SimpleNamespace(server_conf={'db_path': str(tmp_path / 'youtube.db')})
     monkeypatch.setattr('fs42.tools.on_demand.youtube.StationManager', lambda: manager)
     extractor = Mock(side_effect=lambda url, **kwargs:
-                     {'channel_id': CHANNEL, 'channel': 'Example Channel'} if '/videos' in url else
+                     {'channel_id': CHANNEL, 'channel': 'Example Channel'} if kwargs.get('limit') == 1 else
                      {'entries': [{'id': VIDEO, 'title': 'Newest upload', 'duration': 120},
                                   {'id': 'bcdefghijkl', 'title': 'Older upload', 'duration': 90}]})
     monkeypatch.setattr(YouTubeLibrary, '_extract', staticmethod(extractor))
@@ -77,6 +79,22 @@ def test_expired_upload_cache_refreshes_and_failure_can_be_retried(youtube):
         extractor.side_effect = None
         extractor.return_value = {'entries': [{'id': 'zzzzzzzzzzz', 'title': 'New upload'}]}
         assert service.get_uploads(CHANNEL)['items'][0]['id'] == 'zzzzzzzzzzz'
+
+
+def test_uploads_use_videos_tab_and_refresh_legacy_cache_containing_shorts(youtube):
+    service, extractor = youtube
+    service.add_channel('@example')
+    with service._connect() as connection:
+        connection.execute('INSERT INTO youtube_uploads VALUES (?, ?, ?)',
+                           (CHANNEL, time.time(), json.dumps([{'id': 'shortvideo1', 'title': 'A Short'}])))
+    result = service.get_uploads(CHANNEL)
+    extractor.assert_called_with('https://www.youtube.com/channel/' + CHANNEL + '/videos')
+    assert result['total'] == 2
+    assert all(item['id'] != 'shortvideo1' for item in result['items'])
+    with pytest.raises(ValueError):
+        service.get_selection(CHANNEL, 'shortvideo1')
+    assert YouTubeLibrary().get_uploads(CHANNEL) == result
+    assert extractor.call_count == 2
 
 
 def test_bounded_upload_pages_filter_private_live_invalid_and_duplicate_entries(youtube):
