@@ -35,7 +35,8 @@ fs42/
             api/            API routers grouped by resource
             web_interface/  Web console and handheld remote pages and assets
             menu/           Pi-facing menus and browser-based channel displays
-            widgets/        Configurable controls with templates, scripts, and styles
+            widgets/        Web console controls with templates, scripts, and styles
+            menu_widgets/   Pi menu clocks and panels with their own templates and assets
         templates/          Shared Jinja page layout
         static/             Shared scripts, themes, and station templates
 test/                       Unit and integration tests
@@ -162,7 +163,7 @@ JavaScript widget instances keep independent state by control ID. Use
 configuration into scripts.
 
 Browser routes are exported by the application into `window.fs42Routes` and are also
-available at `/web/routes`. `app.utils.routing.urlFor('api.catalogs.get_catalog',
+available at `/web/routes`. `urlFor('api.catalogs.get_catalog',
 {network_name: name})` builds an encoded URL from a registered endpoint. The shared
 API client uses the page's origin and these URLs, including configured deployment
 prefixes. Existing path-based callers remain supported by the same resolver.
@@ -170,7 +171,7 @@ prefixes. Existing path-based callers remain supported by the same resolver.
 `core/errors.py` centralizes HTML error pages, JSON API errors, and traceback logging.
 API validation responses retain their structured `detail` list. Unexpected failures
 return a generic explanation; HTML traceback details appear only when web `debug`
-is explicitly enabled. `app.utils.errors` formats browser errors and displays them
+is explicitly enabled. Top-level `errorMessage`, `showError`, and `reportError` format browser errors and displays them
 as text in an accessible notice or a page's existing error area. Dynamic HTML
 renderers escape catalog, schedule, station, and search text with the shared helper.
 
@@ -239,3 +240,84 @@ sequences, station drafts, and display layout.
 Sequence-scanning fixtures create symbolic links. They require a platform and
 account that can create those links. Playback and hardware integrations also need
 their Linux, MPV, display, and device dependencies for a complete runtime check.
+
+Shared scripts in `web/static/utils/` expose top-level functions, including
+`urlFor`, `fetchURL`, `apiGet`, `apiPost`, `initConsole`, and `escapeHtml`.
+They do not use the page and widget namespaces.
+
+Routing utilities follow the shared web-app helper conventions: `ajaxURL(url,
+callback, method)` returns response text; `ajaxPost(url, data, callback, type)`
+posts JSON, or the `main-form` fields when data is omitted; and
+`ajaxEndpoint(endpoint, args, callback)` waits for routes and retrieves text.
+All three return promises as well as accepting callbacks. `urlFor(endpoint,
+args, filename)` consumes path arguments, appends an optional static filename,
+and encodes remaining query arguments. `convertArgsToStr`, `splitUrl`,
+`isInternal`, `redirect`, and `getPageTitle` are shared global helpers.
+`$ROUTES` is populated from the rendered route data or `/web/routes` by
+`loadRoutes()` and `routingInit()`. The JSON adapters remain available to
+existing console and Pi pages. Redirects use normal browser navigation so
+current players and polling timers are released when a page is replaced.
+
+Blueprint scripts declare behavior directly as `self.render`, `self.onChange`,
+`self.loadData`, or other named methods at namespace scope. `self.setup()` only
+initializes page state, creates widget/viewer instances, starts initial loads,
+and binds handlers. Viewer and widget classes are defined alongside setup,
+with instance behavior on their methods. Small callbacks stay with the action
+that needs their local state; whole page implementations are not defined in setup.
+
+`menu_clock` owns the Pi menus' once-per-second local-time updates. Include it
+with `include_widget('menu_clock', {'attributes': {'id': 'clock'}})`. Defaults
+under `menu_widgets.menu_clock.config` control the locale, `Intl.DateTimeFormat`
+options, and compact lowercase AM/PM formatting. Each instance renders
+immediately, updates once per second, and stops when replaced, detached, or
+unloaded. The custom guide and on-demand menu retain their existing clock IDs
+and styling; their page scripts no longer manage clock timers.
+
+`menu_top_panel` owns the shared menu panel, branding assets, and CSS. Its
+`video_panel` option defaults to `false`; `title` defaults to `null` and is
+rendered as escaped text when provided. Without a preview, the text panel uses
+the full width. The native-renderer hook remains `id="video-panel"` when enabled.
+Use a Jinja call block for the details area instead of passing raw HTML in settings:
+
+```jinja
+{% call include_widget('menu_top_panel', {'video_panel': true, 'title': 'TV Listings'}) %}
+    <h2>{{ program.title }}</h2>
+    <p>{{ program.description }}</p>
+{% endcall %}
+```
+
+The caller block inherits its page's template context and normal escaping. Its
+HTML belongs to the page, so each menu can use its own structure and dynamic
+control IDs. Omit the call block for an empty details area. The nested clock
+can be configured through the `clock` dictionary; use unique clock and panel
+attribute IDs when rendering multiple panels on one page. The guide keeps its
+existing selected-program IDs and continues to update their content in JavaScript.
+
+`menu_bottom_panel` (widget name) renders the `menu-bottom-panel` element and
+owns its stylesheet. It accepts a Jinja call block just like `menu_top_panel`:
+
+```jinja
+{% call include_widget('menu_bottom_panel') %}
+    <p>{{ message }}</p>
+{% endcall %}
+```
+
+Omitting the call block produces an empty panel. Attribute overrides support
+custom IDs and accessibility attributes. The guide's empty decorative panel
+uses `aria-hidden="true"`; panels with meaningful content remain accessible by default.
+
+Console widgets (`selector`, `search`, and `log_display`) live under
+`blueprints/widgets/`. Pi widgets (`menu_clock`, `menu_top_panel`, and
+`menu_bottom_panel`) live under `blueprints/menu_widgets/`. Both families use
+`include_widget()` and caller blocks. Defaults are stored under the matching
+`widgets` or `menu_widgets` settings key. Static URLs and named mounts follow
+the family, for example `/static/menu_widgets/menu_clock/menu_clock.css` and
+`menu_widgets.menu_top_panel.static`. JavaScript uses `app.widgets` for console
+widgets and `app.menu_widgets` for Pi widgets. Each page loads assets from its
+own widget family.
+
+Both customguide and on-demand use `menu_top_panel` and `menu_bottom_panel`.
+On-demand supplies its heading and selection text through the top panel's caller
+block, enables the native video preview, and places `od-navigation` inside the
+bottom panel's caller block. The shared widgets own both panel layouts and their
+styles; the on-demand page owns its choices, title details, and navigation behavior.

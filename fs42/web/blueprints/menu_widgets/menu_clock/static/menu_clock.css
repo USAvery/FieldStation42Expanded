@@ -1,0 +1,15 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. */
+
+.menu-clock-line {
+    justify-content: flex-end;
+    margin-top: 0.1em;
+    display: flex;
+    align-items: center;
+    gap: 0.3em;
+    font-size: min(2.85vw, 3.8vh);
+    line-height: 1;
+}
+
+.menu-clock {
+    font-size: 1.05em;
+}

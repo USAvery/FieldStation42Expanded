@@ -3,19 +3,12 @@
 {% block page_content %}
 <main id="od-wrapper" aria-label="On Demand">
         <!-- Branding, Selection Details, and Native Channel Preview -->
-        <header id="od-top">
-            <div id="od-info">
-                <div id="od-brand">
-                    <img src="{{ sub_static('customguide', 'images/comcast_logo.png') }}" alt="Comcast">
-                    <time id="od-clock"></time>
-                </div>
-                <div id="od-heading">
-                    <h1><span class="od-mark" aria-hidden="true">OD</span> On Demand</h1>
-                    <p id="od-selection">Top Picks</p>
-                </div>
+        {% call include_widget('menu_top_panel', {'video_panel': true, 'clock': {'attributes': {'id': 'od-clock'}}}) %}
+            <div id="od-heading">
+                <h1><span class="od-mark" aria-hidden="true">OD</span> On Demand</h1>
+                <p id="od-selection">Top Picks</p>
             </div>
-            <div id="video-panel" aria-label="Current channel preview"></div>
-        </header>
+        {% endcall %}
         <!-- Library Categories, Results, and Playback Details -->
         <section id="od-content" aria-label="Library">
             <div id="od-search" hidden>
@@ -30,7 +23,8 @@
             <div id="od-status" role="status" aria-live="polite"></div>
             <div id="od-options" aria-label="Choices"></div>
         </section>
-        <nav id="od-navigation" aria-label="Menu navigation"></nav>
-        <footer id="od-footer" aria-hidden="true"></footer>
+        {% call include_widget('menu_bottom_panel') %}
+            <nav id="od-navigation" aria-label="Menu navigation"></nav>
+        {% endcall %}
     </main>
 {% endblock page_content %}

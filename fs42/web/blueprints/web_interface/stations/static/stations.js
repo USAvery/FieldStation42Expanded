@@ -13,9 +13,9 @@ app.web_interface.stations = (function () {
     /**
      * Load Stations
      */
-    async function loadStations() {
+    self.loadStations = async function() {
         try {
-            const data = await window.fs42Api.get('api.stations.list_stations');
+            const data = await apiGet('api.stations.list_stations');
             // Extract station_conf from each station object
             all_stations = (data.stations || []).map(function (s) {
                 return s.station_conf;
@@ -29,16 +29,16 @@ app.web_interface.stations = (function () {
             filtered_stations.sort(function (a, b) {
                 return (a.channel_number || 0) - (b.channel_number || 0);
             });
-            renderStations();
+            self.renderStations();
         }
         catch (error) {
-            app.utils.errors.show('station-list', error);
+            showError('station-list', error);
         }
-    }
+    };
     /**
      * Apply Filters
      */
-    function applyFilters() {
+    self.applyFilters = function() {
         const type_filter = document.getElementById('type-filter').value;
         const search_query = document.getElementById('search-input').value.toLowerCase();
         filtered_stations = all_stations.filter(function (station) {
@@ -57,12 +57,12 @@ app.web_interface.stations = (function () {
             }
             return true;
         });
-        renderStations();
-    }
+        self.renderStations();
+    };
     /**
      * Render Stations
      */
-    function renderStations() {
+    self.renderStations = function() {
         const container = document.getElementById('station-list');
         if (filtered_stations.length === 0) {
             container.innerHTML = [
@@ -80,7 +80,7 @@ app.web_interface.stations = (function () {
             const name = escapeHtml(station.network_name || 'Unnamed Station');
             const channel = escapeHtml(station.channel_number || 'N/A');
             const type = escapeHtml(station.network_type || 'standard');
-            const description = getStationDescription(station);
+            const description = self.getStationDescription(station);
             const draft_badge = station._draft
                 ? '<span class="station-card-draft">draft &bull; not on air</span>'
                 : '';
@@ -139,11 +139,11 @@ app.web_interface.stations = (function () {
         }
         html += '</div>';
         container.innerHTML = html;
-    }
+    };
     /**
      * Get Station Description
      */
-    function getStationDescription(station) {
+    self.getStationDescription = function(station) {
         const type = escapeHtml(station.network_type || 'standard');
         switch (type) {
             case 'standard':
@@ -166,83 +166,80 @@ app.web_interface.stations = (function () {
             default:
                 return 'Custom configuration';
         }
-    }
+    };
     /**
      * Edit Station
      */
-    function editStation(network_name) {
-        window.location.href = window.fs42Api.urlFor('/static/station_editor.html?station=' + encodeURIComponent(network_name));
-    }
+    self.editStation = function(network_name) {
+        window.location.href = urlFor('/static/station_editor.html?station=' + encodeURIComponent(network_name));
+    };
     /**
      * Escape Html
      */
-    function escapeHtml(text) {
-        return app.utils.general.escapeHtml(text);
-    }
     /**
      * Show Template Selector
      */
-    function showTemplateSelector() {
+    self.showTemplateSelector = function() {
         document.getElementById('template-modal').style.display = 'flex';
-    }
+    };
     /**
      * Hide Template Selector
      */
-    function hideTemplateSelector() {
+    self.hideTemplateSelector = function() {
         document.getElementById('template-modal').style.display = 'none';
-    }
+    };
     /**
      * Create From Template
      */
-    async function createFromTemplate(template_name) {
-        hideTemplateSelector();
+    self.createFromTemplate = async function(template_name) {
+        self.hideTemplateSelector();
         try {
             // Load the template
-            const response = await window.fs42Api.fetch('/static/templates/' + template_name + '.json');
+            const response = await fetchURL('/static/templates/' + template_name + '.json');
             if (!response.ok) {
                 throw new Error('Failed to load template: ' + response.statusText);
             }
             const template = await response.json();
 
             // Suggest next available channel number
-            const channel_number = await findNextAvailableChannel();
+            const channel_number = await self.findNextAvailableChannel();
             template.station_conf.channel_number = channel_number;
 
             // Store template in sessionStorage and navigate to editor
             sessionStorage.setItem('newStationTemplate', JSON.stringify(template));
-            window.location.href = window.fs42Api.urlFor('/static/station_editor.html?mode=create');
+            window.location.href = urlFor('/static/station_editor.html?mode=create');
         }
         catch (error) {
-            app.utils.errors.report(error);
+            reportError(error);
         }
-    }
+    };
     /**
      * Duplicate Station
      */
-    async function duplicateStation(network_name) {
+    self.duplicateStation = async function(network_name) {
         try {
             // Fetch the existing station
-            const data = await window.fs42Api.get(window.fs42Api.urlFor('api.stations.get_station_config', {network_name: network_name}));
+            const data = await apiGet(urlFor('api.stations.get_station_config', {network_name: network_name}));
             const config = data.station_config;
 
             // Create a copy with modified name and channel
-            const new_name = generateDuplicateName(config.network_name);
-            const new_channel = await findNextAvailableChannel();
+            const new_name = self.generateDuplicateName(config.network_name);
+            const new_channel = await self.findNextAvailableChannel();
             config.network_name = new_name;
             config.channel_number = new_channel;
 
             // Store in sessionStorage and navigate to editor
             sessionStorage.setItem('newStationTemplate', JSON.stringify(config));
-            window.location.href = window.fs42Api.urlFor('/static/station_editor.html?mode=create');
+            window.location.href = urlFor('/static/station_editor.html?mode=create');
         }
         catch (error) {
-            app.utils.errors.report(error);
+            reportError(error);
         }
-    }
+    };
     /**
      * Generate Duplicate Name
      */
-    function generateDuplicateName(original_name) {
+    self.generateDuplicateName = function(original_name) {
         // Check if name already ends with " 2", " 3", etc.
         const match = original_name.match(/^(.*?)\s+(\d+)$/);
         if (match) {
@@ -280,11 +277,11 @@ app.web_interface.stations = (function () {
             }
             return '' + original_name + ' ' + num;
         }
-    }
+    };
     /**
      * Find Next Available Channel
      */
-    async function findNextAvailableChannel() {
+    self.findNextAvailableChannel = async function() {
         const used_channels = all_stations.map(function (s) {
             return s.channel_number;
         });
@@ -296,24 +293,19 @@ app.web_interface.stations = (function () {
             }
         }
         return 999; // Fallback
-    }
+    };
 
     /** Bind page controls and load the initial data. */
     self.setup = async function() {
-
         // Load stations
-        await loadStations();
+        await self.loadStations();
 
         // Setup event listeners
-        document.getElementById('type-filter').addEventListener('change', applyFilters);
-        document.getElementById('search-input').addEventListener('input', applyFilters);
+        document.getElementById('type-filter').addEventListener('change', self.applyFilters);
+        document.getElementById('search-input').addEventListener('input', self.applyFilters);
 
         // Template selector modal functions
     };
-    Object.assign(self, {
-        loadStations, applyFilters, renderStations, getStationDescription, editStation, escapeHtml,
-        showTemplateSelector, hideTemplateSelector, createFromTemplate, duplicateStation,
-        generateDuplicateName, findNextAvailableChannel
-    });
+    self.escapeHtml = escapeHtml;
     return self;
 })();

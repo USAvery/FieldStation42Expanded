@@ -7,10 +7,10 @@ app.web_interface = app.web_interface || {};
 app.web_interface.remote = (function () {
     let self = {};
 
-    const display = document.getElementById('remote-display');
-    const now_playing_network = document.getElementById('now-playing-network');
-    const now_playing_status = document.getElementById('now-playing-status');
-    const now_playing_title = document.getElementById('now-playing-title');
+    let display = null;
+    let now_playing_network = null;
+    let now_playing_status = null;
+    let now_playing_title = null;
     let current_channel = '001';
     const volume = 50;
     const muted = false;
@@ -26,8 +26,8 @@ app.web_interface.remote = (function () {
     let awaiting_pin = false;
     let guide_visible = false;
     let pin_digits_entered = 0;
-    const number_pad = document.getElementById('number-pad');
-    const nav_pad = document.getElementById('nav-pad');
+    let number_pad = null;
+    let nav_pad = null;
     const program_data = {
         '001': {
             title: 'Morning News',
@@ -54,7 +54,7 @@ app.web_interface.remote = (function () {
     /**
      * Update Now Playing
      */
-    function updateNowPlaying(channel) {
+    self.updateNowPlaying = function(channel) {
         const program = program_data[channel];
         if (program) {
             now_playing_title.textContent = program.title;
@@ -64,20 +64,20 @@ app.web_interface.remote = (function () {
             now_playing_title.textContent = 'Channel ' + channel;
             nowPlayingInfo.textContent = 'Program information unavailable';
         }
-    }
+    };
     /**
      * Idle Display Text
      */
-    function idleDisplayText() {
+    self.idleDisplayText = function() {
         if (awaiting_pin) {
             return pin_digits_entered > 0 ? '•'.repeat(pin_digits_entered) : 'ENTER PIN';
         }
         return 'CH ' + current_channel;
-    }
+    };
     /**
      * Update Now Playing From Status
      */
-    function updateNowPlayingFromStatus(status) {
+    self.updateNowPlayingFromStatus = function(status) {
         guide_visible = !!status.guide_visible;
         awaiting_pin = !!status.awaiting_pin;
         pin_digits_entered = status.pin_digits_entered || 0;
@@ -95,7 +95,7 @@ app.web_interface.remote = (function () {
                 if (status.channel_number && status.channel_number > 0) {
                     current_channel = String(status.channel_number).padStart(3, '0');
                     if (!is_inputting_channel && !is_showing_volume) {
-                        display.textContent = idleDisplayText();
+                        display.textContent = self.idleDisplayText();
                     }
                 }
             }
@@ -114,7 +114,7 @@ app.web_interface.remote = (function () {
                 now_playing_status.textContent = status.network_name || '';
                 now_playing_title.textContent = '';
                 if (!is_inputting_channel && !is_showing_volume) {
-                    display.textContent = idleDisplayText();
+                    display.textContent = self.idleDisplayText();
                 }
             }
             else {
@@ -127,11 +127,11 @@ app.web_interface.remote = (function () {
             }
         }
         // If in system info mode, don't update the display from player status
-    }
+    };
     /**
      * Show Volume Display
      */
-    function showVolumeDisplay(volume_text) {
+    self.showVolumeDisplay = function(volume_text) {
         console.log('showVolumeDisplay called with:', volume_text);
 
         // Clear any existing volume timeout
@@ -151,14 +151,14 @@ app.web_interface.remote = (function () {
             volume_display_timeout = null;
             // Return to normal display (will be updated by next status poll)
             if (!is_inputting_channel) {
-                display.textContent = idleDisplayText();
+                display.textContent = self.idleDisplayText();
             }
         }, 3000);
-    }
+    };
     /**
      * Toggle Info Mode
      */
-    function toggleInfoMode() {
+    self.toggleInfoMode = function() {
         if (info_mode === 'playing') {
             info_mode = 'system';
             display.textContent = 'SYSTEM INFO';
@@ -171,12 +171,12 @@ app.web_interface.remote = (function () {
         }
 
         // Immediately poll for the new mode
-        pollPlayerStatus();
-    }
+        self.pollPlayerStatus();
+    };
     /**
      * Update System Info
      */
-    function updateSystemInfo(info) {
+    self.updateSystemInfo = function(info) {
         // Prioritize: CPU temp, CPU load percent, memory used percent
         console.log('System info received:', info);
 
@@ -223,21 +223,21 @@ app.web_interface.remote = (function () {
         else {
             now_playing_title.textContent = 'Memory N/A';
         }
-    }
+    };
     /**
      * Poll Player Status
      */
-    async function pollPlayerStatus() {
+    self.pollPlayerStatus = async function() {
         try {
             if (info_mode === 'playing') {
-                const status = await window.fs42Api.get('api.player.get_player_status');
+                const status = await apiGet('api.player.get_player_status');
                 console.log('Player status response:', status);
-                updateNowPlayingFromStatus(status);
+                self.updateNowPlayingFromStatus(status);
             }
             else if (info_mode === 'system') {
-                const info = await window.fs42Api.get('api.player.get_info');
+                const info = await apiGet('api.player.get_info');
                 console.log('System info response:', info);
-                updateSystemInfo(info);
+                self.updateSystemInfo(info);
             }
         }
         catch (error) {
@@ -253,43 +253,43 @@ app.web_interface.remote = (function () {
                 now_playing_title.textContent = 'Unable to get info';
             }
         }
-    }
+    };
     /**
      * Start Status Polling
      */
-    function startStatusPolling() {
+    self.startStatusPolling = function() {
         if (status_poll_interval) {
             clearInterval(status_poll_interval);
         }
-        status_poll_interval = setInterval(pollPlayerStatus, 1000);
+        status_poll_interval = setInterval(self.pollPlayerStatus, 1000);
         // Get initial status immediately
-        pollPlayerStatus();
-    }
+        self.pollPlayerStatus();
+    };
     /**
      * Stop Status Polling
      */
-    function stopStatusPolling() {
+    self.stopStatusPolling = function() {
         if (status_poll_interval) {
             clearInterval(status_poll_interval);
             status_poll_interval = null;
         }
-    }
+    };
     /**
      * Toggle Pad
      */
-    function togglePad() {
+    self.togglePad = function() {
         pad_mode = pad_mode === 'number' ? 'nav' : 'number';
         number_pad.hidden = pad_mode !== 'number';
         nav_pad.hidden = pad_mode !== 'nav';
         display.textContent = pad_mode === 'nav' ? 'NAV PAD' : 'NUMBERS';
-    }
+    };
     /**
      * Send Ppv Key
      */
-    async function sendPpvKey(key_name, label) {
+    self.sendPpvKey = async function(key_name, label) {
         const channel_number = parseInt(current_channel, 10);
         try {
-            await window.fs42Api.post('ppv/' + channel_number + '/key/' + key_name);
+            await apiPost('ppv/' + channel_number + '/key/' + key_name);
             display.textContent = label;
             console.log('PPV key ' + key_name + ' sent to channel ' + channel_number);
         }
@@ -297,33 +297,33 @@ app.web_interface.remote = (function () {
             console.error('PPV key ' + key_name + ' failed:', error);
             display.textContent = 'ERROR';
         }
-    }
+    };
     /**
      * Send Parental Digit
      */
-    async function sendParentalDigit(digit) {
+    self.sendParentalDigit = async function(digit) {
         try {
-            await window.fs42Api.post('player/parental/digit/' + digit);
+            await apiPost('player/parental/digit/' + digit);
             // Count it locally so the display reacts at once - the next poll
             // replaces this with the count the player confirms.
             pin_digits_entered += 1;
-            display.textContent = idleDisplayText();
+            display.textContent = self.idleDisplayText();
             console.log('Parental PIN digit sent');
         }
         catch (error) {
             console.error('Parental digit failed:', error);
             display.textContent = 'ERROR';
         }
-    }
+    };
     /**
      * Handle Clear
      */
-    async function handleClear() {
+    self.handleClear = async function() {
         if (awaiting_pin) {
             try {
-                await window.fs42Api.post('api.player.parental_clear');
+                await apiPost('api.player.parental_clear');
                 pin_digits_entered = 0;
-                display.textContent = idleDisplayText();
+                display.textContent = self.idleDisplayText();
                 console.log('Parental PIN cleared');
             }
             catch (error) {
@@ -340,12 +340,12 @@ app.web_interface.remote = (function () {
         }
         channel_input = '';
         is_inputting_channel = false;
-        display.textContent = idleDisplayText();
-    }
+        display.textContent = self.idleDisplayText();
+    };
     /**
      * Handle Number Input
      */
-    function handleNumberInput(digit) {
+    self.handleNumberInput = function(digit) {
         // Set input mode
         is_inputting_channel = true;
 
@@ -363,17 +363,17 @@ app.web_interface.remote = (function () {
 
         // If we have 3 digits, send immediately
         if (channel_input.length >= 3) {
-            sendChannelChange();
+            self.sendChannelChange();
         }
         else {
             // Set timeout for 1 second
-            channel_input_timeout = setTimeout(sendChannelChange, 1000);
+            channel_input_timeout = setTimeout(self.sendChannelChange, 1000);
         }
-    }
+    };
     /**
      * Send Channel Change
      */
-    async function sendChannelChange() {
+    self.sendChannelChange = async function() {
         if (channel_input_timeout) {
             clearTimeout(channel_input_timeout);
             channel_input_timeout = null;
@@ -382,7 +382,7 @@ app.web_interface.remote = (function () {
             try {
                 const channel_number = parseInt(channel_input);
                 console.log('Sending channel change to ' + channel_number);
-                await window.fs42Api.get('player/channels/' + channel_number);
+                await apiGet('player/channels/' + channel_number);
                 console.log('Changed to channel ' + channel_number);
                 // The status polling will update the display with actual channel info
             }
@@ -391,7 +391,7 @@ app.web_interface.remote = (function () {
                 display.textContent = 'ERROR';
                 setTimeout(function () {
                     is_inputting_channel = false;
-                    display.textContent = idleDisplayText();
+                    display.textContent = self.idleDisplayText();
                 }, 2000);
                 return;
             }
@@ -400,15 +400,15 @@ app.web_interface.remote = (function () {
         // Clear the input and exit input mode
         channel_input = '';
         is_inputting_channel = false;
-    }
+    };
     /**
      * Handle Remote Command
      */
-    async function handleRemoteCommand(key) {
+    self.handleRemoteCommand = async function(key) {
         switch (key) {
             case 'power':
                 try {
-                    await window.fs42Api.get('api.player.player_stop');
+                    await apiGet('api.player.player_stop');
                     display.textContent = 'STOPPING';
                     console.log('Player stop command sent');
                 }
@@ -428,37 +428,37 @@ app.web_interface.remote = (function () {
             case '8':
             case '9':
                 if (awaiting_pin) {
-                    await sendParentalDigit(key);
+                    await self.sendParentalDigit(key);
                 }
                 else {
-                    handleNumberInput(key);
+                    self.handleNumberInput(key);
                 }
                 break;
             case 'clear':
-                await handleClear();
+                await self.handleClear();
                 break;
             case 'pad_toggle':
-                togglePad();
+                self.togglePad();
                 break;
             case 'nav_up':
-                await sendPpvKey(guide_visible ? 'ArrowUp' : 'PageUp', 'UP');
+                await self.sendPpvKey(guide_visible ? 'ArrowUp' : 'PageUp', 'UP');
                 break;
             case 'nav_down':
-                await sendPpvKey(guide_visible ? 'ArrowDown' : 'PageDown', 'DOWN');
+                await self.sendPpvKey(guide_visible ? 'ArrowDown' : 'PageDown', 'DOWN');
                 break;
             case 'nav_left':
-                await sendPpvKey('ArrowLeft', 'LEFT');
+                await self.sendPpvKey('ArrowLeft', 'LEFT');
                 break;
             case 'nav_right':
-                await sendPpvKey('ArrowRight', 'RIGHT');
+                await self.sendPpvKey('ArrowRight', 'RIGHT');
                 break;
             case 'nav_enter':
-                await sendPpvKey('Enter', 'SELECT');
+                await self.sendPpvKey('Enter', 'SELECT');
                 break;
             case 'ch_up':
                 display.textContent = 'CHANNEL UP';
                 try {
-                    await window.fs42Api.get('player/channels/up');
+                    await apiGet('player/channels/up');
                     console.log('Channel up command sent');
                     // The status polling will update the display with actual channel
                 }
@@ -467,14 +467,14 @@ app.web_interface.remote = (function () {
                     display.textContent = 'ERROR';
                     // Return to previous display after 2 seconds
                     setTimeout(function () {
-                        display.textContent = idleDisplayText();
+                        display.textContent = self.idleDisplayText();
                     }, 2000);
                 }
                 break;
             case 'ch_down':
                 display.textContent = 'CHANNEL DOWN';
                 try {
-                    await window.fs42Api.get('player/channels/down');
+                    await apiGet('player/channels/down');
                     console.log('Channel down command sent');
                     // The status polling will update the display with actual channel
                 }
@@ -483,46 +483,46 @@ app.web_interface.remote = (function () {
                     display.textContent = 'ERROR';
                     // Return to previous display after 2 seconds
                     setTimeout(function () {
-                        display.textContent = idleDisplayText();
+                        display.textContent = self.idleDisplayText();
                     }, 2000);
                 }
                 break;
             case 'vol_up':
                 try {
-                    const response = await window.fs42Api.get('api.player.volume_up');
-                    showVolumeDisplay(response.volume || 'VOL +');
+                    const response = await apiGet('api.player.volume_up');
+                    self.showVolumeDisplay(response.volume || 'VOL +');
                     console.log('Volume up command sent:', response);
                 }
                 catch (error) {
                     console.error('Volume up failed:', error);
-                    showVolumeDisplay('ERROR');
+                    self.showVolumeDisplay('ERROR');
                 }
                 break;
             case 'vol_down':
                 try {
-                    const response = await window.fs42Api.get('api.player.volume_down');
-                    showVolumeDisplay(response.volume || 'VOL -');
+                    const response = await apiGet('api.player.volume_down');
+                    self.showVolumeDisplay(response.volume || 'VOL -');
                     console.log('Volume down command sent:', response);
                 }
                 catch (error) {
                     console.error('Volume down failed:', error);
-                    showVolumeDisplay('ERROR');
+                    self.showVolumeDisplay('ERROR');
                 }
                 break;
             case 'mute':
                 try {
-                    const response = await window.fs42Api.get('api.player.volume_mute');
-                    showVolumeDisplay('MUTE');
+                    const response = await apiGet('api.player.volume_mute');
+                    self.showVolumeDisplay('MUTE');
                     console.log('Mute toggle command sent:', response);
                 }
                 catch (error) {
                     console.error('Mute failed:', error);
-                    showVolumeDisplay('ERROR');
+                    self.showVolumeDisplay('ERROR');
                 }
                 break;
             case 'guide':
                 try {
-                    await window.fs42Api.post('api.player.show_guide');
+                    await apiPost('api.player.show_guide');
                     display.textContent = 'GUIDE';
                     console.log('Guide command sent');
                 }
@@ -533,10 +533,10 @@ app.web_interface.remote = (function () {
                 break;
             case 'on_demand':
                 try {
-                    await window.fs42Api.post('api.on_demand.open_menu');
+                    await apiPost('api.on_demand.open_menu');
                     guide_visible = true;
                     if (pad_mode !== 'nav') {
-                        togglePad();
+                        self.togglePad();
                     }
                     display.textContent = 'ON DEMAND';
                 }
@@ -547,16 +547,16 @@ app.web_interface.remote = (function () {
                 break;
             case 'exit':
                 display.textContent = 'EXIT';
-                window.location.href = window.fs42Api.urlFor('/');
+                window.location.href = urlFor('/');
                 break;
             case 'info':
-                toggleInfoMode();
+                self.toggleInfoMode();
                 break;
             case 'subtitles':
                 try {
                     // Queue a non-interrupting MPV command; station_player.py
                     // cycles the selected subtitle track and displays its label.
-                    await window.fs42Api.post('api.player.mpv_cycle_subtitles');
+                    await apiPost('api.player.mpv_cycle_subtitles');
                     display.textContent = 'SUBTITLES';
                     console.log('Cycle subtitles command sent');
                 }
@@ -568,7 +568,7 @@ app.web_interface.remote = (function () {
             case 'audio':
                 try {
                     // Same path as subtitles, but cycling the active audio track.
-                    await window.fs42Api.post('api.player.mpv_cycle_audio');
+                    await apiPost('api.player.mpv_cycle_audio');
                     display.textContent = 'AUDIO';
                     console.log('Cycle audio command sent');
                 }
@@ -585,14 +585,48 @@ app.web_interface.remote = (function () {
         if (!['power', 'mute'].includes(key)) {
             setTimeout(function () {
                 if (display.textContent !== 'OFF') {
-                    display.textContent = muted ? 'MUTED' : idleDisplayText();
+                    display.textContent = muted ? 'MUTED' : self.idleDisplayText();
                 }
             }, 2000);
         }
-    }
+    };
 
     /** Bind page controls and load the initial data. */
+    const lastTouchActivation = new WeakMap();
+
+    /** Dispatch a remote press and briefly show button feedback. */
+    self.activateButton = function(button) {
+        self.handleRemoteCommand(button.getAttribute('data-key'));
+        button.style.transform = 'translateY(2px)';
+        setTimeout(function() { button.style.transform = ''; }, 100);
+    };
+
+    /** Keep appliance controls from triggering browser zoom gestures. */
+    self.preventGesture = function(event) {
+        event.preventDefault();
+    };
+
+    /** Dispatch a touch press and remember it to suppress synthetic clicks. */
+    self.onTouchEnd = function(event) {
+        event.preventDefault();
+        lastTouchActivation.set(event.currentTarget, Date.now());
+        self.activateButton(event.currentTarget);
+    };
+
+    /** Handle mouse presses while ignoring a click synthesized from a touch. */
+    self.onButtonClick = function(event) {
+        const touched = lastTouchActivation.get(event.currentTarget);
+        if (touched !== undefined && Date.now() - touched < 500) return;
+        self.activateButton(event.currentTarget);
+    };
+
     self.setup = async function() {
+        display = document.getElementById('remote-display');
+        now_playing_network = document.getElementById('now-playing-network');
+        now_playing_status = document.getElementById('now-playing-status');
+        now_playing_title = document.getElementById('now-playing-title');
+        number_pad = document.getElementById('number-pad');
+        nav_pad = document.getElementById('nav-pad');
         // Basic remote control functionality
         // Mirrors the player status: while a station is locked, digits enter the
         // PIN instead of changing channel (same rule as fs42/tools/remote_control/remote_control.py).
@@ -601,103 +635,25 @@ app.web_interface.remote = (function () {
 
         // What the display falls back to whenever nothing transient is showing.
 
-        // Web channels read keystrokes rather than commands, so the nav pad
-        // forwards the keys ppv.js listens for. The channel in the path is the
-        // one status polling last reported.
-
-        // Button press handler
-        document.querySelectorAll('.remote-btn').forEach(function (btn) {
-            let last_touch_activation = 0;
-            /**
-             * Activate Button
-             */
-            function activateButton(button) {
-                const key = button.getAttribute('data-key');
-                handleRemoteCommand(key);
-
-                // Visual feedback
-                button.style.transform = 'translateY(2px)';
-                setTimeout(function () {
-                    button.style.transform = '';
-                }, 100);
-            }
-
-            // iPhone Safari may still reserve a rapid second tap for page zoom
-            // even when touch-action is set. Handle touch release ourselves and
-            // prevent Safari from producing the native gesture/click.
-            btn.addEventListener(
-                'touchstart',
-                function (event) {
-                    // Prevent Safari from beginning a double-tap/pinch gesture on
-                    // remote buttons. touchend below performs the actual press.
-                    event.preventDefault();
-                },
-                {
-                    passive: false
-                }
-            );
-            btn.addEventListener(
-                'touchend',
-                function (event) {
-                    event.preventDefault();
-                    last_touch_activation = Date.now();
-                    activateButton(this);
-                },
-                {
-                    passive: false
-                }
-            );
-
-            // Keep normal mouse/trackpad behavior on desktop. Some browsers may
-            // still synthesize a click after touchend, so ignore that duplicate.
-            btn.addEventListener('click', function () {
-                if (Date.now() - last_touch_activation < 500) {
-                    return;
-                }
-                activateButton(this);
-            });
-            btn.addEventListener('dblclick', function (event) {
-                event.preventDefault();
-            });
-        });
-
-        // Safari-specific gesture events can bypass ordinary click/dblclick
-        // handling. The remote is an appliance-style control surface, so page
-        // zoom gestures are intentionally disabled here.
-        document.addEventListener(
-            'gesturestart',
-            function (event) {
-                event.preventDefault();
-            },
-            {
-                passive: false
-            }
-        );
-        document.addEventListener(
-            'gesturechange',
-            function (event) {
-                event.preventDefault();
-            },
-            {
-                passive: false
-            }
-        );
+        for (const button of document.querySelectorAll('.remote-btn')) {
+            button.addEventListener('touchstart', self.preventGesture, {passive: false});
+            button.addEventListener('touchend', self.onTouchEnd, {passive: false});
+            button.addEventListener('click', self.onButtonClick);
+            button.addEventListener('dblclick', self.preventGesture);
+        }
+        document.addEventListener('gesturestart', self.preventGesture, {passive: false});
+        document.addEventListener('gesturechange', self.preventGesture, {passive: false});
 
         // Initialize display and start polling
-        display.textContent = idleDisplayText();
+        display.textContent = self.idleDisplayText();
         // Don't show sample data, let the polling populate it
         now_playing_network.textContent = 'Loading...';
         now_playing_status.textContent = '';
         now_playing_title.textContent = '';
-        startStatusPolling();
+        self.startStatusPolling();
 
         // Clean up polling when page is unloaded
-        window.addEventListener('beforeunload', stopStatusPolling);
+        window.addEventListener('beforeunload', self.stopStatusPolling);
     };
-    Object.assign(self, {
-        updateNowPlaying, idleDisplayText, updateNowPlayingFromStatus, showVolumeDisplay, toggleInfoMode,
-        updateSystemInfo, pollPlayerStatus, startStatusPolling, stopStatusPolling, togglePad, sendPpvKey,
-        sendParentalDigit, handleClear, handleNumberInput, sendChannelChange, handleRemoteCommand
-    });
     return self;
 })();

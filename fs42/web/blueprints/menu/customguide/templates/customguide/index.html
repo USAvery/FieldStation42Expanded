@@ -4,35 +4,18 @@
 <!-- Program Details and Live Preview -->
     <div id="guide-wrapper">
         <div id="guide-listings">
-            <div id="top-panel">
-                <div id="text-panel">
-                    <div class="xfinity-brand-strip">
-                        <div class="comcast-logo"><img src="{{ sub_static('customguide', 'images/comcast_logo.png') }}" alt="Comcast"></div>
-                        <div class="xfinity-listings-block">
-                            <div class="xfinity-listings-title">TV Listings</div>
-                            <div class="xfinity-clock-line">
-                                <span id="clock"></span>
-                            </div>
-                        </div>
-                        <div class="tv-guide-badge" aria-label="TV Guide">
-                            <img src="{{ sub_static('customguide', 'images/tv_guide_logo.png') }}" alt="TV Guide">
-                        </div>
-                    </div>
-                    <div class="xfinity-program-details">
-                        <div class="xfinity-program-heading">
-                            <div id="selected-program-title">Program Title</div>
-                            <div id="selected-channel-label"></div>
-                        </div>
-                        <div class="xfinity-program-subrow">
-                            <div id="selected-program-time"></div>
-                            <div id="selected-program-icons">
-                            </div>
-                        </div>
-                        <div id="selected-program-description"></div>
+            {% call include_widget('menu_top_panel', {'video_panel': true, 'title': 'TV Listings', 'clock': {'attributes': {'id': 'clock'}}}) %}
+                <div class="xfinity-program-heading">
+                    <div id="selected-program-title">Program Title</div>
+                    <div id="selected-channel-label"></div>
+                </div>
+                <div class="xfinity-program-subrow">
+                    <div id="selected-program-time"></div>
+                    <div id="selected-program-icons">
                     </div>
                 </div>
-                <div id="video-panel" aria-label="Current channel preview"></div>
-            </div>
+                <div id="selected-program-description"></div>
+            {% endcall %}
             <div id="grid-wrapper">
                 <div id="grid-header">
                     <div class="grid-channel-stub">
@@ -45,8 +28,7 @@
                 </div>
                 <div id="grid-listings"></div>
             </div>
-            <div id="guide-promo" aria-hidden="true">
-            </div>
+            {{ include_widget('menu_bottom_panel', {'attributes': {'aria-hidden': 'true'}}) }}
         </div>
     </div>
 {% endblock page_content %}

@@ -6,7 +6,6 @@ window.app = window.app || {};
 app.web_interface = app.web_interface || {};
 app.web_interface.schedule = (function () {
     let self = {};
-    const escapeHtml = app.utils.general.escapeHtml;
 
     let stations = [];
     let selected_station = null;
@@ -20,8 +19,8 @@ app.web_interface.schedule = (function () {
     /**
      * Load Stations And Summary
      */
-    async function loadStationsAndSummary() {
-        stations = await window.fs42Common.fetchStationSummary();
+    self.loadStationsAndSummary = async function() {
+        stations = await fetchStationSummary();
         const available = stations.filter(station => station._has_schedule);
         app.widgets.selector.instances['station-select'].setOptions(
             [{value: 'all', label: 'All Channels (' + available.length + ')'}].concat(
@@ -39,11 +38,11 @@ app.web_interface.schedule = (function () {
         document.getElementById('schedule-blocks-header').style.display = 'none';
         document.getElementById('schedule-table').innerHTML = '';
         document.getElementById('add-time-log').textContent = '';
-    }
+    };
     /**
      * Update Station Summary
      */
-    function updateStationSummary(network_name) {
+    self.updateStationSummary = function(network_name) {
         if (!network_name || network_name === 'all') {
             document.getElementById('station-summary-table').innerHTML = '';
             document.getElementById('station-summary-header').style.display = 'none';
@@ -63,7 +62,7 @@ app.web_interface.schedule = (function () {
         });
         if (station) {
             document.getElementById('station-summary-table').innerHTML =
-                window.fs42Common.renderSummaryTable([station]);
+                renderSummaryTable([station]);
             document.getElementById('station-summary-header').style.display = '';
             document.getElementById('schedule-controls').style.display = '';
             document.getElementById('schedule-query-header').style.display = '';
@@ -84,11 +83,11 @@ app.web_interface.schedule = (function () {
             document.getElementById('end-date').style.display = 'none';
             document.getElementById('get-schedule').style.display = 'none';
         }
-    }
+    };
     /**
      * Poll Add Time Status
      */
-    function pollAddTimeStatus(task_id, after_done_callback) {
+    self.pollAddTimeStatus = function(task_id, after_done_callback) {
         if (add_time_poll_interval) {
             clearInterval(add_time_poll_interval);
         }
@@ -102,7 +101,7 @@ app.web_interface.schedule = (function () {
         dismiss_btn.style.display = '';
         add_time_poll_interval = setInterval(async function () {
             try {
-                const resp = await window.fs42Api.fetch(window.fs42Api.urlFor('api.build.add_time_to_schedule_status', {task_id: task_id}));
+                const resp = await fetchURL(urlFor('api.build.add_time_to_schedule_status', {task_id: task_id}));
                 const data = await resp.json();
                 if (data.error) {
                     log_elem.textContent = data.error;
@@ -138,22 +137,22 @@ app.web_interface.schedule = (function () {
                 clearInterval(add_time_poll_interval);
             }
         }, 2000);
-    }
+    };
     /**
      * Load Schedule Extents
      */
-    async function loadScheduleExtents(network_name) {
-        const summary = await window.fs42Common.fetchScheduleSummary(network_name);
+    self.loadScheduleExtents = async function(network_name) {
+        const summary = await fetchScheduleSummary(network_name);
         if (summary && summary.extents) {
             schedule_extents = summary.extents;
             document.getElementById('start-date').value = summary.extents.start.replace(' ', 'T');
             document.getElementById('end-date').value = summary.extents.end.replace(' ', 'T');
         }
-    }
+    };
     /**
      * Get Schedule Blocks
      */
-    async function getScheduleBlocks() {
+    self.getScheduleBlocks = async function() {
         const start = document.getElementById('start-date').value;
         const end = document.getElementById('end-date').value;
         let blocks;
@@ -161,10 +160,10 @@ app.web_interface.schedule = (function () {
             return;
         }
         if (start && end) {
-            blocks = await window.fs42Common.fetchSchedule(selected_station, start, end);
+            blocks = await fetchSchedule(selected_station, start, end);
         }
         else {
-            blocks = await window.fs42Common.fetchSchedule(selected_station);
+            blocks = await fetchSchedule(selected_station);
         }
         if (blocks && blocks.length > 0) {
             document.getElementById('schedule-blocks-header').style.display = '';
@@ -173,18 +172,18 @@ app.web_interface.schedule = (function () {
             document.getElementById('schedule-blocks-header').style.display = 'none';
         }
         document.getElementById('schedule-table').innerHTML =
-            window.fs42Common.renderScheduleTable(blocks);
-    }
+            renderScheduleTable(blocks);
+    };
     /**
      * Setup Search Handlers
      */
-    function setupSearchHandlers() {
-        app.widgets.search.instances.search.bind(performSearch, clearSearch);
-    }
+    self.setupSearchHandlers = function() {
+        app.widgets.search.instances.search.bind(self.performSearch, self.clearSearch);
+    };
     /**
      * Perform Search
      */
-    async function performSearch() {
+    self.performSearch = async function() {
         const search_input = document.getElementById('search-input');
         const results_div = document.getElementById('search-results');
         const results_content = document.getElementById('search-results-content');
@@ -200,22 +199,22 @@ app.web_interface.schedule = (function () {
         results_div.style.display = 'block';
         results_content.innerHTML = '<p>Searching all schedules...</p>';
         try {
-            const response = await window.fs42Api.get(
-                window.fs42Api.urlFor('api.schedules.search_all_schedules') + '?query=' + encodeURIComponent(query)
+            const response = await apiGet(
+                urlFor('api.schedules.search_all_schedules') + '?query=' + encodeURIComponent(query)
             );
-            displaySearchResults(response, query);
+            self.displaySearchResults(response, query);
         }
         catch (error) {
-            app.utils.errors.show(results_content, error);
+            showError(results_content, error);
         }
         finally {
             app.widgets.search.instances.search.busy(false);
         }
-    }
+    };
     /**
      * Display Search Results
      */
-    function displaySearchResults(response, query) {
+    self.displaySearchResults = function(response, query) {
         const results_content = document.getElementById('search-results-content');
         const results = response.results || [];
         if (results.length === 0) {
@@ -285,14 +284,14 @@ app.web_interface.schedule = (function () {
         for (const day_key of sorted_days) {
             const day_data = blocks_by_day[day_key];
             html += '<h4>' + day_data.label + ' (' + day_data.blocks.length + ' results)</h4>';
-            html += renderScheduleTableWithStations(day_data.blocks);
+            html += self.renderScheduleTableWithStations(day_data.blocks);
         }
         results_content.innerHTML = html;
-    }
+    };
     /**
      * Render Schedule Table With Stations
      */
-    function renderScheduleTableWithStations(blocks) {
+    self.renderScheduleTableWithStations = function(blocks) {
         if (!blocks.length) {
             return '<p>No schedule blocks found.</p>';
         }
@@ -301,8 +300,8 @@ app.web_interface.schedule = (function () {
             '<thead><tr><th>Start Time</th><th>End Time</th><th>Station</th><th>Title</th></tr></thead><tbody>';
         for (const block of blocks) {
             // Format time only (not date) for readability
-            const start = block.start_time ? formatTimeOnly(block.start_time) : '';
-            const end = block.end_time ? formatTimeOnly(block.end_time) : '';
+            const start = block.start_time ? self.formatTimeOnly(block.start_time) : '';
+            const end = block.end_time ? self.formatTimeOnly(block.end_time) : '';
             html +=
                 "<tr>\n            <td data-label='Start Time'>" +
                 escapeHtml(start) +
@@ -316,11 +315,11 @@ app.web_interface.schedule = (function () {
         }
         html += '</tbody></table>';
         return html;
-    }
+    };
     /**
      * Format Time Only
      */
-    function formatTimeOnly(dt_str) {
+    self.formatTimeOnly = function(dt_str) {
         // Returns just the time portion in HH:MM format
         if (!dt_str) {
             return '';
@@ -332,23 +331,23 @@ app.web_interface.schedule = (function () {
         const hh = String(d.getHours()).padStart(2, '0');
         const min = String(d.getMinutes()).padStart(2, '0');
         return '' + hh + ':' + min;
-    }
+    };
     /**
      * Clear Search
      */
-    function clearSearch() {
+    self.clearSearch = function() {
         const search_input = document.getElementById('search-input');
         const results_div = document.getElementById('search-results');
         const results_content = document.getElementById('search-results-content');
         search_input.value = '';
         results_div.style.display = 'none';
         results_content.innerHTML = '';
-    }
+    };
 
     /** Handle station-select change. */
     self.onStationSelectChange = async function(e) {
         selected_station = e.target.value || 'all';
-        updateStationSummary(selected_station);
+        self.updateStationSummary(selected_station);
         document.getElementById('schedule-table').innerHTML = '';
         document.getElementById('schedule-blocks-header').style.display = 'none';
         document.getElementById('add-time-log').textContent = '';
@@ -356,7 +355,7 @@ app.web_interface.schedule = (function () {
         document.getElementById('add-time-log-frame').style.display = 'none';
         document.getElementById('add-time-log-dismiss').style.display = 'none';
         if (selected_station && selected_station !== 'all') {
-            await loadScheduleExtents(selected_station);
+            await self.loadScheduleExtents(selected_station);
 
             // Set default query to 24 hours from start of current hour
             const now = new Date();
@@ -383,7 +382,7 @@ app.web_interface.schedule = (function () {
             document.getElementById('end-date').value = formatLocalDateTime(end_of_period);
 
             // Auto-load schedule preview for the selected channel
-            await getScheduleBlocks();
+            await self.getScheduleBlocks();
         }
         else {
             document.getElementById('start-date').value = '';
@@ -402,7 +401,7 @@ app.web_interface.schedule = (function () {
         document.getElementById('add-time-log-frame').style.display = '';
         document.getElementById('add-time-log-dismiss').style.display = '';
         try {
-            const resp = await window.fs42Api.fetch(window.fs42Api.urlFor('api.build.add_time_to_schedule', {amount: amount, network_name: station}), {
+            const resp = await fetchURL(urlFor('api.build.add_time_to_schedule', {amount: amount, network_name: station}), {
                 method: 'POST'
             });
             const data = await resp.json();
@@ -415,13 +414,13 @@ app.web_interface.schedule = (function () {
                     clearInterval(add_time_poll_interval);
                 }
                 add_time_poll_interval = setInterval(async function () {
-                    const resp = await window.fs42Api.fetch(window.fs42Api.urlFor('api.build.add_time_to_schedule_status', {task_id: task_id}));
+                    const resp = await fetchURL(urlFor('api.build.add_time_to_schedule_status', {task_id: task_id}));
                     const data = await resp.json();
                     document.getElementById('add-time-log').textContent = data.log || '';
                     if (data.status === 'done' || data.status === 'error') {
                         clearInterval(add_time_poll_interval);
                         if (selected_station && selected_station !== 'all') {
-                            await getScheduleBlocks();
+                            await self.getScheduleBlocks();
                         }
                     }
                 }, 2000);
@@ -454,7 +453,7 @@ app.web_interface.schedule = (function () {
         document.getElementById('add-time-log-frame').style.display = '';
         document.getElementById('add-time-log-dismiss').style.display = '';
         try {
-            const resp = await window.fs42Api.fetch(window.fs42Api.urlFor('api.build.rebuild_schedule', {network_name: station}), {
+            const resp = await fetchURL(urlFor('api.build.rebuild_schedule', {network_name: station}), {
                 method: 'POST'
             });
             const data = await resp.json();
@@ -467,13 +466,13 @@ app.web_interface.schedule = (function () {
                     clearInterval(add_time_poll_interval);
                 }
                 add_time_poll_interval = setInterval(async function () {
-                    const resp = await window.fs42Api.fetch(window.fs42Api.urlFor('api.build.rebuild_schedule_status', {task_id: task_id}));
+                    const resp = await fetchURL(urlFor('api.build.rebuild_schedule_status', {task_id: task_id}));
                     const data = await resp.json();
                     document.getElementById('add-time-log').textContent = data.log || '';
                     if (data.status === 'done' || data.status === 'error') {
                         clearInterval(add_time_poll_interval);
                         if (selected_station && selected_station !== 'all') {
-                            await getScheduleBlocks();
+                            await self.getScheduleBlocks();
                         }
                     }
                 }, 2000);
@@ -487,9 +486,8 @@ app.web_interface.schedule = (function () {
 
     /** Bind page controls and load the initial data. */
     self.setup = async function() {
-
         // Set up search functionality
-        setupSearchHandlers();
+        self.setupSearchHandlers();
         /**
          * Initialize Schedule Page
          */
@@ -498,14 +496,9 @@ app.web_interface.schedule = (function () {
         document.getElementById('station-select').addEventListener('change', self.onStationSelectChange);
         document.getElementById('build-schedule-btn').addEventListener('click', self.onBuildScheduleBtnClick);
         document.getElementById('reset-schedules-btn').addEventListener('click', self.onResetSchedulesBtnClick);
-        document.getElementById('get-schedule').addEventListener('click', getScheduleBlocks);
-        loadStationsAndSummary();
+        document.getElementById('get-schedule').addEventListener('click', self.getScheduleBlocks);
+        self.loadStationsAndSummary();
 
     };
-    Object.assign(self, {
-        loadStationsAndSummary, updateStationSummary, pollAddTimeStatus, loadScheduleExtents,
-        getScheduleBlocks, setupSearchHandlers, performSearch, displaySearchResults,
-        renderScheduleTableWithStations, formatTimeOnly, clearSearch
-    });
     return self;
 })();

@@ -18,7 +18,7 @@ app.web_interface.station_editor = (function () {
     /**
      * Init Editor
      */
-    async function initEditor() {
+    self.initEditor = async function() {
         return new Promise(function (resolve) {
             require.config({
                 paths: {
@@ -59,16 +59,16 @@ app.web_interface.station_editor = (function () {
                 // Track changes for dirty state
                 editor.onDidChangeModelContent(function () {
                     is_dirty = editor.getValue() !== original_content;
-                    updateSaveButton();
+                    self.updateSaveButton();
                 });
                 resolve();
             });
         });
-    }
+    };
     /**
      * Compact Json Stringify
      */
-    function compactJsonStringify(obj, indent = 4) {
+    self.compactJsonStringify = function(obj, indent = 4) {
         // Custom JSON formatter for more compact output
         // Keeps simple objects on one line, expands complex ones
         const indent_str = ' '.repeat(indent);
@@ -164,29 +164,29 @@ app.web_interface.station_editor = (function () {
             return JSON.stringify(val);
         }
         return format(obj);
-    }
+    };
     /**
      * Load Station
      */
-    async function loadStation() {
+    self.loadStation = async function() {
         try {
-            const data = await window.fs42Api.get(window.fs42Api.urlFor('api.stations.get_station_config', {network_name: station_name}));
+            const data = await apiGet(urlFor('api.stations.get_station_config', {network_name: station_name}));
 
             // Load the config using compact formatting
-            const json_str = compactJsonStringify(data.station_config, 4);
+            const json_str = self.compactJsonStringify(data.station_config, 4);
             original_content = json_str;
             editor.setValue(json_str);
             is_dirty = false;
-            updateSaveButton();
+            self.updateSaveButton();
         }
         catch (error) {
-            showError('Failed to load station: ' + (error.message || 'Unknown error'));
+            self.showError('Failed to load station: ' + (error.message || 'Unknown error'));
         }
-    }
+    };
     /**
      * Load Template
      */
-    async function loadTemplate() {
+    self.loadTemplate = async function() {
         try {
             // Get template from sessionStorage
             const template_str = sessionStorage.getItem('newStationTemplate');
@@ -199,27 +199,27 @@ app.web_interface.station_editor = (function () {
 
             // Parse and load the template
             const template = JSON.parse(template_str);
-            const json_str = compactJsonStringify(template, 4);
+            const json_str = self.compactJsonStringify(template, 4);
             original_content = ''; // No original content for new stations
             editor.setValue(json_str);
             is_dirty = true; // Mark as dirty since it's new
-            updateSaveButton();
+            self.updateSaveButton();
         }
         catch (error) {
-            showError('Failed to load template: ' + (error.message || 'Unknown error'));
+            self.showError('Failed to load template: ' + (error.message || 'Unknown error'));
             // Redirect back to dashboard on error
             setTimeout(function () {
-                window.location.href = window.fs42Api.urlFor('/static/stations.html');
+                window.location.href = urlFor('/static/stations.html');
             }, 2000);
         }
-    }
+    };
     /**
      * Save Station
      */
-    async function saveStation() {
+    self.saveStation = async function() {
         // Clear previous messages
-        hideError();
-        hideSuccess();
+        self.hideError();
+        self.hideSuccess();
 
         // 1. Validate JSON syntax
         let config;
@@ -227,21 +227,21 @@ app.web_interface.station_editor = (function () {
             config = JSON.parse(editor.getValue());
         }
         catch (e) {
-            showError('Invalid JSON: ' + e.message);
+            self.showError('Invalid JSON: ' + e.message);
             return;
         }
 
         // 2. Basic validation
         if (!config.station_conf) {
-            showError('Configuration must have a "station_conf" object');
+            self.showError('Configuration must have a "station_conf" object');
             return;
         }
         if (!config.station_conf.network_name) {
-            showError('Missing required field: network_name');
+            self.showError('Missing required field: network_name');
             return;
         }
         if (config.station_conf.channel_number === undefined) {
-            showError('Missing required field: channel_number');
+            self.showError('Missing required field: channel_number');
             return;
         }
 
@@ -250,7 +250,7 @@ app.web_interface.station_editor = (function () {
             let result;
             if (is_create_mode) {
                 // Create new station with POST
-                result = await window.fs42Api.post('api.stations.create_station', config);
+                result = await apiPost('api.stations.create_station', config);
 
                 // After successful creation, switch to edit mode
                 station_name = config.station_conf.network_name;
@@ -268,7 +268,7 @@ app.web_interface.station_editor = (function () {
             }
             else {
                 // Update existing station with PUT
-                result = await window.fs42Api.put(window.fs42Api.urlFor('api.stations.get_station_config', {network_name: station_name}), config);
+                result = await apiPut(urlFor('api.stations.get_station_config', {network_name: station_name}), config);
 
                 // If the station was renamed, update the URL and station name
                 if (config.station_conf.network_name !== station_name) {
@@ -285,77 +285,77 @@ app.web_interface.station_editor = (function () {
             // Success!
             original_content = editor.getValue();
             is_dirty = false;
-            updateSaveButton();
-            showSuccess();
+            self.updateSaveButton();
+            self.showSuccess();
         }
         catch (error) {
             // Server validation error
-            let error_msg = app.utils.errors.message(error);
+            let error_msg = errorMessage(error);
 
             // Try to parse and enhance schema validation errors
-            error_msg = enhanceErrorMessage(error_msg);
-            showError(error_msg);
+            error_msg = self.enhanceErrorMessage(error_msg);
+            self.showError(error_msg);
 
             // Try to highlight the field mentioned in the error
-            highlightErrorField(error_msg);
+            self.highlightErrorField(error_msg);
         }
-    }
+    };
     /**
      * Format Document
      */
-    function formatDocument() {
+    self.formatDocument = function() {
         try {
             // Parse current editor content
             const current_json = JSON.parse(editor.getValue());
 
             // Format using our compact formatter
-            const formatted = compactJsonStringify(current_json, 4);
+            const formatted = self.compactJsonStringify(current_json, 4);
 
             // Update editor
             editor.setValue(formatted);
 
             // Mark as dirty since we changed the content
             is_dirty = formatted !== original_content;
-            updateSaveButton();
+            self.updateSaveButton();
         }
         catch (e) {
-            showError('Cannot format: ' + e.message);
+            self.showError('Cannot format: ' + e.message);
         }
-    }
+    };
     /**
      * Cancel Edit
      */
-    function cancelEdit() {
+    self.cancelEdit = function() {
         if (is_dirty && !confirm('You have unsaved changes. Are you sure you want to leave?')) {
             return;
         }
-        window.location.href = window.fs42Api.urlFor('/static/stations.html');
-    }
+        window.location.href = urlFor('/static/stations.html');
+    };
     /**
      * Update Save Button
      */
-    function updateSaveButton() {
+    self.updateSaveButton = function() {
         const btn = document.getElementById('save-btn');
         btn.disabled = !is_dirty;
         btn.textContent = is_dirty ? 'Save *' : 'Save';
-    }
+    };
     /**
      * Show Error
      */
-    function showError(message) {
-        app.utils.errors.show('error-list', {detail: message});
+    self.showError = function(message) {
+        self.showError('error-list', {detail: message});
         document.getElementById('error-panel').classList.add('visible');
-    }
+    };
     /**
      * Hide Error
      */
-    function hideError() {
+    self.hideError = function() {
         document.getElementById('error-panel').classList.remove('visible');
-    }
+    };
     /**
      * Show Success
      */
-    function showSuccess() {
+    self.showSuccess = function() {
         const msg = document.getElementById('success-message');
         msg.classList.add('visible');
 
@@ -363,36 +363,41 @@ app.web_interface.station_editor = (function () {
         setTimeout(function () {
             msg.classList.remove('visible');
         }, 3000);
-    }
+    };
     /**
      * Hide Success
      */
-    function hideSuccess() {
+    self.hideSuccess = function() {
         document.getElementById('success-message').classList.remove('visible');
-    }
+    };
     /**
      * Enhance Error Message
      */
-    function enhanceErrorMessage(error_msg) {
+    self.enhanceErrorMessage = function(error_msg) {
         // Just return the original server error message as-is
         return error_msg;
-    }
+    };
     /**
      * Highlight Error Field
      */
-    function highlightErrorField(error_msg) {
+    self.highlightErrorField = function(error_msg) {
         // Don't try to highlight - server errors don't include line numbers
         // Just clear any previous markers
         monaco.editor.setModelMarkers(editor.getModel(), 'validation', []);
-    }
+    };
     /**
      * Escape Html
      */
-    function escapeHtml(text) {
-        return app.utils.general.escapeHtml(text);
-    }
 
     /** Bind page controls and load the initial data. */
+    /** Handle beforeunload. */
+    self.onBeforeunload = function(e) {
+        if (is_dirty) {
+            e.preventDefault();
+            e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+        }
+    };
+
     self.setup = async function() {
         // Get parameters from URL
         station_name = params.get('station');
@@ -401,33 +406,24 @@ app.web_interface.station_editor = (function () {
         is_create_mode = mode === 'create';
         if (!is_create_mode && !station_name) {
             alert('No station specified');
-            window.location.href = window.fs42Api.urlFor('/static/stations.html');
+            window.location.href = urlFor('/static/stations.html');
             return;
         }
 
         // Initialize Monaco Editor
-        await initEditor();
+        await self.initEditor();
 
         // Load station config or template
         if (is_create_mode) {
-            await loadTemplate();
+            await self.loadTemplate();
         }
         else {
-            await loadStation();
+            await self.loadStation();
         }
 
         // Warn before leaving with unsaved changes
-        window.addEventListener('beforeunload', function (e) {
-            if (is_dirty) {
-                e.preventDefault();
-                e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
-            }
-        });
+        window.addEventListener('beforeunload', self.onBeforeunload);
     };
-    Object.assign(self, {
-        initEditor, compactJsonStringify, loadStation, loadTemplate, saveStation, formatDocument,
-        cancelEdit, updateSaveButton, showError, hideError, showSuccess, hideSuccess, enhanceErrorMessage,
-        highlightErrorField, escapeHtml
-    });
+    self.escapeHtml = escapeHtml;
     return self;
 })();

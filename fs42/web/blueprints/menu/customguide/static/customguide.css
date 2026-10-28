@@ -59,31 +59,6 @@ body {
     background: hsl(215.25, 63.492063%, 24.705882%);
 }
 
-#top-panel {
-    overflow: hidden;
-    flex: 0 0 40.4%;
-    width: 100%;
-    height: 40.4%;
-    display: flex;
-    flex-direction: row;
-    background: hsl(216, 62.962963%, 26.470588%);
-    border-bottom: min(0.3vw, 0.4vh) solid hsl(218.571429, 53.846154%, 5.098039%);
-}
-
-#video-panel {
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    order: 1;
-    flex: 0 0 41.4%;
-    width: 41.4%;
-    height: 100%;
-    aspect-ratio: auto;
-    border-left: 0.59vh solid hsl(216.923077, 37.142857%, 6.862745%);
-    background: hsl(216, 62.962963%, 26.470588%);
-    overflow: hidden;
-}
-
 #grid-wrapper {
     display: flex;
     flex-direction: column;
@@ -149,123 +124,11 @@ body {
     cursor: pointer;
 }
 
-
 html,
 body {
     width: 100%;
     height: 100%;
     background: hsl(0, 0%, 0%);
-}
-
-#text-panel {
-    order: 0;
-    flex: 0 0 58.6%;
-    width: 58.6%;
-    height: 100%;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start;
-    align-items: stretch;
-    text-align: left;
-    gap: 0;
-    overflow: hidden;
-    color: hsl(0, 0%, 100%);
-    background: hsl(212.783505, 49.74359%, 38.235294%);
-}
-
-.xfinity-brand-strip {
-    position: relative;
-    flex: 0 0 44.8%;
-    width: 100%;
-    overflow: hidden;
-    background: hsl(217.6, 59.055118%, 24.901961%);
-    border-bottom: min(0.24vw, 0.32vh) solid hsl(216.923077, 41.935484%, 18.235294%);
-}
-
-.comcast-logo {
-    position: absolute;
-    left: 12.3%;
-    top: 35.2%;
-    width: calc(var(--guide-height) * 0.29);
-    color: hsl(218.4, 17.985612%, 72.745098%);
-    font-family: Arial, Helvetica, sans-serif;
-    font-size: min(5.55vw, 7.4vh);
-    font-weight: 300;
-    line-height: 1;
-    letter-spacing: -0.065em;
-    text-shadow: 0 min(0.12vw, 0.16vh) min(0.1vw, 0.13vh) rgba(0, 0, 0, 0.2);
-}
-
-.comcast-logo img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.xfinity-listings-block {
-    position: absolute;
-    left: 54.5%;
-    top: 44%;
-    color: hsl(0, 0%, 100%);
-    font-weight: 250;
-    letter-spacing: 0.06em;
-    text-shadow: 0.03em 0.08em 0 hsl(0, 0%, 0%);
-    white-space: nowrap;
-}
-
-.xfinity-listings-title {
-    color: hsl(57.142857, 91.304348%, 77.45098%);
-    font-size: calc(var(--guide-height) * 0.0375);
-    line-height: 1;
-}
-
-.xfinity-clock-line {
-    justify-content: flex-end;
-    margin-top: 0.1em;
-    display: flex;
-    align-items: center;
-    gap: 0.3em;
-    font-size: min(2.85vw, 3.8vh);
-    line-height: 1;
-}
-
-.xfinity-clock-line #clock {
-    font-size: 1.05em;
-}
-
-.tv-guide-badge {
-    position: absolute;
-    right: 2.4%;
-    top: 39%;
-    width: 16.1%;
-    height: 55%;
-    display: flex;
-}
-
-.tv-guide img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.xfinity-program-details {
-    flex: 1;
-    min-height: 0;
-    padding: 1.4% 3.1% 1.2% 12.8%;
-    background: linear-gradient(
-        180deg,
-        hsl(235.714286, 9.090909%, 30.196078%) 0%,
-        hsl(210, 58.536585%, 32.156863%) 5%,
-        hsl(215.696203, 32.244898%, 48.039216%) 50%,
-        hsl(216.428571, 44.210526%, 62.745098%) 95%,
-        hsl(215.294118, 35.172414%, 28.431373%) 100%
-    );
-    color: hsl(0, 0%, 100%);
-    text-shadow:
-        min(0.16vw, 0.21vh) min(0.16vw, 0.21vh) 0 hsl(0, 0%, 0%),
-        0 0 min(0.1vw, 0.13vh) hsl(0, 0%, 0%);
-    overflow: hidden;
 }
 
 .xfinity-program-heading,
@@ -569,21 +432,6 @@ body {
     color: hsl(0, 0%, 6.666667%) !important;
 }
 
-#guide-promo {
-    flex: 0 0 9.1%;
-    height: 9.1%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: linear-gradient(
-        180deg,
-        hsl(210, 54.285714%, 72.54902%) 0%,
-        hsl(213.103448, 34.661355%, 50.784314%) 46%,
-        hsl(214.390244, 65.079365%, 24.705882%) 100%
-    );
-    border-top: min(0.22vw, 0.29vh) solid hsl(210.769231, 62.903226%, 24.313725%);
-    overflow: hidden;
-}
 
 .promo-card {
     width: 53.5%;
@@ -642,17 +490,4 @@ html #guide-listings {
     background: transparent !important;
 }
 
-html #top-panel {
-    background: transparent !important;
-}
-
 /* Reveal MPV through the preview and cover unused edges with black bars */
-html #video-panel {
-    background:
-        linear-gradient(hsl(0, 0%, 0%), hsl(0, 0%, 0%)) top left / 100% var(--live-preview-top) no-repeat,
-        linear-gradient(hsl(0, 0%, 0%), hsl(0, 0%, 0%)) bottom left / 100% var(--live-preview-bottom) no-repeat,
-        linear-gradient(hsl(0, 0%, 0%), hsl(0, 0%, 0%)) left var(--live-preview-top) / var(--live-preview-left)
-            calc(100% - var(--live-preview-top) - var(--live-preview-bottom)) no-repeat,
-        linear-gradient(hsl(0, 0%, 0%), hsl(0, 0%, 0%)) right var(--live-preview-top) / var(--live-preview-right)
-            calc(100% - var(--live-preview-top) - var(--live-preview-bottom)) no-repeat !important;
-}

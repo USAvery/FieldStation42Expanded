@@ -110,13 +110,16 @@ def setup_pages(app, pages, conf):
     app.state.page_navigation.sort(key=lambda item: (item['group'], item['order'], item['title']))
     app.state.widget_sources = []
     for name in widget.get_widgets():
+        group = widget.widget_group(name)
         directory = os.path.join(widget.widget_directory(name), 'static')
         if not os.path.isdir(directory):
             continue
-        app.mount('/static/widgets/' + name, StaticFiles(directory=directory), name='widgets.' + name + '.static')
+        url = '/static/' + group + '/' + name
+        app.mount(url, StaticFiles(directory=directory), name=group + '.' + name + '.static')
         for filename in sorted(os.listdir(directory)):
             if filename.endswith(('.js', '.css')):
-                app.state.widget_sources.append(dict(name=name, filename=filename, css=filename.endswith('.css')))
-        app.state.browser_paths['/static/widgets/' + name + '/{path}'] = '/static/widgets/' + name + '/{path}'
+                app.state.widget_sources.append(dict(group=group, name=name, filename=filename,
+                                                     css=filename.endswith('.css')))
+        app.state.browser_paths[url + '/{path}'] = url + '/{path}'
     app.state.templates = Jinja2Templates(directory=template_dirs)
     tu.setup(app.state.templates)

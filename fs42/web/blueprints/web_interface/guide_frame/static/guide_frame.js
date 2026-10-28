@@ -6,7 +6,6 @@ window.app = window.app || {};
 app.web_interface = app.web_interface || {};
 app.web_interface.guide_frame = (function () {
     let self = {};
-    const escapeHtml = app.utils.general.escapeHtml;
 
     let stations = [];
     let current_time = new Date();
@@ -45,7 +44,7 @@ app.web_interface.guide_frame = (function () {
     /**
      * Format Date For API
      */
-    function formatDateForAPI(date) {
+    self.formatDateForAPI = function(date) {
         const year = date.getFullYear();
         const month = String(date.getMonth() + 1).padStart(2, '0');
         const day = String(date.getDate()).padStart(2, '0');
@@ -53,46 +52,37 @@ app.web_interface.guide_frame = (function () {
         const minutes = String(date.getMinutes()).padStart(2, '0');
         const seconds = String(date.getSeconds()).padStart(2, '0');
         return '' + year + '-' + month + '-' + day + 'T' + hours + ':' + minutes + ':' + seconds;
-    }
+    };
     /**
      * Init Debug Toggle
      */
-    function initDebugToggle() {
-        updateDebugIndicator();
-        document.addEventListener('keydown', function (e) {
-            // Ignore if the user is typing into a field
-            const tag = (e.target.tagName || '').toLowerCase();
-            if (tag === 'input' || tag === 'textarea') {
-                return;
-            }
-            if (e.key === 'd' || e.key === 'D') {
-                toggleDebugFilename();
-            }
-        });
-    }
+    self.initDebugToggle = function() {
+        self.updateDebugIndicator();
+        document.addEventListener('keydown', self.onKeydown);
+    };
     /**
      * Toggle Debug Filename
      */
-    function toggleDebugFilename() {
-        setDebugFilename(!debug_show_filename);
-    }
+    self.toggleDebugFilename = function() {
+        self.setDebugFilename(!debug_show_filename);
+    };
     /**
      * Set Debug Filename
      */
-    function setDebugFilename(enabled) {
+    self.setDebugFilename = function(enabled) {
         debug_show_filename = !!enabled;
         localStorage.setItem('fs42-guide-debug', debug_show_filename);
-        updateDebugIndicator();
+        self.updateDebugIndicator();
         // Re-render the schedule in place so titles/file names update
         // immediately, keeping the current vertical scroll position
         // (the grid has a full-height blank spacer at the top, so we
         // must preserve scrollTop or the view lands on empty space).
-        refreshScheduleInPlace();
-    }
+        self.refreshScheduleInPlace();
+    };
     /**
      * Update Debug Indicator
      */
-    function updateDebugIndicator() {
+    self.updateDebugIndicator = function() {
         let indicator = document.getElementById('debug-indicator');
         if (!debug_show_filename) {
             if (indicator) {
@@ -111,15 +101,15 @@ app.web_interface.guide_frame = (function () {
             indicator.textContent = 'DEBUG: file names (press "d")';
             document.body.appendChild(indicator);
         }
-    }
+    };
     /**
      * Refresh Schedule In Place
      */
-    async function refreshScheduleInPlace() {
+    self.refreshScheduleInPlace = async function() {
         const stations_column = document.getElementById('stations-column');
         const guide_grid_container = document.querySelector('.guide-grid-container');
         const saved_top = stations_column ? stations_column.scrollTop : 0;
-        await loadScheduleData();
+        await self.loadScheduleData();
 
         // Restore the scroll position so we don't land on the top blank spacer
         if (stations_column) {
@@ -128,21 +118,21 @@ app.web_interface.guide_frame = (function () {
         if (guide_grid_container) {
             guide_grid_container.scrollTop = saved_top;
         }
-    }
+    };
     /**
      * Get Block Filename
      */
-    function getBlockFilename(block) {
+    self.getBlockFilename = function(block) {
         const path = block.content && (block.content.path || block.content.realpath);
         if (!path) {
             return null;
         }
         return path.split(/[\\/]/).pop();
-    }
+    };
     /**
      * Initialize Guide
      */
-    async function initializeGuide() {
+    self.initializeGuide = async function() {
         current_time = new Date();
 
         // Always start at the current 30-minute boundary
@@ -161,7 +151,7 @@ app.web_interface.guide_frame = (function () {
         guide_end_time = new Date(guide_start_time.getTime() + 2 * 60 * 60 * 1000); // 2 hours total
 
         // Load all stations
-        const all_stations = await window.fs42Common.fetchStationSummary();
+        const all_stations = await fetchStationSummary();
 
         // Filter out hidden stations
         stations = all_stations.filter(function (station) {
@@ -181,13 +171,13 @@ app.web_interface.guide_frame = (function () {
         }
 
         // Create timeline
-        createTimeline();
+        self.createTimeline();
 
         // Create stations column
-        createStationsColumn();
+        self.createStationsColumn();
 
         // Load and display schedule data
-        await loadScheduleData();
+        await self.loadScheduleData();
 
         // Set initial scroll position to show first station at top
         const stations_column = document.getElementById('stations-column');
@@ -196,11 +186,11 @@ app.web_interface.guide_frame = (function () {
 
         stations_column.scrollTop = container_height;
         guide_grid_container.scrollTop = container_height;
-    }
+    };
     /**
      * Create Timeline
      */
-    function createTimeline() {
+    self.createTimeline = function() {
         const timeline = document.getElementById('timeline');
         const total_minutes = (guide_end_time - guide_start_time) / (1000 * 60);
         const total_slots = Math.ceil(total_minutes / 30);
@@ -245,11 +235,11 @@ app.web_interface.guide_frame = (function () {
         // Hide scrollbars since we're auto-scrolling
         stations_column.style.overflowY = 'hidden';
         guide_grid_container.style.overflowY = 'hidden';
-    }
+    };
     /**
      * Create Stations Column
      */
-    function createStationsColumn() {
+    self.createStationsColumn = function() {
         const stations_column = document.getElementById('stations-column');
         const container_height = window.innerHeight - 40; // Use full height minus timeline
 
@@ -278,11 +268,11 @@ app.web_interface.guide_frame = (function () {
         // Add smooth blank space at the bottom
         stations_html += '<div style="height: ' + container_height + 'px; background: #0f1b2d;"></div>';
         stations_column.innerHTML = stations_html;
-    }
+    };
     /**
      * Load Schedule Data
      */
-    async function loadScheduleData() {
+    self.loadScheduleData = async function() {
         const grid = document.getElementById('guide-grid');
         const total_minutes = (guide_end_time - guide_start_time) / (1000 * 60);
         grid.style.width = '100%';
@@ -317,14 +307,14 @@ app.web_interface.guide_frame = (function () {
                 // Fetch a wider time range to include shows that started before our guide window
                 // but might still be airing during our guide time
                 const extended_start_time = new Date(guide_start_time.getTime() - 3 * 60 * 60 * 1000); // 3 hours before
-                const schedule_blocks = await window.fs42Common.fetchSchedule(
+                const schedule_blocks = await fetchSchedule(
                     station.network_name,
-                    formatDateForAPI(extended_start_time),
-                    formatDateForAPI(guide_end_time)
+                    self.formatDateForAPI(extended_start_time),
+                    self.formatDateForAPI(guide_end_time)
                 );
                 if (schedule_blocks && schedule_blocks.length > 0) {
                     for (const block of schedule_blocks) {
-                        const block_element = createProgramBlock(block);
+                        const block_element = self.createProgramBlock(block);
                         if (block_element) {
                             station_row.appendChild(block_element);
                         }
@@ -359,11 +349,11 @@ app.web_interface.guide_frame = (function () {
         bottom_blank_div.style.width = '100%';
         bottom_blank_div.style.background = '#0f1b2d';
         grid.appendChild(bottom_blank_div);
-    }
+    };
     /**
      * Create Program Block
      */
-    function createProgramBlock(block) {
+    self.createProgramBlock = function(block) {
         const block_start = new Date(block.start_time);
         const block_end = new Date(block.end_time);
 
@@ -402,7 +392,7 @@ app.web_interface.guide_frame = (function () {
         }
         let title = block.title || 'Untitled';
         if (debug_show_filename) {
-            title = getBlockFilename(block) || title;
+            title = self.getBlockFilename(block) || title;
         }
         const start_time = block_start.toLocaleTimeString('en-US', {
             hour: '2-digit',
@@ -416,11 +406,11 @@ app.web_interface.guide_frame = (function () {
             escapeHtml(start_time) +
             '</span>\n    ';
         return program_div;
-    }
+    };
     /**
      * Update Timeline Marker
      */
-    function updateTimelineMarker() {
+    self.updateTimelineMarker = function() {
         // Remove any existing marker
         const existing_marker = document.querySelector('.current-time-marker');
         if (existing_marker) {
@@ -448,11 +438,11 @@ app.web_interface.guide_frame = (function () {
             marker.style.filter = 'drop-shadow(0 0 4px #ff0000)';
             timeline.appendChild(marker);
         }
-    }
+    };
     /**
      * Start Time Update
      */
-    function startTimeUpdate() {
+    self.startTimeUpdate = function() {
         setInterval(function () {
             current_time = new Date();
             const time_display = document.getElementById('current-time-display');
@@ -465,13 +455,13 @@ app.web_interface.guide_frame = (function () {
                 second: '2-digit',
                 hour12: false
             });
-            updateTimelineMarker();
+            self.updateTimelineMarker();
         }, 1000);
-    }
+    };
     /**
      * Start Auto Scroll
      */
-    function startAutoScroll() {
+    self.startAutoScroll = function() {
         if (scroll_interval) {
             clearInterval(scroll_interval);
         }
@@ -479,17 +469,17 @@ app.web_interface.guide_frame = (function () {
         // Check every minute if we need to advance the guide
         scroll_interval = setInterval(function () {
             if (auto_scroll_enabled) {
-                checkTimeAdvance();
+                self.checkTimeAdvance();
             }
         }, 60000); // Check every minute
 
         // Start vertical scrolling of stations
-        startVerticalScroll();
-    }
+        self.startVerticalScroll();
+    };
     /**
      * Start Vertical Scroll
      */
-    function startVerticalScroll() {
+    self.startVerticalScroll = function() {
         if (vertical_scroll_interval) {
             clearInterval(vertical_scroll_interval);
         }
@@ -528,10 +518,10 @@ app.web_interface.guide_frame = (function () {
 
                         // Show/hide branding overlay
                         if (should_show_branding_with_height_check) {
-                            showBrandingOverlay();
+                            self.showBrandingOverlay();
                         }
                         else {
-                            hideBrandingOverlay();
+                            self.hideBrandingOverlay();
                         }
 
                         // Reset to top when we reach the bottom (now includes blank space)
@@ -546,11 +536,11 @@ app.web_interface.guide_frame = (function () {
                 }
             }
         }, 50); // Update every 50ms (20 times per second) for ultra-smooth scrolling
-    }
+    };
     /**
      * Check Time Advance
      */
-    function checkTimeAdvance() {
+    self.checkTimeAdvance = function() {
         const now = new Date();
         const current_minutes = now.getMinutes();
         const current_slot = Math.floor(current_minutes / 30) * 30;
@@ -571,27 +561,27 @@ app.web_interface.guide_frame = (function () {
             guide_end_time = new Date(guide_start_time.getTime() + 2 * 60 * 60 * 1000);
 
             // Reload the guide data
-            reloadGuideData();
+            self.reloadGuideData();
         }
-    }
+    };
     /**
      * Reload Guide Data
      */
-    async function reloadGuideData() {
+    self.reloadGuideData = async function() {
         // Update timeline
-        createTimeline();
+        self.createTimeline();
 
         // Reload schedule data
-        await loadScheduleData();
+        await self.loadScheduleData();
 
         // Reset scroll position to start
         const container = document.querySelector('.guide-grid-container');
         container.scrollLeft = 0;
-    }
+    };
     /**
      * Show Branding Overlay
      */
-    function showBrandingOverlay() {
+    self.showBrandingOverlay = function() {
         const overlay = document.getElementById('branding-overlay');
         if (overlay && !overlay.classList.contains('visible')) {
             overlay.classList.add('visible');
@@ -609,14 +599,14 @@ app.web_interface.guide_frame = (function () {
                 }
 
                 // Start cycling for subsequent messages
-                branding_cycle_interval = setInterval(cycleBrandingMessage, 7000);
+                branding_cycle_interval = setInterval(self.cycleBrandingMessage, 7000);
             }
         }
-    }
+    };
     /**
      * Hide Branding Overlay
      */
-    function hideBrandingOverlay() {
+    self.hideBrandingOverlay = function() {
         const overlay = document.getElementById('branding-overlay');
         if (overlay && overlay.classList.contains('visible')) {
             overlay.classList.remove('visible');
@@ -628,11 +618,11 @@ app.web_interface.guide_frame = (function () {
                 branding_message_index = 0; // Reset to first message for next time
             }
         }
-    }
+    };
     /**
      * Cycle Branding Message
      */
-    function cycleBrandingMessage() {
+    self.cycleBrandingMessage = function() {
         const title_element = document.querySelector('.branding-title');
         const subtitle_element = document.querySelector('.branding-subtitle');
         const content_element = document.querySelector('.branding-content');
@@ -652,11 +642,11 @@ app.web_interface.guide_frame = (function () {
                 content_element.style.transform = 'translateY(0) scale(1)';
             }, 500); // Half second fade out duration
         }
-    }
+    };
     /**
      * Initialize Music
      */
-    function initializeMusic() {
+    self.initializeMusic = function() {
         if (!ENABLE_BACKGROUND_MUSIC) {
             console.log('Background music is disabled by feature flag');
             return;
@@ -671,22 +661,22 @@ app.web_interface.guide_frame = (function () {
 
         // Handle track ended - play next in playlist
         audio.addEventListener('ended', function () {
-            playNextTrack();
+            self.playNextTrack();
         });
 
         // Handle errors - try next track
         audio.addEventListener('error', function () {
             console.log('Error loading track, trying next...');
-            playNextTrack();
+            self.playNextTrack();
         });
 
         // Auto-start music (may require user interaction first)
-        tryPlayMusic();
-    }
+        self.tryPlayMusic();
+    };
     /**
      * Try Play Music
      */
-    function tryPlayMusic() {
+    self.tryPlayMusic = function() {
         if (!ENABLE_BACKGROUND_MUSIC) {
             return;
         }
@@ -711,11 +701,11 @@ app.web_interface.guide_frame = (function () {
                 }
             );
         });
-    }
+    };
     /**
      * Play Next Track
      */
-    function playNextTrack() {
+    self.playNextTrack = function() {
         if (!ENABLE_BACKGROUND_MUSIC) {
             return;
         }
@@ -727,16 +717,16 @@ app.web_interface.guide_frame = (function () {
         const next_track = music_playlist[current_track_index];
 
         // Update audio source
-        audio.src = window.fs42Api.urlFor(next_track);
+        audio.src = urlFor(next_track);
         audio.load();
         audio.play().catch(function (error) {
             console.log('Error playing next track:', error);
         });
-    }
+    };
     /**
      * Toggle Music
      */
-    function toggleMusic() {
+    self.toggleMusic = function() {
         if (!ENABLE_BACKGROUND_MUSIC) {
             return;
         }
@@ -750,11 +740,22 @@ app.web_interface.guide_frame = (function () {
         else {
             audio.pause();
         }
-    }
+    };
 
     /** Bind page controls and load the initial data. */
-    self.setup = async function() {
+    /** Handle keydown. */
+    self.onKeydown = function(e) {
+        // Ignore if the user is typing into a field
+        const tag = (e.target.tagName || '').toLowerCase();
+        if (tag === 'input' || tag === 'textarea') {
+            return;
+        }
+        if (e.key === 'd' || e.key === 'D') {
+            self.toggleDebugFilename();
+        }
+    };
 
+    self.setup = async function() {
         // Initialize auto-scroll setting from localStorage
         auto_scroll_enabled = saved_setting !== 'false'; // Default to true if not set
 
@@ -762,22 +763,22 @@ app.web_interface.guide_frame = (function () {
         debug_show_filename = localStorage.getItem('fs42-guide-debug') === 'true';
 
         // Initialize guide
-        await initializeGuide();
+        await self.initializeGuide();
 
         // Initialize background music
-        initializeMusic();
+        self.initializeMusic();
 
         // Start auto-scroll and time updates
-        startTimeUpdate();
-        startAutoScroll();
+        self.startTimeUpdate();
+        self.startAutoScroll();
 
         // Enable the debug toggle (press "d" to switch between title and file name)
-        initDebugToggle();
+        self.initDebugToggle();
 
         // Toggle between normalized titles and raw file names.
         // Exposed on window so the parent page's button can call it too.
-        window.toggleDebugFilename = toggleDebugFilename;
-        window.setDebugFilename = setDebugFilename;
+        window.toggleDebugFilename = self.toggleDebugFilename;
+        window.setDebugFilename = self.setDebugFilename;
 
         // Let the parent page read current state (localStorage is shared, but
         // this keeps the source of truth in one place).
@@ -791,12 +792,5 @@ app.web_interface.guide_frame = (function () {
 
         // Music Player Functions
     };
-    Object.assign(self, {
-        formatDateForAPI, initDebugToggle, toggleDebugFilename, setDebugFilename, updateDebugIndicator,
-        refreshScheduleInPlace, getBlockFilename, initializeGuide, createTimeline, createStationsColumn,
-        loadScheduleData, createProgramBlock, updateTimelineMarker, startTimeUpdate, startAutoScroll,
-        startVerticalScroll, checkTimeAdvance, reloadGuideData, showBrandingOverlay, hideBrandingOverlay,
-        cycleBrandingMessage, initializeMusic, tryPlayMusic, playNextTrack, toggleMusic
-    });
     return self;
 })();

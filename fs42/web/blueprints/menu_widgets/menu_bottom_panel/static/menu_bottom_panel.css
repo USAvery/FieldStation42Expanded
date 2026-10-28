@@ -1,0 +1,17 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. */
+
+.menu-bottom-panel {
+    flex: 0 0 9.1%;
+    height: 9.1%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(
+        180deg,
+        hsl(210, 54.285714%, 72.54902%) 0%,
+        hsl(213.103448, 34.661355%, 50.784314%) 46%,
+        hsl(214.390244, 65.079365%, 24.705882%) 100%
+    );
+    border-top: min(0.22vw, 0.29vh) solid hsl(210.769231, 62.903226%, 24.313725%);
+    overflow: hidden;
+}

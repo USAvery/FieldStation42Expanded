@@ -16,10 +16,12 @@
     <script src="{{ request.url_for('static', path='utils/general.js').path }}"></script>
     {% endif %}
     {% for source in request.app.state.widget_sources %}
+    {% if source.group == ('menu_widgets' if page_group == 'menu' else 'widgets') %}
     {% if source.css %}
-    <link href="{{ request.url_for('widgets.' + source.name + '.static', path=source.filename).path }}" rel="stylesheet">
+    <link href="{{ request.url_for(source.group + '.' + source.name + '.static', path=source.filename).path }}" rel="stylesheet">
     {% else %}
-    <script src="{{ request.url_for('widgets.' + source.name + '.static', path=source.filename).path }}"></script>
+    <script src="{{ request.url_for(source.group + '.' + source.name + '.static', path=source.filename).path }}"></script>
+    {% endif %}
     {% endif %}
     {% endfor %}
     {% block page_sources %}{% endblock %}
@@ -30,5 +32,5 @@
     {% block page_setup %}{% endblock %}
     <!-- Embedded JavaScript -->
     <script src="{{ sub_static(page_name, page_name + '.js') }}"></script>
-    <script>Promise.resolve().then(function() { return app.{{ page_group }}.{{ page_name }}.setup(); }).catch(app.utils.errors.report);</script>
+    <script>Promise.resolve().then(function() { return app.{{ page_group }}.{{ page_name }}.setup(); }).catch(reportError);</script>
 {% endblock content %}

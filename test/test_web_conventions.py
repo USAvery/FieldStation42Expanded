@@ -196,9 +196,9 @@ const window={fs42Routes:__CONFIG__,fetch:async(url,options)=>{
     calls.push(url);
     return {ok:true,status:200,json:async()=>({ok:true})};
 }};
-const context={window,app:{},encodeURIComponent};
+const context={window,app:{},encodeURIComponent,URL,URLSearchParams};
 vm.runInNewContext(__SOURCE__,context);
-const api=window.fs42Api;
+const api={urlFor:context.urlFor,get:context.apiGet};
 assert.equal(api.urlFor('api.catalogs.get_catalog',{network_name:'A & B'}),'/station/library/catalogs/A%20%26%20B');
 assert.equal(api.urlFor('/catalogs/Example?q=a%26b'),'/station/library/catalogs/Example?q=a%26b');
 assert.equal(api.urlFor('/static/themes/retro.css'),'/station/static/themes/retro.css');
@@ -250,9 +250,9 @@ const bad='<img src=x onerror=alert(1)>';
 const catalog={title:bad,path:'" title="'+bad,duration:1,count:bad,hints:[bad]};
 const block={title:bad,station_name:bad,start_time:'2026-10-28T00:00:00',end_time:'2026-10-28T01:00:00'};
 assert(app.web_interface.stations.escapeHtml('\" data-x=\"').includes('&quot;'));
-assert(!app.utils.general.renderCatalogTable([catalog]).includes('<img'));
-assert(!app.utils.general.renderSummaryTable([{network_name:bad,catalog_summary:{entry_count:bad}}]).includes('<img'));
-assert(!app.utils.general.renderScheduleTable([block]).includes('<img'));
+assert(!context.renderCatalogTable([catalog]).includes('<img'));
+assert(!context.renderSummaryTable([{network_name:bad,catalog_summary:{entry_count:bad}}]).includes('<img'));
+assert(!context.renderScheduleTable([block]).includes('<img'));
 app.web_interface.catalog.displaySearchResults({results:[{network_name:bad,catalog_entries:[catalog]}]},bad);
 assert(!output.innerHTML.includes('<img'));assert(output.innerHTML.includes('&lt;img'));
 app.web_interface.schedule.displaySearchResults({results:[{network_name:bad,schedule_blocks:[block]}]},bad);
@@ -262,3 +262,320 @@ assert(output.textContent.includes(bad));
 """
     result = subprocess.run([node, '-'], input=script, capture_output=True, encoding='utf8', timeout=20)
     assert result.returncode == 0, result.stderr
+
+
+def test_reference_routing_helpers_callbacks_forms_and_lazy_routes(app):
+    """
+    Exercise reference-style helper signatures alongside the JSON API adapters
+    """
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('Node is required for browser utility checks')
+    source = Path(_constants.STATIC_DIR, 'utils', 'routing.js').read_text(encoding='utf8')
+    script = r"""
+const vm=require('vm'),assert=require('assert');
+const requests=[],navigations=[];
+const config={root:'/station',paths:{'/text':'/station/text'},endpoints:{
+    'api.example.item':'/station/items/{id}',
+    'api.example.text':'/station/text',
+    'widgets.example.static':'/station/static/example/{path}'
+}};
+class FormData {constructor(form){this.form=form}}
+class DOMParser {parseFromString(text){return {title:text.match(/<title>(.*?)<\/title>/)[1]}}}
+const form={id:'main-form'};
+const window={$ROOT_PATH:'/station',location:{href:'http://localhost:18442/station/',
+    origin:'http://localhost:18442',assign:url=>navigations.push(url)},fetch:async(url,options={})=>{
+    requests.push({url,options});
+    if(url==='/station/web/routes') return {ok:true,json:async()=>config};
+    if(url==='/station/fail') return {ok:false,status:422,json:async()=>({detail:'Example validation failure'})};
+    if(url==='/station/empty') return {ok:true,status:204};
+    return {ok:true,status:200,text:async()=>'<title>Example</title>',json:async()=>({success:true})};
+}};
+const context={window,console,URL,URLSearchParams,FormData,DOMParser,
+    document:{getElementById:id=>id==='main-form'?form:null}};
+vm.runInNewContext(__SOURCE__,context);
+(async()=>{
+    let textCallback;
+    const text=await context.ajaxEndpoint('api.example.text',{},value=>{textCallback=value});
+    assert.equal(textCallback,text);
+    assert.equal(requests.filter(r=>r.url==='/station/web/routes').length,1);
+    assert.equal(context.urlFor('api.example.item',{id:'A & B',query:'one & two'}),
+        '/station/items/A%20%26%20B?query=one+%26+two');
+    assert.equal(context.urlFor('widgets.example.static',{},'images/a b.png'),
+        '/station/static/example/images/a%20b.png');
+    assert.equal(context.urlFor('/text?existing=yes#section',{extra:'x y'}),
+        '/station/text?existing=yes&extra=x+y#section');
+    assert.equal(context.convertArgsToStr({tag:['one','two'],empty:null}), '?tag=one&tag=two');
+    const split=context.splitUrl('/text?tag=one&tag=two#section');
+    assert.equal(split[0],'/text');assert.equal(JSON.stringify(split[1]),JSON.stringify({tag:['one','two']}));
+    assert(context.isInternal('/station/text'));assert(!context.isInternal('https://example.com/'));
+    let jsonCallback;
+    await context.ajaxPost('/form',{value:'example'},value=>{jsonCallback=value},'json');
+    assert(jsonCallback.success);assert.equal(requests.at(-1).options.body,'{"value":"example"}');
+    await context.ajaxPost('/form',{},undefined,'json');
+    assert.equal(requests.at(-1).options.body,'{}');
+    await context.ajaxPost('/form',value=>{jsonCallback=value},'json');
+    assert(requests.at(-1).options.body instanceof FormData);
+    assert.equal(requests.at(-1).options.headers,undefined);
+    assert.equal(await context.ajaxPost('/empty',{},undefined,'json'),null);
+    await assert.rejects(context.fetchURL('/fail'),error=>error.status===422&&error.detail==='Example validation failure');
+    assert.throws(()=>context.urlFor('api.example.missing'),/Endpoint not found/);
+    assert.equal(await context.getPageTitle('/text'),'Example');
+    let prevented=false;context.redirect('/text',{preventDefault:()=>{prevented=true}});
+    assert(prevented);assert.equal(navigations.at(-1),'/station/text');
+    assert((await context.apiPut('api.example.text',{})).success);
+})().catch(error=>{console.error(error);process.exit(1)});
+"""
+    script = script.replace('__SOURCE__', json.dumps(source))
+    result = subprocess.run([node, '-'], input=script, capture_output=True, encoding='utf8', timeout=20)
+    assert result.returncode == 0, result.stderr
+
+
+def test_blueprint_methods_are_available_without_starting_the_pages(app):
+    """
+    Load blueprint behavior without requiring page elements or starting requests and timers
+    """
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('Node is required for browser utility checks')
+    directory = Path(_constants.WEB_DIR, 'blueprints')
+    sources = {str(path.relative_to(directory)): path.read_text(encoding='utf8')
+               for path in directory.rglob('*.js')}
+    script = r"""
+const vm=require('vm'),assert=require('assert');
+for(const [name,source] of Object.entries(__SOURCES__)) {
+    const app={};
+    const unexpected=()=>{throw new Error(name+': started page behavior before setup')};
+    const window={app,location:{search:''},addEventListener:unexpected};
+    const context={window,app,URLSearchParams,WeakMap,localStorage:{getItem:()=>null},
+        document:{getElementById:unexpected,querySelectorAll:unexpected,addEventListener:unexpected},
+        setInterval:unexpected,setTimeout:unexpected,apiGet:unexpected,apiPost:unexpected,
+        fetchURL:unexpected,escapeHtml:value=>String(value)};
+    vm.runInNewContext(source,context,{filename:name});
+    const parts=name.split(/[\\/]/);
+    const module=app[parts[0]][parts[1]];
+    assert.equal(typeof module.setup,'function',name);
+    if(parts[1]==='on_demand') assert.equal(typeof module.renderView,'function');
+    if(parts[1]==='customguide') assert.equal(typeof module.buildGrid,'function');
+    if(parts[1]==='ppv') assert.equal(typeof module.randomOtherIndex,'function');
+    if(parts[1]==='bump') assert.equal(typeof window.StationBump,'function');
+}
+"""
+    script = script.replace('__SOURCES__', json.dumps(sources))
+    result = subprocess.run([node, '-'], input=script, capture_output=True, encoding='utf8', timeout=20)
+    assert result.returncode == 0, result.stderr
+
+
+def test_widget_instances_keep_controls_and_handlers_independent(app):
+    """
+    Use widget behavior outside setup without sharing one instance's controls with another
+    """
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('Node is required for browser utility checks')
+    sources = [(Path(_constants.WEB_DIR) / 'blueprints/widgets' / name / 'static' / (name + '.js')).read_text()
+               for name in ('selector', 'search', 'log_display')]
+    script = r"""
+const vm=require('vm'),assert=require('assert');const elements=new Map();
+function element(id) {
+    if(!elements.has(id)) elements.set(id,{style:{display:'none'},children:[],value:'',
+        replaceChildren(){this.children=[]},appendChild(child){this.children.push(child)},
+        addEventListener(name,handler){this[name]=handler}});
+    return elements.get(id);
+}
+const app={},window={app};const context={app,window,document:{getElementById:element,createElement:()=>({})}};
+for(const source of __SOURCES__) vm.runInNewContext(source,context);
+const one=app.widgets.selector.setup({attributes:{id:'one'}});
+const two=app.widgets.selector.setup({attributes:{id:'two'}});
+one.setOptions([{value:'one',label:'Example'}],'one');
+assert.equal(one.getValue(),'one');assert.equal(element('two').children.length,0);
+let calls=0;
+const first=app.widgets.search.setup({id:'first',loading:'Loading'});
+const second=app.widgets.search.setup({id:'second',loading:'Waiting'});
+first.bind(()=>calls++,()=>{});second.bind(()=>calls+=10,()=>{});
+element('first-input').onkeydown({key:'Enter',preventDefault:()=>{}});
+assert.equal(calls,1);first.busy(true);assert.equal(element('first-btn').disabled,true);
+assert.equal(element('second-btn').disabled,undefined);
+const log=app.widgets.log_display.setup({prefix:'first'});
+app.widgets.log_display.setup({prefix:'second'});
+log.show('Message');assert.equal(element('first-log').textContent,'Message');
+assert.equal(element('second-log').textContent,undefined);
+element('first-log-dismiss').onclick();assert.equal(element('first-log-frame').style.display,'none');
+"""
+    script = script.replace('__SOURCES__', json.dumps(sources))
+    result = subprocess.run([node, '-'], input=script, capture_output=True, encoding='utf8', timeout=20)
+    assert result.returncode == 0, result.stderr
+
+
+def test_menu_pages_render_the_shared_clock_widget(app):
+    """
+    Preserve menu clock IDs and load the shared implementation once per page
+    """
+    with TestClient(app) as client:
+        for url, control in [('/static/customguide/customguide.html', 'clock'), ('/on-demand', 'od-clock')]:
+            html = client.get(url).text
+            assert '<time id="{}"'.format(control) in html
+            assert html.count('app.menu_widgets.menu_clock.setup(') == 1
+            assert '<div class="menu-clock-line">' in html
+            assert 'data-variant' not in html
+            assert html.count('/static/menu_widgets/menu_clock/menu_clock.js') == 1
+            assert html.count('/static/menu_widgets/menu_clock/menu_clock.css') == 1
+        assert client.get('/static/menu_widgets/menu_clock/menu_clock.js').status_code == 200
+        assert client.get('/static/menu_widgets/menu_clock/menu_clock.css').status_code == 200
+
+
+def test_menu_clock_ticks_replaces_instances_and_releases_timers(app):
+    """
+    Update independent clocks each second without leaking replacement or detached timers
+    """
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('Node is required for browser utility checks')
+    source = Path(_constants.WEB_DIR, 'blueprints/menu_widgets/menu_clock/static/menu_clock.js').read_text()
+    script = r"""
+const vm=require('vm'),assert=require('assert');
+const elements={one:{isConnected:true},two:{isConnected:true}};
+const timers=new Map(),listeners=new Map();let id=0,now=Date.parse('2026-10-28T13:45:00Z');
+class ClockDate extends Date {constructor(){super(now)}}
+const app={},window={app,addEventListener:(name,fn)=>listeners.set(name,fn),
+    removeEventListener:(name,fn)=>{if(listeners.get(name)===fn)listeners.delete(name)}};
+const context={app,window,Date:ClockDate,Intl,document:{getElementById:name=>elements[name]},
+    setInterval:(fn,ms)=>{assert.equal(ms,1000);timers.set(++id,fn);return id},
+    clearInterval:id=>timers.delete(id)};
+vm.runInNewContext(__SOURCE__,context);
+const config={attributes:{id:'one'},locale:'en-US',compact:true,
+    options:{hour:'numeric',minute:'2-digit',hour12:true,timeZone:'UTC'}};
+const widget=app.menu_widgets.menu_clock;
+const first=widget.setup(config);
+assert.equal(elements.one.textContent,'1:45pm');assert.equal(timers.size,1);
+const previous=elements.one.dateTime;now+=1000;timers.get(first.timer)();
+assert.notEqual(elements.one.dateTime,previous);
+const second=widget.setup({...config,attributes:{id:'two'},compact:false});
+assert.equal(elements.two.textContent,'1:45 PM');assert.equal(timers.size,2);
+widget.setup(config);assert.equal(first.timer,null);assert.equal(timers.size,2);
+elements.two.isConnected=false;timers.get(second.timer)();assert.equal(second.timer,null);
+assert.equal(timers.size,1);listeners.get('beforeunload')();assert.equal(timers.size,0);
+assert.equal(Object.keys(widget.instances).length,0);
+"""
+    script = script.replace('__SOURCE__', json.dumps(source))
+    result = subprocess.run([node, '-'], input=script, capture_output=True, encoding='utf8', timeout=20)
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize('video,title', [(False, None), (True, 'TV Listings'), (False, '<img src=x onerror=alert(1)>')])
+def test_menu_top_panel_options_and_caller_content(app, video, title):
+    """
+    Render optional preview and title while keeping caller content composable and escaped
+    """
+    @app.get('/panel-example', include_in_schema=False)
+    def example(request: Request):
+        template = app.state.templates.env.from_string(
+            "{% call include_widget('menu_top_panel', config) %}"
+            '<strong id="custom-details">{{ details }}</strong>{% endcall %}')
+        return HTMLResponse(template.render(request=request, config={'video_panel': video, 'title': title},
+                                            details='<script>unsafe()</script>'))
+
+    with TestClient(app) as client:
+        html = client.get('/panel-example').text
+        assert ('id="video-panel"' in html) is video
+        assert ('class="menu-top-panel-title"' in html) is (title is not None)
+        assert '<strong id="custom-details">&lt;script&gt;unsafe()&lt;/script&gt;</strong>' in html
+        assert '<img src=x' not in html
+        assert 'app.menu_widgets.menu_clock.setup(' in html
+        assert 'id="selected-program-title"' not in html
+
+
+def test_menu_top_panel_default_options_and_guide_integration(app):
+    """
+    Omit the preview and title by default, and preserve the guide's native-preview hook and details
+    """
+    @app.get('/default-panel', include_in_schema=False)
+    def default_panel(request: Request):
+        template = app.state.templates.env.from_string("{{ include_widget('menu_top_panel') }}")
+        return HTMLResponse(template.render(request=request))
+
+    with TestClient(app) as client:
+        html = client.get('/default-panel').text
+        assert 'id="video-panel"' not in html
+        assert 'class="menu-top-panel-title"' not in html
+        guide = client.get('/static/customguide/customguide.html').text
+        for control in ('top-panel', 'video-panel', 'selected-program-title', 'selected-channel-label',
+                        'selected-program-time', 'selected-program-icons', 'selected-program-description', 'clock'):
+            assert 'id="{}"'.format(control) in guide
+        assert 'menu-top-panel-details' in guide
+        assert 'TV Listings' in guide
+        assert guide.count('/static/menu_widgets/menu_top_panel/menu_top_panel.css') == 1
+        for file in ('menu_top_panel.css', 'images/comcast_logo.png', 'images/tv_guide_logo.png'):
+            assert client.get('/static/menu_widgets/menu_top_panel/' + file).status_code == 200
+
+
+def test_menu_bottom_panel_replaces_guide_promo_and_loads_its_styles(app):
+    """
+    Keep the guide layout while loading the renamed bottom panel through widget assets
+    """
+    with TestClient(app) as client:
+        html = client.get('/static/customguide/customguide.html').text
+        assert 'id="menu-bottom-panel"' in html
+        assert 'guide-promo' not in html
+        assert html.count('/static/menu_widgets/menu_bottom_panel/menu_bottom_panel.css') == 1
+        response = client.get('/static/menu_widgets/menu_bottom_panel/menu_bottom_panel.css')
+        assert response.status_code == 200
+        assert '.menu-bottom-panel {' in response.text
+
+
+def test_menu_bottom_panel_accepts_caller_html_and_preserves_escaping(app):
+    """
+    Supply page-owned HTML without making ordinary template values trusted HTML
+    """
+    @app.get('/bottom-example', include_in_schema=False)
+    def example(request: Request):
+        template = app.state.templates.env.from_string(
+            "{% call include_widget('menu_bottom_panel') %}"
+            '<strong id="bottom-message">{{ message }}</strong>{% endcall %}')
+        return HTMLResponse(template.render(request=request, message='<script>unsafe()</script>'))
+
+    with TestClient(app) as client:
+        html = client.get('/bottom-example').text
+        assert '<strong id="bottom-message">&lt;script&gt;unsafe()&lt;/script&gt;</strong>' in html
+        assert 'aria-hidden="true"' not in html
+        assert 'id="menu-bottom-panel"' in html
+
+
+def test_menu_widgets_have_separate_discovery_settings_and_page_assets(app):
+    """
+    Keep Pi components out of console widget discovery and console page asset lists
+    """
+    assert set(widget.get_widgets(groups=('widgets',))) == {'selector', 'search', 'log_display'}
+    assert set(widget.get_widgets(groups=('menu_widgets',))) == {'menu_clock', 'menu_top_panel', 'menu_bottom_panel'}
+    assert 'menu_clock' in app.state.web_settings['menu_widgets']
+    assert 'menu_clock' not in app.state.web_settings['widgets']
+    with TestClient(app) as client:
+        console = client.get('/static/catalog.html').text
+        assert 'src="/static/menu_widgets/' not in console
+        assert 'href="/static/menu_widgets/' not in console
+        assert '/static/widgets/selector/selector.js' in console
+        menu = client.get('/static/customguide/customguide.html').text
+        assert 'src="/static/widgets/' not in menu
+        assert 'href="/static/widgets/' not in menu
+        assert '/static/menu_widgets/menu_clock/menu_clock.js' in menu
+        assert '/static/menu_widgets/menu_top_panel/menu_top_panel.css' in menu
+
+
+def test_on_demand_uses_both_shared_menu_panels(app):
+    """
+    Preserve browsing controls and preview hooks inside the reusable panel layouts
+    """
+    with TestClient(app) as client:
+        html = client.get('/on-demand').text
+        assert 'menu-top-panel--video' in html
+        assert 'class="menu-top-panel-details"' in html
+        assert 'id="menu-bottom-panel"' in html
+        for control in ('video-panel', 'od-clock', 'od-heading', 'od-selection', 'od-options',
+                        'od-search', 'od-query', 'od-details', 'od-title', 'od-navigation'):
+            assert html.count('id="{}"'.format(control)) == 1
+        assert 'id="od-top"' not in html
+        assert 'id="od-footer"' not in html
+        assert html.index('id="menu-bottom-panel"') < html.index('id="od-navigation"')
+        assert 'menu_buttom_panel' not in html
+        assert '/static/menu_widgets/menu_bottom_panel/menu_bottom_panel.css' in html
+        assert client.get('/static/menu_widgets/menu_bottom_panel/menu_bottom_panel.css').status_code == 200

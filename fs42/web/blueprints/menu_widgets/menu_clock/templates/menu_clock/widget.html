@@ -1,0 +1,5 @@
+{# This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. #}
+<div class="menu-clock-line">
+    <time {{ render_attributes(widget.attributes) }}></time>
+</div>
+<script>app.menu_widgets.menu_clock.setup({{ widget|tojson }});</script>

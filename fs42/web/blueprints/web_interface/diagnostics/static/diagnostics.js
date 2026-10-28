@@ -35,7 +35,7 @@ app.web_interface.diagnostics = (function () {
         async loadDiagnosticsData() {
             try {
                 this.showLoading();
-                this.diagnosticsData = await window.fs42Api.get('api.player.get_info');
+                this.diagnosticsData = await apiGet('api.player.get_info');
                 this.hideLoading();
             }
             catch (error) {
@@ -332,7 +332,7 @@ app.web_interface.diagnostics = (function () {
                     '                <div class="error-title">SYSTEM ERROR</div>',
                     '                <div>'
                 ].join('\n') +
-                app.utils.general.escapeHtml(message) +
+                escapeHtml(message) +
                 '</div>\n            </div>\n        ';
         }
         /**
@@ -364,6 +364,45 @@ app.web_interface.diagnostics = (function () {
     }
 
     /** Bind page controls and load the initial data. */
+    /** Handle keydown. */
+    self.onKeydown = function(event) {
+        if (!diagnostics_slideshow) {
+            return;
+        }
+        switch (event.key) {
+            case 'ArrowRight':
+            case ' ':
+            case 'n':
+                event.preventDefault();
+                diagnostics_slideshow.nextSlide();
+                break;
+            case 'ArrowLeft':
+            case 'p':
+                event.preventDefault();
+                diagnostics_slideshow.previousSlide();
+                break;
+            case 'r':
+            case 'F5':
+                event.preventDefault();
+                diagnostics_slideshow.refresh();
+                break;
+            case 'Escape':
+                event.preventDefault();
+                if (diagnostics_slideshow.slideInterval) {
+                    diagnostics_slideshow.stopSlideshow();
+                }
+                else {
+                    diagnostics_slideshow.startSlideshow();
+                }
+                break;
+        }
+    };
+
+    /** Refresh the active diagnostic slideshow. */
+    self.refresh = function() {
+        if (diagnostics_slideshow) return diagnostics_slideshow.refresh();
+    };
+
     self.setup = async function() {
         // Diagnostics slideshow functionality for CRT displays
 
@@ -372,48 +411,11 @@ app.web_interface.diagnostics = (function () {
         await diagnostics_slideshow.init();
 
         // Keyboard controls for manual navigation
-        document.addEventListener('keydown', function (event) {
-            if (!diagnostics_slideshow) {
-                return;
-            }
-            switch (event.key) {
-                case 'ArrowRight':
-                case ' ':
-                case 'n':
-                    event.preventDefault();
-                    diagnostics_slideshow.nextSlide();
-                    break;
-                case 'ArrowLeft':
-                case 'p':
-                    event.preventDefault();
-                    diagnostics_slideshow.previousSlide();
-                    break;
-                case 'r':
-                case 'F5':
-                    event.preventDefault();
-                    diagnostics_slideshow.refresh();
-                    break;
-                case 'Escape':
-                    event.preventDefault();
-                    if (diagnostics_slideshow.slideInterval) {
-                        diagnostics_slideshow.stopSlideshow();
-                    }
-                    else {
-                        diagnostics_slideshow.startSlideshow();
-                    }
-                    break;
-            }
-        });
+        document.addEventListener('keydown', self.onKeydown);
 
         // Auto-refresh every 30 seconds
-        setInterval(function () {
-            if (diagnostics_slideshow) {
-                diagnostics_slideshow.refresh();
-            }
-        }, 30000);
+        setInterval(self.refresh, 30000);
     };
-    Object.assign(self, {
-        DiagnosticsSlideshow
-    });
+    self.DiagnosticsSlideshow = DiagnosticsSlideshow;
     return self;
 })();

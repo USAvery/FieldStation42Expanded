@@ -1,0 +1,144 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. */
+
+.menu-top-panel {
+    --menu-top-panel-height: var(--guide-height, min(100vh, 75vw));
+    box-sizing: border-box;
+    overflow: hidden;
+    flex: 0 0 40.4%;
+    width: 100%;
+    height: 40.4%;
+    display: flex;
+    flex-direction: row;
+    background: hsl(216, 62.962963%, 26.470588%);
+    border-bottom: min(0.3vw, 0.4vh) solid hsl(218.571429, 53.846154%, 5.098039%);
+}
+
+.menu-top-panel #video-panel {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    order: 1;
+    flex: 0 0 41.4%;
+    width: 41.4%;
+    height: 100%;
+    aspect-ratio: auto;
+    border-left: 0.59vh solid hsl(216.923077, 37.142857%, 6.862745%);
+    background: hsl(216, 62.962963%, 26.470588%);
+    overflow: hidden;
+}
+
+.menu-top-panel-text {
+    order: 0;
+    flex: 0 0 100%;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: stretch;
+    text-align: left;
+    gap: 0;
+    overflow: hidden;
+    color: hsl(0, 0%, 100%);
+    background: hsl(212.783505, 49.74359%, 38.235294%);
+}
+
+.menu-top-panel-brand-strip {
+    position: relative;
+    flex: 0 0 44.8%;
+    width: 100%;
+    overflow: hidden;
+    background: hsl(217.6, 59.055118%, 24.901961%);
+    border-bottom: min(0.24vw, 0.32vh) solid hsl(216.923077, 41.935484%, 18.235294%);
+}
+
+.menu-top-panel-logo {
+    position: absolute;
+    left: 12.3%;
+    top: 35.2%;
+    width: calc(var(--menu-top-panel-height) * 0.29);
+    color: hsl(218.4, 17.985612%, 72.745098%);
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: min(5.55vw, 7.4vh);
+    font-weight: 300;
+    line-height: 1;
+    letter-spacing: -0.065em;
+    text-shadow: 0 min(0.12vw, 0.16vh) min(0.1vw, 0.13vh) rgba(0, 0, 0, 0.2);
+}
+
+.menu-top-panel-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.menu-top-panel-listings {
+    position: absolute;
+    left: 54.5%;
+    top: 44%;
+    color: hsl(0, 0%, 100%);
+    font-weight: 250;
+    letter-spacing: 0.06em;
+    text-shadow: 0.03em 0.08em 0 hsl(0, 0%, 0%);
+    white-space: nowrap;
+}
+
+.menu-top-panel-title {
+    color: hsl(57.142857, 91.304348%, 77.45098%);
+    font-size: calc(var(--menu-top-panel-height) * 0.0375);
+    line-height: 1;
+}
+
+.menu-top-panel-badge {
+    position: absolute;
+    right: 2.4%;
+    top: 39%;
+    width: 16.1%;
+    height: 55%;
+    display: flex;
+}
+
+.menu-top-panel-badge img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.menu-top-panel-details {
+    flex: 1;
+    min-height: 0;
+    padding: 1.4% 3.1% 1.2% 12.8%;
+    background: linear-gradient(
+        180deg,
+        hsl(235.714286, 9.090909%, 30.196078%) 0%,
+        hsl(210, 58.536585%, 32.156863%) 5%,
+        hsl(215.696203, 32.244898%, 48.039216%) 50%,
+        hsl(216.428571, 44.210526%, 62.745098%) 95%,
+        hsl(215.294118, 35.172414%, 28.431373%) 100%
+    );
+    color: hsl(0, 0%, 100%);
+    text-shadow:
+        min(0.16vw, 0.21vh) min(0.16vw, 0.21vh) 0 hsl(0, 0%, 0%),
+        0 0 min(0.1vw, 0.13vh) hsl(0, 0%, 0%);
+    overflow: hidden;
+}
+
+.menu-top-panel {
+    background: transparent !important;
+}
+
+.menu-top-panel #video-panel {
+    background:
+        linear-gradient(hsl(0, 0%, 0%), hsl(0, 0%, 0%)) top left / 100% var(--live-preview-top, 0%) no-repeat,
+        linear-gradient(hsl(0, 0%, 0%), hsl(0, 0%, 0%)) bottom left / 100% var(--live-preview-bottom, 0%) no-repeat,
+        linear-gradient(hsl(0, 0%, 0%), hsl(0, 0%, 0%)) left var(--live-preview-top, 0%) / var(--live-preview-left, 0%)
+            calc(100% - var(--live-preview-top, 0%) - var(--live-preview-bottom, 0%)) no-repeat,
+        linear-gradient(hsl(0, 0%, 0%), hsl(0, 0%, 0%)) right var(--live-preview-top, 0%) / var(--live-preview-right, 0%)
+            calc(100% - var(--live-preview-top, 0%) - var(--live-preview-bottom, 0%)) no-repeat !important;
+}
+
+.menu-top-panel--video .menu-top-panel-text {
+    flex-basis: 58.6%;
+    width: 58.6%;
+}

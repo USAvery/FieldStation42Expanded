@@ -47,44 +47,7 @@ body {
     text-shadow: min(0.2vw, 0.27vh) min(0.2vw, 0.27vh) min(0.16vw, 0.22vh) black;
 }
 
-#od-top {
-    display: flex;
-    height: 40.6%;
-    flex: 0 0 40.6%;
-}
-
-#od-info {
-    width: 58.6%;
-    height: 100%;
-    overflow: hidden;
-}
-
-#od-brand {
-    height: 45%;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 4.3% 0 9%;
-    background: hsl(216.164384, 56.589147%, 25.294118%);
-    border-bottom: min(0.35vw, 0.47vh) solid hsl(214.285714, 43.750000%, 25.098039%);
-}
-
-#od-brand img {
-    width: 44%;
-    height: auto;
-    object-fit: contain;
-}
-
-#od-clock {
-    font-size: var(--od-font);
-    font-weight: 700;
-    white-space: nowrap;
-}
-
 #od-heading {
-    height: 55%;
-    padding: 4.8% 9% 0 13%;
-    background: linear-gradient(hsl(210.697674, 46.739130%, 36.078431%), hsl(213.076923, 38.235294%, 60.000000%));
     overflow: hidden;
 }
 
@@ -121,18 +84,6 @@ h1 {
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
-}
-
-#video-panel {
-    width: 41.4%;
-    height: 100%;
-    border-left: 0.59vh solid hsl(215.000000, 52.173913%, 9.019608%);
-    background: linear-gradient(black, black) top left / 100% var(--live-preview-top) no-repeat,
-        linear-gradient(black, black) bottom left / 100% var(--live-preview-bottom) no-repeat,
-        linear-gradient(black, black) left var(--live-preview-top) / var(--live-preview-left)
-            calc(100% - var(--live-preview-top) - var(--live-preview-bottom)) no-repeat,
-        linear-gradient(black, black) right var(--live-preview-top) / var(--live-preview-right)
-            calc(100% - var(--live-preview-top) - var(--live-preview-bottom)) no-repeat;
 }
 
 #od-content {
@@ -176,12 +127,12 @@ h1 {
 }
 
 #od-navigation {
-    flex: 0 0 8.2%;
+    width: 100%;
+    height: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 6%;
-    background: hsl(216.164384, 56.589147%, 25.294118%);
 }
 
 #od-navigation button {
@@ -198,12 +149,6 @@ h1 {
     outline: none;
     text-decoration: underline;
     text-underline-offset: 0.15em;
-}
-
-#od-footer {
-    flex: 0 0 8%;
-    background: linear-gradient(hsl(212.307692, 39.000000%, 60.784314%), hsl(212.413793, 34.661355%, 49.215686%) 40%, hsl(213.600000, 51.724138%, 28.431373%));
-    border-top: min(0.35vw, 0.47vh) solid hsl(211.621622, 35.576923%, 40.784314%);
 }
 
 #od-status {

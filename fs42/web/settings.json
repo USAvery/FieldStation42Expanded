@@ -27,5 +27,44 @@
                 "title": "Log"
             }
         }
+    },
+    "menu_widgets": {
+        "menu_clock": {
+            "config": {
+                "attributes": {
+                    "id": "menu-clock",
+                    "class": "menu-clock"
+                },
+                "locale": "en-US",
+                "options": {
+                    "hour": "numeric",
+                    "minute": "2-digit",
+                    "hour12": true
+                },
+                "compact": true
+            }
+        },
+        "menu_top_panel": {
+            "config": {
+                "video_panel": false,
+                "title": null,
+                "attributes": {
+                    "id": "top-panel"
+                },
+                "clock": {
+                    "attributes": {
+                        "id": "menu-top-panel-clock"
+                    }
+                }
+            }
+        },
+        "menu_bottom_panel": {
+            "config": {
+                "attributes": {
+                    "id": "menu-bottom-panel",
+                    "class": "menu-bottom-panel"
+                }
+            }
+        }
     }
 }

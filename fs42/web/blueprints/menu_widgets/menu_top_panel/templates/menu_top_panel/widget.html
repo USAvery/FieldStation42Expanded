@@ -1,0 +1,19 @@
+{# This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. #}
+<div class="menu-top-panel{% if widget.video_panel %} menu-top-panel--video{% endif %}" {{ render_attributes(widget.attributes) }}>
+    <div class="menu-top-panel-text">
+        <div class="menu-top-panel-brand-strip">
+            <div class="menu-top-panel-logo"><img src="{{ sub_static('menu_widgets.menu_top_panel', 'images/comcast_logo.png') }}" alt="Comcast"></div>
+            <div class="menu-top-panel-listings">
+                {% if widget.title is not none %}<div class="menu-top-panel-title">{{ widget.title }}</div>{% endif %}
+                {{ include_widget('menu_clock', widget.clock) }}
+            </div>
+            <div class="menu-top-panel-badge" aria-label="TV Guide">
+                <img src="{{ sub_static('menu_widgets.menu_top_panel', 'images/tv_guide_logo.png') }}" alt="TV Guide">
+            </div>
+        </div>
+        <div class="menu-top-panel-details">
+            {% if caller is not none %}{{ caller() }}{% endif %}
+        </div>
+    </div>
+    {% if widget.video_panel %}<div id="video-panel" aria-label="Current channel preview"></div>{% endif %}
+</div>

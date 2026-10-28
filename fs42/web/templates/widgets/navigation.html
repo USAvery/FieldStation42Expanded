@@ -2,7 +2,7 @@
    See https://mozilla.org/MPL/2.0/. #}
 <nav class="pure-menu pure-menu-horizontal custom-menu" id="mainMenu" aria-label="Console">
     <a href="{{ sub_url_for('index') }}" class="pure-menu-heading">FieldStation42</a>
-    <button type="button" class="menu-toggle" aria-label="Toggle menu" onclick="app.utils.general.toggleMenu()">&#9776;</button>
+    <button type="button" class="menu-toggle" aria-label="Toggle menu" onclick="toggleMenu()">&#9776;</button>
     <ul class="pure-menu-list">
         {% for item in navigation %}
         <li class="pure-menu-item"{% if item.requires_player %} data-requires-player hidden{% endif %}>

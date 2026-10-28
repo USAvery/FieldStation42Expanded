@@ -6,14 +6,13 @@ window.app = window.app || {};
 app.web_interface = app.web_interface || {};
 app.web_interface.index = (function () {
     let self = {};
-    const escapeHtml = app.utils.general.escapeHtml;
 
     /**
      * Load Station Summary
      */
-    async function loadStationSummary() {
+    self.loadStationSummary = async function() {
         try {
-            const resp = await window.fs42Api.get('api.summary.get_summary');
+            const resp = await apiGet('api.summary.get_summary');
             const stations = resp.summary_data || [];
             if (stations.length === 0) {
                 document.getElementById('stations-list').innerHTML = '<p>No stations found.</p>';
@@ -86,13 +85,13 @@ app.web_interface.index = (function () {
             document.getElementById('stations-list').innerHTML =
                 '<p style="color:red">Failed to load station data.</p>';
         }
-    }
+    };
     /**
      * Check Queue Connection
      */
-    async function checkQueueConnection() {
+    self.checkQueueConnection = async function() {
         try {
-            const resp = await window.fs42Api.get('api.player.get_connected');
+            const resp = await apiGet('api.player.get_connected');
             const ticker_control = document.getElementById('ticker-control');
             if (resp.queue_connected) {
                 ticker_control.style.display = 'block';
@@ -105,11 +104,11 @@ app.web_interface.index = (function () {
             // If API call fails, hide ticker controls
             document.getElementById('ticker-control').style.display = 'none';
         }
-    }
+    };
     /**
      * Update Station Summary
      */
-    function updateStationSummary(network_name) {
+    self.updateStationSummary = function(network_name) {
         if (!network_name) {
             document.getElementById('station-summary-table').innerHTML = '';
             document.getElementById('catalog-table').innerHTML = '';
@@ -119,67 +118,67 @@ app.web_interface.index = (function () {
             return s.network_name === network_name;
         });
         if (station) {
-            document.getElementById('station-summary-table').innerHTML = window.fs42Common.renderSummaryTable([
+            document.getElementById('station-summary-table').innerHTML = renderSummaryTable([
                 station
             ]);
         }
         else {
             document.getElementById('station-summary-table').innerHTML = '<p>No summary found.</p>';
         }
-    }
+    };
 
     /** Bind page controls and load the initial data. */
-    self.setup = async function() {
-        // Load page data after its controls have been added to the document
-        await loadStationSummary();
-        await checkQueueConnection();
-        setInterval(checkQueueConnection, 5000);
+    /** Handle submit. */
+    self.onSubmit = async function(e) {
+        if (e.target.id === 'ticker-form') {
+            e.preventDefault();
+            const message = document.getElementById('ticker-message').value.trim();
+            const header = document.getElementById('ticker-header').value.trim() || 'FS42';
+            const style = document.getElementById('ticker-style').value;
+            const iterations = parseInt(document.getElementById('ticker-iterations').value) || 2;
+            if (!message) {
+                alert('Please enter a ticker message');
+                return;
+            }
+            try {
+                const resp = await apiPost('api.player.show_ticker', {
+                    message: message,
+                    header: header,
+                    style: style,
+                    iterations: iterations
+                });
+                if (resp.status === 'success') {
+                    // Clear the form
+                    document.getElementById('ticker-message').value = '';
+                    document.getElementById('ticker-header').value = 'FS42';
+                    document.getElementById('ticker-style').value = 'fieldstation';
+                    document.getElementById('ticker-iterations').value = '2';
 
-        // Handle ticker form submission
-        document.addEventListener('submit', async function (e) {
-            if (e.target.id === 'ticker-form') {
-                e.preventDefault();
-                const message = document.getElementById('ticker-message').value.trim();
-                const header = document.getElementById('ticker-header').value.trim() || 'FS42';
-                const style = document.getElementById('ticker-style').value;
-                const iterations = parseInt(document.getElementById('ticker-iterations').value) || 2;
-                if (!message) {
-                    alert('Please enter a ticker message');
-                    return;
-                }
-                try {
-                    const resp = await window.fs42Api.post('api.player.show_ticker', {
-                        message: message,
-                        header: header,
-                        style: style,
-                        iterations: iterations
-                    });
-                    if (resp.status === 'success') {
-                        // Clear the form
-                        document.getElementById('ticker-message').value = '';
-                        document.getElementById('ticker-header').value = 'FS42';
-                        document.getElementById('ticker-style').value = 'fieldstation';
-                        document.getElementById('ticker-iterations').value = '2';
-
-                        // Show success message briefly
-                        const button = e.target.querySelector('button[type="submit"]');
-                        const original_text = button.textContent;
-                        button.textContent = 'Ticker Sent!';
-                        button.disabled = true;
-                        setTimeout(function () {
-                            button.textContent = original_text;
-                            button.disabled = false;
-                        }, 2000);
-                    }
-                }
-                catch (error) {
-                    alert('Failed to send ticker: ' + error.message);
+                    // Show success message briefly
+                    const button = e.target.querySelector('button[type="submit"]');
+                    const original_text = button.textContent;
+                    button.textContent = 'Ticker Sent!';
+                    button.disabled = true;
+                    setTimeout(function () {
+                        button.textContent = original_text;
+                        button.disabled = false;
+                    }, 2000);
                 }
             }
-        });
+            catch (error) {
+                alert('Failed to send ticker: ' + error.message);
+            }
+        }
     };
-    Object.assign(self, {
-        loadStationSummary, checkQueueConnection, updateStationSummary
-    });
+
+    self.setup = async function() {
+        // Load page data after its controls have been added to the document
+        await self.loadStationSummary();
+        await self.checkQueueConnection();
+        setInterval(self.checkQueueConnection, 5000);
+
+        // Handle ticker form submission
+        document.addEventListener('submit', self.onSubmit);
+    };
     return self;
 })();

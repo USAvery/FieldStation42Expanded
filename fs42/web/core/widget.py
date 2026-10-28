@@ -14,24 +14,40 @@ from jinja2 import pass_context
 from markupsafe import Markup
 
 from fs42.web.core import settings
-from fs42.web.blueprints import widgets
 
 ATTRIBUTE_NAME = re.compile(r'^[A-Za-z_:][A-Za-z0-9_:.-]*$')
 
 
-def get_widgets():
+def get_widgets(groups=('widgets', 'menu_widgets')):
     """
     Discover reusable widget packages alongside their templates and assets
     """
-    return tuple(item.name for item in sorted(pkgutil.iter_modules(widgets.__path__), key=lambda item: item.name)
-                 if item.ispkg)
+    names = []
+    for group in groups:
+        package = importlib.import_module('fs42.web.blueprints.' + group)
+        for item in sorted(pkgutil.iter_modules(package.__path__), key=lambda item: item.name):
+            if item.ispkg:
+                if item.name in names:
+                    raise ValueError('Widget names must be unique: {}'.format(item.name))
+                names.append(item.name)
+    return tuple(names)
+
+
+def widget_group(name):
+    """
+    Identify the widget family that owns a named component
+    """
+    for group in ('widgets', 'menu_widgets'):
+        if name in get_widgets(groups=(group,)):
+            return group
+    raise ValueError('Unknown widget: {}'.format(name))
 
 
 def widget_directory(name):
     """
     Locate a widget's assets beside its package source
     """
-    module = importlib.import_module(widgets.__name__ + '.' + name)
+    module = importlib.import_module('fs42.web.blueprints.' + widget_group(name) + '.' + name)
     return os.path.dirname(module.__file__)
 
 
@@ -41,7 +57,7 @@ def widget_config(request, name, overrides=None):
     """
     if name not in get_widgets():
         raise ValueError('Unknown widget: {}'.format(name))
-    defaults = request.app.state.web_settings.get('widgets', {}).get(name, {}).get('config', {})
+    defaults = request.app.state.web_settings.get(widget_group(name), {}).get(name, {}).get('config', {})
     config = settings.merge(defaults, overrides or {})
     if name == 'selector':
         config['attributes'].setdefault('name', config['attributes']['id'])
@@ -63,13 +79,13 @@ def render_attributes(attributes):
 
 
 @pass_context
-def include_widget(context, name, config=None):
+def include_widget(context, name, config=None, caller=None):
     """
-    Render one widget instance and its safely serialized initialization data
+    Render a widget with configuration and an optional Jinja caller block
     """
     values = widget_config(context['request'], name, config)
     template = context['request'].app.state.templates.env.get_template(name + '/widget.html')
-    return Markup(template.render(widget=values, request=context['request']))
+    return Markup(template.render(widget=values, request=context['request'], caller=caller))
 
 
 def setup(templates):

@@ -3,27 +3,46 @@ window.app = window.app || {};
 app.widgets = app.widgets || {};
 app.widgets.search = (function() {
     let self = {instances: {}};
-    self.setup = function(config) {
-        const id = config.id;
-        const input = document.getElementById(id + '-input');
-        const submit = document.getElementById(id + '-btn');
-        const clear = document.getElementById('clear-' + id + '-btn');
-        const instance = {
-            bind: function(search, reset) {
-                submit.onclick = search;
-                clear.onclick = reset;
-                input.onkeydown = function(event) {
-                    if (event.key === 'Enter') { event.preventDefault(); search(); }
-                };
-            },
-            busy: function(value) { submit.disabled = value; submit.textContent = value ? config.loading : 'Search'; },
-            message: function(text) {
-                const results = document.getElementById(id + '-results-content');
-                results.textContent = text;
-                document.getElementById(id + '-results').style.display = '';
+
+    class Search {
+        constructor(config) {
+            this.config = config;
+            this.input = document.getElementById(config.id + '-input');
+            this.submit = document.getElementById(config.id + '-btn');
+            this.clear = document.getElementById('clear-' + config.id + '-btn');
+            this.onKeydown = this.onKeydown.bind(this);
+        }
+
+        /** Bind this instance's search and reset actions. */
+        bind(search, reset) {
+            this.search = search;
+            this.submit.onclick = search;
+            this.clear.onclick = reset;
+            this.input.onkeydown = this.onKeydown;
+        }
+
+        onKeydown(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                this.search();
             }
-        };
-        self.instances[id] = instance;
+        }
+
+        busy(value) {
+            this.submit.disabled = value;
+            this.submit.textContent = value ? this.config.loading : 'Search';
+        }
+
+        message(text) {
+            document.getElementById(this.config.id + '-results-content').textContent = text;
+            document.getElementById(this.config.id + '-results').style.display = '';
+        }
+    }
+
+    /** Create and register an independent widget instance. */
+    self.setup = function(config) {
+        const instance = new Search(config);
+        self.instances[config.id] = instance;
         return instance;
     };
     return self;

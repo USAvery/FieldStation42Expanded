@@ -8,8 +8,8 @@ app.web_interface.handheld_remote = (function () {
     let self = {};
     let entry_buffer = '';
     let entry_timer = null;
-    function sendCommand(cmd) {
-        window.fs42Api.fetch('api.remote_control.handle_command', {
+    self.sendCommand = function(cmd) {
+        fetchURL('api.remote_control.handle_command', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -24,27 +24,27 @@ app.web_interface.handheld_remote = (function () {
             })
             .then(function (data) {
                 console.log('Sent:', cmd, data);
-                updateStatusDisplay(data.current);
-            }).catch(app.utils.errors.report);
-    }
-    function appendDigit(n) {
+                self.updateStatusDisplay(data.current);
+            }).catch(reportError);
+    };
+    self.appendDigit = function(n) {
         if (entry_buffer.length >= 2) entry_buffer = '';
         entry_buffer += n.toString();
         document.getElementById('entry').innerText = entry_buffer;
         if (entry_timer) clearTimeout(entry_timer);
         entry_timer = setTimeout(function () {
-            sendDirect(false);
+            self.sendDirect(false);
         }, 1500);
-    }
-    function clearEntry() {
+    };
+    self.clearEntry = function() {
         entry_buffer = '';
         document.getElementById('entry').innerText = '_';
         if (entry_timer) clearTimeout(entry_timer);
-    }
-    function sendDirect(force) {
+    };
+    self.sendDirect = function(force) {
         const chan = parseInt(entry_buffer, 10);
         if (!isNaN(chan)) {
-            window.fs42Api.fetch('api.remote_control.handle_command', {
+            fetchURL('api.remote_control.handle_command', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -55,12 +55,12 @@ app.web_interface.handheld_remote = (function () {
                 })
             }).then(function () {
                 console.log('Sent direct', chan);
-                updateStatus();
+                self.updateStatus();
             });
         }
-        if (force || entry_buffer.length > 0) clearEntry();
-    }
-    function updateStatusDisplay(data) {
+        if (force || entry_buffer.length > 0) self.clearEntry();
+    };
+    self.updateStatusDisplay = function(data) {
         if (data.channel != null && data.channel >= 1) {
             document.getElementById('current-channel').innerText = data.channel.toString().padStart(2, '0');
         }
@@ -69,35 +69,34 @@ app.web_interface.handheld_remote = (function () {
         }
         document.getElementById('network-name').innerText = data.name || '';
         document.getElementById('title').innerText = data.title || ''; // Added this line
-    }
-    function updateStatus() {
-        window.fs42Api.fetch('api.remote_control.get_status')
+    };
+    self.updateStatus = function() {
+        fetchURL('api.remote_control.get_status')
             .then(function (response) {
                 return response.json();
             })
-            .then(updateStatusDisplay).catch(app.utils.errors.report);
-    }
+            .then(self.updateStatusDisplay).catch(reportError);
+    };
+    /** Prevent rapid remote presses from zooming the page. */
+    self.preventZoom = function(event) {
+        event.preventDefault();
+    };
+
     self.setup = function () {
-        setInterval(updateStatus, 2000);
-        updateStatus();
+        setInterval(self.updateStatus, 2000);
+        self.updateStatus();
 
         /* Keep rapid remote-button taps from triggering browser double-tap zoom. */
-        document.querySelectorAll('.btn').forEach(function (button) {
-            button.addEventListener('dblclick', function (event) {
-                event.preventDefault();
-            });
-        });
+        for (const button of document.querySelectorAll('.btn')) {
+            button.addEventListener('dblclick', self.preventZoom);
+        }
     };
-    self.sendCommand = sendCommand;
     /**
      * Open the television's On Demand menu without changing the tuned channel
      */
     self.openOnDemand = function() {
-        clearEntry();
-        sendCommand('on_demand_menu');
+        self.clearEntry();
+        self.sendCommand('on_demand_menu');
     };
-    self.appendDigit = appendDigit;
-    self.clearEntry = clearEntry;
-    self.sendDirect = sendDirect;
     return self;
 })();
