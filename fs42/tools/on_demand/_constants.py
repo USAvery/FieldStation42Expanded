@@ -17,6 +17,7 @@ CATEGORIES = [
     {'id': 'long', 'title': 'Long Features'},
     {'id': 'channels', 'title': 'By Channel'},
     {'id': 'all', 'title': 'All Titles'},
+    {'id': 'youtube', 'title': 'YouTube'},
 ]
 CATEGORY_FILTERS = {
     'movies': "kind = 'movie'",

@@ -403,3 +403,37 @@ Remember: FieldStation42 is designed to be fun and easy to use. If something see
 ---
 
 *Happy Broadcasting! 📡✨*
+
+
+### YouTube in On Demand
+
+Open **YouTube** in the web console navigation to add a YouTube channel URL,
+`@handle`, or channel ID. Remove a channel from the same page. Saved channels live
+in the existing runtime SQLite database, independently of the station catalog.
+
+On the television, open **On Demand → YouTube**, choose a saved channel, and select
+an upload. Its details appear in the shared top panel. Open the upload and choose
+**Play** to play it once through the existing MPV instance. The remote Back button
+returns through the menus; no on-screen Back button is added.
+
+The latest 30 public uploads are listed newest first in pages of 10. Metadata is
+cached for 10 minutes across the web and player processes; revisiting a channel
+after that refreshes it. Removing a channel also removes its upload cache.
+
+Install the updated `install/requirements.in` in the application's virtual
+environment. YouTube uses the paired `yt-dlp` and `yt-dlp-ejs` versions there, plus
+**Node.js 22+ or Deno 2+** on the player's PATH for YouTube's JavaScript challenges.
+MPV must include its standard `ytdl_hook` script. The player locates yt-dlp in its
+own Python environment before falling back to PATH. Keep the extractor and EJS
+script versions updated together when YouTube changes. Private, paid, and
+sign-in-only videos are not supported by this interface.
+
+API endpoints:
+
+- `GET /on-demand/youtube/channels`: saved channels.
+- `POST /on-demand/youtube/channels`: add or update with `{"url":"@channel"}`.
+- `DELETE /on-demand/youtube/channels/{channel_id}`: remove a channel.
+- `GET /on-demand/youtube/channels/{channel_id}/uploads?page=0`: recent uploads.
+- `POST /on-demand/youtube/channels/{channel_id}/play/{video_id}`: validate a saved
+  channel's listed upload and queue single playback. Direct arbitrary URLs are
+  not accepted.

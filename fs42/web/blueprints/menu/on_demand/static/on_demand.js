@@ -115,7 +115,10 @@ app.menu.on_demand = (function() {
         }
         playing = true;
         status.textContent = 'Starting ' + item.title + '…';
-        apiPost(urlFor('api.on_demand.play_title', {entry_id: item.id}), {})
+        const endpoint = item.source === 'youtube'
+            ? urlFor('api.youtube.play_upload', {channel_id:item.channel_id, video_id:item.id})
+            : urlFor('api.on_demand.play_title', {entry_id:item.id});
+        apiPost(endpoint, {})
             .catch(function(error) {
                 status.textContent = error.detail || 'Playback could not start. Please try again.';
                 playing = false;
@@ -193,7 +196,10 @@ app.menu.on_demand = (function() {
         if (view.channel) {
             params.set('channel', view.channel);
         }
-        apiGet(urlFor('api.on_demand.get_titles') + '?' + params.toString())
+        const endpoint = view.youtube_channel
+            ? urlFor('api.youtube.get_uploads', {channel_id:view.youtube_channel, page:view.page || 0})
+            : urlFor('api.on_demand.get_titles') + '?' + params.toString();
+        apiGet(endpoint)
             .then(function(result) {
                 if (token !== request_id) {
                     return;
@@ -248,6 +254,9 @@ app.menu.on_demand = (function() {
             self.showTitles(token);
             self.selectChoice(0);
         }
+        else if (view.type === 'youtube') {
+            self.showYouTubeChannels(token);
+        }
         else if (view.type === 'channels') {
             const page = view.page || 0;
             menu.channels.slice(page * 10, page * 10 + 10).forEach(function(channel) {
@@ -269,7 +278,7 @@ app.menu.on_demand = (function() {
         else {
             menu.categories.forEach(function(category) {
                 self.addChoice(options, category.title, function() {
-                    const type = category.id === 'search' || category.id === 'channels' ? category.id : 'titles';
+                    const type = ['search', 'channels', 'youtube'].includes(category.id) ? category.id : 'titles';
                     self.openView({type: type, title: category.title, category: category.id, page: 0});
                 });
             });
@@ -279,6 +288,27 @@ app.menu.on_demand = (function() {
     /**
      * Load menu choices once and retain an explicit retry if the server is unavailable
      */
+    self.showYouTubeChannels = function(token) {
+        status.textContent = 'Loading YouTube channels…';
+        apiGet('api.youtube.get_channels').then(function(result) {
+            if (token !== request_id) return;
+            status.textContent = result.channels.length ? '' : 'Add YouTube channels from the web console to see them here.';
+            const page = view.page || 0;
+            result.channels.slice(page * 10, page * 10 + 10).forEach(function(channel) {
+                self.addChoice(options, channel.title, function() {
+                    self.openView({type:'titles', title:channel.title, youtube_channel:channel.id, page:0});
+                });
+            });
+            if (page > 0) self.addChoice(navigation, 'Previous', function() {view.page--; self.renderView()});
+            if ((page + 1) * 10 < result.channels.length) {
+                self.addChoice(navigation, 'More Choices', function() {view.page++; view.selected=0; self.renderView()});
+            }
+            self.selectChoice(view.selected || 0);
+        }).catch(function(error) {
+            if (token === request_id) self.showError(error, self.renderView);
+        });
+    };
+
     self.loadMenu = function() {
         status.textContent = 'Loading library…';
         apiGet('api.on_demand.get_menu')

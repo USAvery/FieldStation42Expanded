@@ -14,3 +14,6 @@ jsonschema
 requests
 mutagen
 evdev
+# Keep the YouTube extractor and its matching JavaScript challenge scripts together.
+yt-dlp==2026.10.26
+yt-dlp-ejs==0.8.0

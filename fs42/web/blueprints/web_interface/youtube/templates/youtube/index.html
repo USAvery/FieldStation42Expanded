@@ -1,0 +1,13 @@
+{% extends 'web_interface/index.html' %}
+{% block tool_content %}
+<section id="youtube-manager" class="pure-u-1">
+    <p>Choose the channels available under YouTube in On Demand. Their recent uploads appear automatically.</p>
+    <form id="youtube-add-form" class="pure-form">
+        <label for="youtube-channel-url">YouTube channel</label>
+        <input id="youtube-channel-url" type="text" required maxlength="500" placeholder="@channel or channel URL" autocomplete="off">
+        <button id="youtube-add" class="pure-button primary" type="submit">Add Channel</button>
+    </form>
+    <p id="youtube-status" role="status" aria-live="polite"></p>
+    <ul id="youtube-channels" aria-label="Saved YouTube channels"></ul>
+</section>
+{% endblock tool_content %}

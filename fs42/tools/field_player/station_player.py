@@ -7,6 +7,8 @@ Execute station schedules through MPV and coordinate guide, web-channel, and ove
 Handle playback recovery, runtime commands, parental controls, and player status updates.
 """
 import os
+import sysconfig
+import shutil
 import glob
 import json
 import time
@@ -1146,6 +1148,9 @@ class StationPlayer(object):
                             5,
                         ),
                     )
+                if is_stream and str(file_path).startswith('https://www.youtube.com/watch?v='):
+                    # Allow YouTube format extraction before MPV reports file-loaded.
+                    timeout_seconds = max(timeout_seconds, 45)
                 start_time = time.monotonic()
 
                 while True:
@@ -1332,34 +1337,51 @@ class StationPlayer(object):
 
     def play_on_demand(self, entry_id):
         """
-        Authorize a local catalog title, play it once, and restore the library when it finishes
+        Authorize a catalog title or saved YouTube upload and play it once
 
-        :param entry_id: (int) catalog record requested by the On Demand menu
+        :param entry_id: (int|dict) catalog record or saved-channel YouTube selection
         :return:         (PlayerOutcome) normal completion or a command interrupting playback
         """
         from fs42.tools.on_demand import OnDemand
         try:
-            selection = OnDemand().get_selection(entry_id)
-        except ValueError as error:
+            youtube = isinstance(entry_id, dict) and entry_id.get('source') == 'youtube'
+            if youtube:
+                from fs42.tools.on_demand.youtube import YouTubeLibrary
+                selection = YouTubeLibrary().get_selection(entry_id.get('channel_id', ''), entry_id.get('video_id', ''))
+            else:
+                selection = OnDemand().get_selection(entry_id)
+        except (ValueError, RuntimeError) as error:
             self._l.warning('On Demand selection unavailable: {}'.format(error))
             return PlayerOutcome(PlayerState.SUCCESS)
 
         self._close_guide_overlay()
         network = selection['network_name']
-        if self._parental_controls_required(network) and self.parental_unlocked_network != network:
+        if network and self._parental_controls_required(network) and self.parental_unlocked_network != network:
             response = self.prompt_parental_controls(StationManager().station_by_name(network))
             if response.status != PlayerState.SUCCESS:
                 return response
 
         try:
-            response = self.play_and_wait(selection['file_path'], loop=False, title=selection['title'])
+            if youtube:
+                executable = os.path.join(sysconfig.get_path('scripts'), 'yt-dlp.exe' if os.name == 'nt' else 'yt-dlp')
+                executable = executable if os.path.isfile(executable) else shutil.which('yt-dlp')
+                if not executable:
+                    raise RuntimeError('YouTube playback requires yt-dlp. Install the updated requirements.')
+                self.mpv.command('change-list', 'script-opts', 'append', 'ytdl_hook-ytdl_path=' + executable)
+                self.mpv.command('set_property', 'options/ytdl-raw-options', {'js-runtimes': 'node'})
+                response = self.play_and_wait(selection['file_path'], loop=False, title=selection['title'], is_stream=True)
+            else:
+                response = self.play_and_wait(selection['file_path'], loop=False, title=selection['title'])
+        except Exception as error:
+            self._l.warning('On Demand playback failed: {}'.format(error))
+            response = PlayerOutcome(PlayerState.FAILED)
         finally:
             self.parental_unlocked_network = None
         if response.status in (PlayerState.SUCCESS, PlayerState.FAILED):
             self._open_guide_overlay()
         return response
 
-    def play_and_wait(self, file_path, loop=True, title='Unknown'):
+    def play_and_wait(self, file_path, loop=True, title='Unknown', is_stream=False):
         """
         Play a media file until interrupted, or until completion when looping is disabled
 
@@ -1372,7 +1394,7 @@ class StationPlayer(object):
         self.mpv.loop_playlist = 'inf' if loop else 'no'
         self.mpv.vf = ''
         self.mpv.af = ''
-        if not self.play_file(file_path, offset_seconds=0, media_type='video', title=title):
+        if not self.play_file(file_path, offset_seconds=0, media_type='video', title=title, is_stream=is_stream):
             if self._pending_response:
                 response = self._pending_response
                 self._pending_response = None
