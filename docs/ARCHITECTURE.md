@@ -29,10 +29,13 @@ fs42/
     web/
         app.py              Application factory and server lifecycle
         remote_app.py       Standalone handheld-remote application factory
+        settings.json       Web defaults, widget configuration, and registration options
         core/               Router setup, shared state, and service helpers
         blueprints/
             api/            API routers grouped by resource
-            tools/          Page routers, templates, scripts, and styles
+            web_interface/  Web console and handheld remote pages and assets
+            menu/           Pi-facing menus and browser-based channel displays
+            widgets/        Configurable controls with templates, scripts, and styles
         templates/          Shared Jinja page layout
         static/             Shared scripts, themes, and station templates
 test/                       Unit and integration tests
@@ -110,7 +113,10 @@ keep the APIs required by their installed libraries.
 command and shutdown queues plus server configuration. Build-task results, locks,
 and player sampling state belong to that application instance.
 
-Each page lives in `fs42/web/blueprints/tools/<page>/`:
+Console pages and the standalone handheld remote live in
+`fs42/web/blueprints/web_interface/<page>/`. The console guide and its embedded
+guide frame also belong here. Pi-facing customguide, on-demand, PPV, and bump
+screens live in `fs42/web/blueprints/menu/<page>/`:
 
 ```text
 <page>/
@@ -120,14 +126,58 @@ Each page lives in `fs42/web/blueprints/tools/<page>/`:
     static/style.css
 ```
 
-Some display pages have additional theme, image, and music files. Templates extend
-the shared Jinja layout. Page scripts expose an `app.tools.<page>` namespace with a
-`setup` entry point. Shared request and layout helpers live under
-`web/static/utils/`.
+Some display pages have additional theme, image, and music files. Page scripts
+expose `app.web_interface.<page>` or `app.menu.<page>`, with an explicit `setup()`
+entry point and methods on `self`. Keep page markup in Jinja templates, styling
+in CSS, and browser interaction and changing data in JavaScript. Shared request
+and behavior helpers live under `web/static/utils/`.
+
+`core/_pages.py` discovers API and page packages that expose an `APIRouter` named
+`router`. Add a page package without editing a central router or asset list.
+The page module declares `TITLE` and can declare `DESCRIPTION`, `MENU_TITLE`,
+`MENU_GROUP`, `MENU_ORDER`, and `HEADING`. Set `HIDE_FROM_MENU = True` for pages
+that do not belong in console navigation. `REQUIRES_PLAYER = True` hides a
+navigation item until a player queue is connected. `STANDALONE = True` selects
+the handheld-remote deployment. `STATIC_ALIASES` lists older asset prefixes.
+
+Give page routes names such as `catalog.index`, and render them with
+`bu.render_page(request, __name__)` from `core/blueprint.py`. Templates use
+`sub_url_for('catalog')` for page links and
+`sub_static('catalog', 'catalog.js')` for page assets.
+
+`templates/base.html` loads each page's script and styles once and calls its
+`setup()` after the markup. Regular console pages extend
+`web_interface/index.html` and fill `tool_content`; this layout includes
+navigation built from page metadata. Display-only pages, the handheld remote,
+and Pi menus use layouts without console navigation. Configurable selectors,
+search controls, and log displays live under `blueprints/widgets/`. The station editor keeps its Monaco
+dependency in its own `page_sources` block.
+
+Render widgets with `include_widget('selector', {'attributes': {'id': 'channel'}})`.
+The widget configuration merges instance overrides over the application's defaults
+without modifying them. Widget packages are discovered automatically; templates live
+in `templates/<name>/widget.html`, and files in `static/` are included once per page.
+JavaScript widget instances keep independent state by control ID. Use
+`render_attributes()` for HTML attributes and Jinja's `tojson` filter when passing
+configuration into scripts.
+
+Browser routes are exported by the application into `window.fs42Routes` and are also
+available at `/web/routes`. `app.utils.routing.urlFor('api.catalogs.get_catalog',
+{network_name: name})` builds an encoded URL from a registered endpoint. The shared
+API client uses the page's origin and these URLs, including configured deployment
+prefixes. Existing path-based callers remain supported by the same resolver.
+
+`core/errors.py` centralizes HTML error pages, JSON API errors, and traceback logging.
+API validation responses retain their structured `detail` list. Unexpected failures
+return a generic explanation; HTML traceback details appear only when web `debug`
+is explicitly enabled. `app.utils.errors` formats browser errors and displays them
+as text in an accessible notice or a page's existing error area. Dynamic HTML
+renderers escape catalog, schedule, station, and search text with the shared helper.
 
 Existing page and API URLs remain available. Page assets use
-`/static/tools/<page>/`; the existing `/static/bump/`, `/static/ppv/`, and
-`/static/customguide/` asset paths also remain available. The shared
+`/static/web_interface/<page>/` or `/static/menu/<page>/`. Compatibility paths
+under `/static/tools/<page>/`, `/static/bump/`, `/static/ppv/`,
+`/static/on_demand/`, and `/static/customguide/` remain available. The shared
 `/static/common.js` and `/static/fs42_client.js` URLs resolve to their reorganized
 utility scripts.
 
@@ -137,6 +187,37 @@ Station definitions remain in `confs/`, and server settings remain in
 `confs/main_config.json`. Generated files stay under the configured runtime and catalog
 directories. Database tables, serialized scheduling-hint names, and saved player
 state retain their existing formats.
+
+Web settings load from `fs42/web/settings.json`, then an optional JSON file named by
+`FS42_WEB_SETTINGS`, then the `web` dictionary in `confs/main_config.json` (or the
+application factory's `server_conf`). Nested dictionaries merge; lists and scalar
+values replace their defaults. Both web application factories accept these settings.
+
+For example, this `web` section hides diagnostics, mounts the catalog page below
+`/console`, and adds `/service` to the summary API routes:
+
+```json
+{
+    "web": {
+        "disabled_blueprints": ["web_interface.diagnostics"],
+        "url_prefixes": {
+            "web_interface.catalog": "/console",
+            "api.summary": "/service"
+        },
+        "widgets": {
+            "selector": {"config": {"label": "Choose station:"}}
+        }
+    }
+}
+```
+
+`url_prefixes` prepend to each blueprint's declared page/API URLs and page asset
+mounts. Qualified names distinguish API and page packages; short package names
+are also accepted. Disabling a group or parent package skips its descendants.
+Use `root_path`, for example `/station`, for deployment behind a proxy mounted
+under that path. Leave it empty for ordinary direct hosting. Default URLs are
+unchanged when these overrides are absent. The environment override file contains
+the web settings directly, without the outer `web` key.
 
 Python imports now use the package locations shown above. External extensions
 that imported former flat modules such as `fs42.catalog_api` should update to

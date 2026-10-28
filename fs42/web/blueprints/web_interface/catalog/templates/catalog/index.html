@@ -1,0 +1,19 @@
+{% extends 'web_interface/index.html' %}
+
+<!-- Page Content -->
+{% block tool_content %}
+{{ include_widget('search', {'id': 'search', 'placeholder': 'Search catalogs...'}) }}
+<div class="station-select-container">
+    {{ include_widget('selector', {'attributes': {'id': 'station-select'}}) }}
+    <button id="rebuild-btn" class="pure-button primary" style="margin-left: 1em;">Rebuild Catalog</button>
+</div>
+<div id="station-summary" class="pure-u-1">
+    <h2 id="station-summary-header" style="display:none;">Station Summary</h2>
+    <div id="station-summary-table"></div>
+</div>
+{{ include_widget('log_display', {'prefix': 'rebuild'}) }}
+<div id="catalog-table-frame" class="pure-u-1">
+    <h2 id="catalog-table-header" style="display:none;">Catalog Entries</h2>
+    <div id="catalog-table"></div>
+</div>
+{% endblock tool_content %}

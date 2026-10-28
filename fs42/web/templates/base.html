@@ -1,0 +1,34 @@
+{# This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+   See https://mozilla.org/MPL/2.0/. #}
+{% extends 'index.html' %}
+{% block head %}
+    <meta charset="utf-8">
+    <meta name="viewport" content="{% block viewport %}width=device-width, initial-scale=1.0{% endblock %}">
+    <title>{{ title }}</title>
+    {% block base_css_sources %}{% endblock %}
+    {% for filename in page_styles %}
+    <link href="{{ sub_static(page_name, filename) }}" rel="stylesheet">
+    {% endfor %}
+    <script>window.fs42Routes = {{ browser_config(request)|tojson }};</script>
+    <script src="{{ request.url_for('static', path='utils/routing.js').path }}"></script>
+    <script src="{{ request.url_for('static', path='utils/errors.js').path }}"></script>
+    {% if shared_utils %}
+    <script src="{{ request.url_for('static', path='utils/general.js').path }}"></script>
+    {% endif %}
+    {% for source in request.app.state.widget_sources %}
+    {% if source.css %}
+    <link href="{{ request.url_for('widgets.' + source.name + '.static', path=source.filename).path }}" rel="stylesheet">
+    {% else %}
+    <script src="{{ request.url_for('widgets.' + source.name + '.static', path=source.filename).path }}"></script>
+    {% endif %}
+    {% endfor %}
+    {% block page_sources %}{% endblock %}
+{% endblock head %}
+{% block content %}
+    <div id="app-errors" role="alert" hidden></div>
+    {% block page_content %}{% endblock %}
+    {% block page_setup %}{% endblock %}
+    <!-- Embedded JavaScript -->
+    <script src="{{ sub_static(page_name, page_name + '.js') }}"></script>
+    <script>Promise.resolve().then(function() { return app.{{ page_group }}.{{ page_name }}.setup(); }).catch(app.utils.errors.report);</script>
+{% endblock content %}

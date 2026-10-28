@@ -1,0 +1,13 @@
+<div id="{{ widget.id }}-section" class="pure-u-1 search-widget">
+    <div class="pure-form search-controls">
+        <input type="search" id="{{ widget.id }}-input" placeholder="{{ widget.placeholder }}" class="pure-input">
+        <button type="button" id="{{ widget.id }}-btn" class="pure-button pure-button-primary">Search</button>
+        <button type="button" id="clear-{{ widget.id }}-btn" class="pure-button">Clear</button>
+    </div>
+    <div id="{{ widget.id }}-results" class="search-results" style="display:none;">
+        <h3>Search Results</h3>
+        <div id="{{ widget.id }}-results-content" role="status" aria-live="polite"></div>
+    </div>
+</div>
+
+<script>app.widgets.search.setup({{ widget|tojson }});</script>

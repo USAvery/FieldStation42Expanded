@@ -1,0 +1,11 @@
+{# This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+   See https://mozilla.org/MPL/2.0/. #}
+{% macro log_display(prefix) %}
+<div id="{{ prefix }}-log-frame" class="log-container" style="display:none;">
+    <div class="log-header">
+        <h2 id="{{ prefix }}-log-header">Log</h2>
+        <button id="{{ prefix }}-log-dismiss" class="pure-button">Dismiss</button>
+    </div>
+    <pre id="{{ prefix }}-log" class="fs42-terminal"></pre>
+</div>
+{% endmacro %}

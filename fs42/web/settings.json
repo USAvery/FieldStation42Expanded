@@ -1,0 +1,31 @@
+{
+    "root_path": "",
+    "debug": false,
+    "disabled_blueprints": [],
+    "url_prefixes": {},
+    "widgets": {
+        "selector": {
+            "config": {
+                "label": "Select Station:",
+                "attributes": {
+                    "id": "station-select",
+                    "class": "pure-input-1"
+                },
+                "options": []
+            }
+        },
+        "search": {
+            "config": {
+                "id": "search",
+                "placeholder": "Search...",
+                "loading": "Searching..."
+            }
+        },
+        "log_display": {
+            "config": {
+                "prefix": "task",
+                "title": "Log"
+            }
+        }
+    }
+}

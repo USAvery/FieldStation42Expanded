@@ -1,0 +1,13 @@
+{# This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+   See https://mozilla.org/MPL/2.0/. #}
+{% extends 'base.html' %}
+{% block base_css_sources %}
+    <link href="https://unpkg.com/purecss@3.0.0/build/pure-min.css" rel="stylesheet">
+    <link href="https://unpkg.com/purecss@3.0.0/build/grids-responsive-min.css" rel="stylesheet">
+    <link id="theme-css" href="{{ request.url_for('static', path='themes/default.css').path }}" rel="stylesheet">
+    <link href="{{ request.url_for('static', path='console.css').path }}" rel="stylesheet">
+{% endblock %}
+
+{% block page_setup %}
+    <script>app.utils.general.setup();</script>
+{% endblock %}

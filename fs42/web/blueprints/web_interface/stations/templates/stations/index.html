@@ -1,0 +1,85 @@
+{% extends 'web_interface/index.html' %}
+
+{% block page_sources %}
+<link rel="stylesheet" href="{{ request.url_for('static', path='station_ui.css').path }}">
+{% endblock %}
+
+<!-- Page Content -->
+{% block tool_content %}
+<div class="page-header">
+    <div>
+        <h1 style="margin:0;">Station Manager</h1>
+        <p style="color:#8b949e;margin:0.5em 0 0 0;">Manage your FieldStation42 channel configurations</p>
+    </div>
+    <button class="pure-button pure-button-primary" onclick="app.web_interface.stations.showTemplateSelector()">
+        + Create New Station
+    </button>
+</div>
+
+<div class="filter-bar">
+    <select id="type-filter" class="pure-input">
+        <option value="all">All Types</option>
+        <option value="standard">Standard</option>
+        <option value="web">Web</option>
+        <option value="guide">Guide</option>
+        <option value="loop">Loop</option>
+        <option value="streaming">Streaming</option>
+    </select>
+    <div class="search-container">
+        <input id="search-input" type="text" class="pure-input" placeholder="Search stations...">
+        <span class="search-icon">🔍</span>
+    </div>
+</div>
+
+<div id="station-list">
+    <div class="loading-spinner">
+        <p>Loading stations...</p>
+    </div>
+</div>
+
+<!-- Template Selector Modal -->
+<div id="template-modal" class="modal" style="display:none;">
+    <div class="modal-overlay" onclick="app.web_interface.stations.hideTemplateSelector()"></div>
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>Create New Station</h2>
+            <button class="modal-close" onclick="app.web_interface.stations.hideTemplateSelector()">×</button>
+        </div>
+        <div class="modal-body">
+            <p style="color:#8b949e;margin-bottom:1.5em;">Choose a template to get started:</p>
+            <div class="template-grid">
+                <div class="template-card" onclick="app.web_interface.stations.createFromTemplate('standard')">
+                    <div class="template-icon">📺</div>
+                    <h3>Standard</h3>
+                    <p>Traditional scheduled TV with time slots and programming</p>
+                </div>
+                <div class="template-card" onclick="app.web_interface.stations.createFromTemplate('web')">
+                    <div class="template-icon">🌐</div>
+                    <h3>Web Page</h3>
+                    <p>Embed a web page as a channel</p>
+                </div>
+                <div class="template-card" onclick="app.web_interface.stations.createFromTemplate('loop')">
+                    <div class="template-icon">🔄</div>
+                    <h3>Loop</h3>
+                    <p>Continuous playlist of content</p>
+                </div>
+                <div class="template-card" onclick="app.web_interface.stations.createFromTemplate('guide')">
+                    <div class="template-icon">📋</div>
+                    <h3>Guide</h3>
+                    <p>Scrolling guide with programming schedule</p>
+                </div>
+                <div class="template-card" onclick="app.web_interface.stations.createFromTemplate('streaming')">
+                    <div class="template-icon">📡</div>
+                    <h3>Streaming</h3>
+                    <p>External stream sources</p>
+                </div>
+                <div class="template-card" onclick="app.web_interface.stations.createFromTemplate('blank')">
+                    <div class="template-icon">⚡</div>
+                    <h3>Blank</h3>
+                    <p>Minimal configuration for advanced users</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock tool_content %}

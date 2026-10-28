@@ -26,5 +26,6 @@ DEFAULT_SERVER_CONF = {
     'video_seek_timeout': 10,
     'stream_start_timeout': 5,
     'follow_static_symlinks': False,
+    'web': {},
     'custom_holidays': {},
 }

@@ -1,0 +1,9 @@
+<div id="{{ widget.prefix }}-log-frame" class="log-container" style="display:none;">
+    <div class="log-header">
+        <h2 id="{{ widget.prefix }}-log-header">{{ widget.title }}</h2>
+        <button type="button" id="{{ widget.prefix }}-log-dismiss" class="pure-button">Dismiss</button>
+    </div>
+    <pre id="{{ widget.prefix }}-log" class="fs42-terminal"></pre>
+</div>
+
+<script>app.widgets.log_display.setup({{ widget|tojson }});</script>

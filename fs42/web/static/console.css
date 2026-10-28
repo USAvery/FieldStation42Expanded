@@ -1,0 +1,19 @@
+/*
+ * This Source Code Form is subject to the Mozilla Public License, v. 2.0.
+ * See https://mozilla.org/MPL/2.0/.
+ */
+
+/* Keep player-only navigation hidden when PureCSS supplies item display rules. */
+[data-requires-player][hidden] {
+    display: none !important;
+}
+
+button.menu-toggle {
+    border: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+}
+
+
+#app-errors:not([hidden]) { padding: 1em; color: #b00020; background: #fff1f1; white-space: pre-wrap; }

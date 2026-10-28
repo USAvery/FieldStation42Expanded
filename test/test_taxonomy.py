@@ -57,9 +57,11 @@ def test_remote_page_and_legacy_assets_work_outside_repo(tmp_path, monkeypatch):
         for url in ('/', '/static/index.html'):
             response = client.get(url)
             assert response.status_code == 200
-            assert 'app.tools.handheld_remote.setup()' in response.text
+            assert 'app.web_interface.handheld_remote.setup()' in response.text
         for url in ('/static/remote.js', '/static/remote.css', '/static/tools/handheld_remote/handheld_remote.js',
-                    '/static/tools/handheld_remote/style.css'):
+                    '/static/tools/handheld_remote/style.css',
+                    '/static/web_interface/handheld_remote/handheld_remote.js',
+                    '/static/web_interface/handheld_remote/style.css'):
             assert client.get(url).status_code == 200
 
 

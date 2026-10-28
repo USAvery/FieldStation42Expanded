@@ -1,0 +1,14 @@
+{# This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0.
+   See https://mozilla.org/MPL/2.0/. #}
+{% extends 'web_interface/base.html' %}
+{% block page_content %}
+    {% include 'widgets/navigation.html' %}
+    <div class="pure-g">
+        <div class="pure-u-1">
+            {% block page_heading %}{% if heading %}<h1>{{ heading }}</h1>{% endif %}{% endblock %}
+            {% if description %}<p>{{ description }}</p>{% endif %}
+            {% block tool_content %}{% endblock tool_content %}
+        </div>
+    </div>
+{% endblock page_content %}
+{% block page_sources %}{{ super() }}{% endblock %}

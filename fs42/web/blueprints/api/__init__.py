@@ -3,31 +3,5 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Collect the API routers registered by the main station-console application.
+Group HTTP API resource routers discovered by web setup.
 """
-from fastapi import APIRouter
-
-from .ppv import router as ppv_router
-from .build import router as build_router
-from .media import router as media_router
-from .player import router as player_router
-from .themes import router as themes_router
-from .summary import router as summary_router
-from .catalogs import router as catalogs_router
-from .stations import router as stations_router
-from .schedules import router as schedules_router
-from .on_demand import router as on_demand_router
-
-# Create a list of all routers to be included
-routers = [
-    summary_router,
-    catalogs_router,
-    schedules_router,
-    player_router,
-    build_router,
-    themes_router,
-    stations_router,
-    ppv_router,
-    media_router,
-    on_demand_router,
-]

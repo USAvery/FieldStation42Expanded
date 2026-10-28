@@ -13,6 +13,8 @@ from fastapi import HTTPException
 from fs42.tools.field_player import remote_commands
 from fs42.web.blueprints.api.remote_control import _constants
 
+STANDALONE = True
+
 router = APIRouter()
 
 

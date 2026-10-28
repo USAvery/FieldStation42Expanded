@@ -14,14 +14,11 @@ from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI
-from fastapi import Request
-from fastapi.responses import JSONResponse
 
 from fs42.core import logger
 from fs42.web.core import setup
 from fs42.web.core.state import WebState
 from fs42.core.station_manager import StationManager
-from fs42.core.station_manager import StationConfigError
 
 _logger = logger.setup('fs42.web')
 
@@ -58,14 +55,6 @@ async def _lifespan(app):
                 await task
 
 
-async def _station_config_error_handler(request: Request, exc: StationConfigError):
-    """
-    Report a configuration error to the operator
-    """
-    _logger.error('Station configuration error: {}'.format(exc))
-    return JSONResponse(status_code=500, content={'detail': str(exc)})
-
-
 def create_app(command_queue=None, shutdown_queue=None, server_conf=None):
     """
     Build the web console and register its API services
@@ -79,7 +68,6 @@ def create_app(command_queue=None, shutdown_queue=None, server_conf=None):
     app.state.player_command_queue = command_queue
     app.state.shutdown_queue = shutdown_queue
     app.state.web = WebState()
-    app.add_exception_handler(StationConfigError, _station_config_error_handler)
     conf = StationManager().server_conf if server_conf is None else server_conf
     setup.setup(app, conf)
     return app

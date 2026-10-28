@@ -1,0 +1,6 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. */
+
+.search-widget { margin-bottom: 1.5em; }
+.search-controls { display: flex; align-items: center; gap: 0.5em; }
+.search-controls input { flex: 1; max-width: 300px; }
+.search-results { margin-top: 1em; }

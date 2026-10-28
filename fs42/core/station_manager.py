@@ -186,6 +186,7 @@ class StationManager(object):
                     'overlay_conf',
                     'start_channel',
                     'follow_static_symlinks',
+                    'web',
                     'parental_controls_pin',
                     'parental_controls_theme',
                     'custom_holidays',

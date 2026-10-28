@@ -1,0 +1,72 @@
+{% extends 'web_interface/base.html' %}
+{% block viewport %}width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no{% endblock %}
+
+{% block page_content %}
+<div class="remote-container">
+        <div class="remote-header">
+            <div class="remote-brand">FieldStation42</div>
+            <button class="remote-btn power-btn" data-key="power">STOP</button>
+        </div>
+
+        <div class="remote-screen" id="remote-display">
+            Ready
+        </div>
+
+        <!-- Number Pad -->
+        <div class="button-grid number-pad" id="number-pad">
+            <button class="remote-btn number-btn" data-key="1">1</button>
+            <button class="remote-btn number-btn" data-key="2">2</button>
+            <button class="remote-btn number-btn" data-key="3">3</button>
+            <button class="remote-btn number-btn" data-key="4">4</button>
+            <button class="remote-btn number-btn" data-key="5">5</button>
+            <button class="remote-btn number-btn" data-key="6">6</button>
+            <button class="remote-btn number-btn" data-key="7">7</button>
+            <button class="remote-btn number-btn" data-key="8">8</button>
+            <button class="remote-btn number-btn" data-key="9">9</button>
+            <button class="remote-btn number-btn pad-toggle-btn" data-key="pad_toggle">NAV</button>
+            <button class="remote-btn number-btn zero-btn" data-key="0">0</button>
+            <!-- Clears a half-typed channel number, or a half-typed parental PIN. -->
+            <button class="remote-btn number-btn clear-btn" data-key="clear">CLR</button>
+        </div>
+
+        <!-- Nav Pad - swaps in for the number pad to drive web channels (PPV). -->
+        <div class="button-grid nav-pad" id="nav-pad" hidden>
+            <button class="remote-btn nav-btn nav-up" data-key="nav_up">▲</button>
+            <!-- Horizontal keys are used by interactive web channels such as the custom guide. -->
+            <button class="remote-btn nav-btn nav-left" data-key="nav_left">◀</button>
+            <button class="remote-btn nav-btn nav-enter" data-key="nav_enter">OK</button>
+            <button class="remote-btn nav-btn nav-right" data-key="nav_right">▶</button>
+            <button class="remote-btn nav-btn pad-toggle-btn" data-key="pad_toggle">123</button>
+            <button class="remote-btn nav-btn nav-down" data-key="nav_down">▼</button>
+        </div>
+
+        <!-- Volume and Channel Controls in Vertical Columns -->
+        <div class="button-grid volume-channel-section">
+            <button class="remote-btn volume-btn" data-key="vol_up">VOL +</button>
+            <button class="remote-btn channel-btn" data-key="ch_up">CH ▲</button>
+            <button class="remote-btn volume-btn" data-key="vol_down">VOL -</button>
+            <button class="remote-btn channel-btn" data-key="ch_down">CH ▼</button>
+        </div>
+
+        <!-- Currently Playing Display -->
+        <div class="now-playing">
+            <div class="now-playing-label">NOW PLAYING</div>
+            <div class="now-playing-network" id="now-playing-network">No network</div>
+            <div class="now-playing-status" id="now-playing-status">Stopped</div>
+            <div class="now-playing-title" id="now-playing-title">No program selected</div>
+        </div>
+
+        <!-- Function Buttons -->
+        <div class="button-grid function-section">
+            <button class="remote-btn function-btn" data-key="guide">GUIDE</button>
+            <button class="remote-btn function-btn" data-key="on_demand">ON DEMAND</button>
+            <button class="remote-btn function-btn" data-key="exit">EXIT</button>
+            <button class="remote-btn function-btn" data-key="mute">MUTE</button>
+            <button class="remote-btn function-btn" data-key="info">INFO</button>
+            <!-- Cycle MPV tracks without changing channel playback. The player shows
+                 the selected audio/subtitle track on MPV's on-screen display. -->
+            <button class="remote-btn function-btn" data-key="subtitles">SUBS</button>
+            <button class="remote-btn function-btn" data-key="audio">AUDIO</button>
+        </div>
+    </div>
+{% endblock page_content %}

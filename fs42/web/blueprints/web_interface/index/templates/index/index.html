@@ -1,0 +1,64 @@
+{% extends 'web_interface/index.html' %}
+
+<!-- Page Content -->
+{% block tool_content %}
+<div class="pure-u-1" style="margin-bottom:2em;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:1em;">
+        <h2 style="margin:0;">On Now</h2>
+        <a href="{{ sub_url_for('guide') }}" class="pure-button pure-button-primary" style="font-size:0.8em;">View Full Guide</a>
+    </div>
+    <iframe src="{{ sub_url_for('guide_frame') }}"
+            style="width:100%; height:200px; border:1px solid #666; border-radius:4px; display:block;"
+            title="Current Programming">
+        <p>Your browser does not support iframes. <a href="{{ sub_url_for('guide') }}">View Guide</a></p>
+    </iframe>
+</div>
+
+<div id="station-summary" class="pure-u-1">
+    <h2>Station Summary</h2>
+    <div id="stations-list">
+        <p>Loading station data...</p>
+    </div>
+</div>
+
+<div id="ticker-control" class="pure-u-1" style="display:none; margin-top:1.5em; margin-bottom:1.5em;">
+    <h2 style="margin-bottom:1em; font-size:1.2em;">Display Message</h2>
+    <form id="ticker-form" class="pure-form pure-form-aligned">
+        <fieldset style="padding:1em;">
+            <div class="pure-g" style="align-items:end;">
+                <div class="pure-u-1 pure-u-md-1-3" style="padding-right:0.5em;">
+                    <label for="ticker-message" style="margin-top:0;">Message</label>
+                    <input id="ticker-message" type="text" class="pure-input-1" placeholder="Enter ticker message..." required>
+                </div>
+                <div class="pure-u-1 pure-u-md-1-6" style="padding:0 0.25em;">
+                    <label for="ticker-header">Header</label>
+                    <input id="ticker-header" type="text" class="pure-input-1" value="FS42" placeholder="Header">
+                </div>
+                <div class="pure-u-1 pure-u-md-1-4" style="padding:0 0.25em;">
+                    <label for="ticker-style">Style</label>
+                    <select id="ticker-style" class="pure-input-1">
+                        <option value="fieldstation">FieldStation</option>
+                        <option value="breaking">Breaking</option>
+                        <option value="weather">Weather</option>
+                        <option value="sports">Sports</option>
+                        <option value="financial">Financial</option>
+                        <option value="election">Election</option>
+                    </select>
+                </div>
+                <div class="pure-u-1 pure-u-md-1-12" style="padding:0 0.25em;">
+                    <label for="ticker-iterations">Count</label>
+                    <input id="ticker-iterations" type="number" class="pure-input-1" value="2" min="1" max="10" style="text-align:center;">
+                </div>
+                <div class="pure-u-1 pure-u-md-1-6" style="padding-left:0.5em;">
+                    <label style="margin-top:0; visibility:hidden;">Action</label>
+                    <button type="submit" class="pure-button pure-button-primary" style="width:100%;">Send</button>
+                </div>
+            </div>
+        </fieldset>
+    </form>
+</div>
+<div style="text-align:center; margin-top:1em;">
+    <span style="font-size:1.5em;font-weight:bold;">FieldStation42</span>
+    <span style="margin-left:1em; font-size:1.2em;">It's Up To You.</span>
+</div>
+{% endblock tool_content %}

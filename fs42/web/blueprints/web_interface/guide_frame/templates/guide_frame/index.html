@@ -1,0 +1,31 @@
+{% extends 'web_interface/base.html' %}
+
+{% block page_sources %}
+<link rel="stylesheet" href="{{ request.url_for('static', path='guide.css').path }}">
+{% endblock %}
+
+<!-- Page Content -->
+{% block page_content %}
+<div class="guide-container">
+    <div class="guide-timeline" id="timeline"></div>
+    <div class="guide-content">
+        <div class="guide-stations" id="stations-column"></div>
+        <div class="guide-grid-container">
+            <div class="guide-grid" id="guide-grid"></div>
+        </div>
+    </div>
+    <div class="branding-overlay" id="branding-overlay">
+        <div class="branding-content">
+            <div class="branding-title">FieldStation42</div>
+            <div class="branding-subtitle">It's Up To You</div>
+        </div>
+    </div>
+</div>
+
+
+<!-- Background Music Player -->
+<audio id="background-music" preload="none" loop volume="0.3">
+    <source src="/static/music/guide-track-1.mp3" type="audio/mpeg">
+    <source src="/static/music/guide-track-1.ogg" type="audio/ogg">
+</audio>
+{% endblock page_content %}

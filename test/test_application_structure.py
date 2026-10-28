@@ -22,6 +22,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from fs42.web.app import create_app
+from fs42.web.core import _pages
 from fs42.web.core import _constants
 from fs42.tools.station import _utils
 from fs42.web.app import _monitor_shutdown
@@ -34,7 +35,8 @@ PAGES = [
     '/', '/remote', '/static/about.html', '/static/catalog.html', '/static/diagnostics.html', '/static/guide.html',
     '/static/guide_frame.html', '/static/index.html', '/static/remote.html', '/static/schedule.html',
     '/static/stations.html', '/static/station_editor.html', '/static/bump/bump.html',
-    '/static/customguide/customguide.html', '/static/ppv/ppv.html'
+    '/static/customguide/customguide.html', '/static/ppv/ppv.html', '/on-demand',
+    '/static/on_demand/on_demand.html'
 ]
 
 
@@ -72,6 +74,104 @@ def test_public_script_urls_still_resolve(client):
     """
     assert client.get('/static/common.js').status_code == 200
     assert client.get('/static/fs42_client.js').status_code == 200
+
+
+@pytest.mark.parametrize('module', _pages.get_pages())
+def test_page_assets_resolve_from_responsibility_package(client, module):
+    """
+    Serve relocated page assets through their new URLs and existing aliases
+    """
+    group, page = module.__name__.split('.')[-2:]
+    aliases = getattr(module, 'STATIC_ALIASES', [])
+    directory = os.path.join(os.path.dirname(module.__file__), 'static')
+    for name in os.listdir(directory):
+        if not name.endswith(('.js', '.css')):
+            continue
+        with open(os.path.join(directory, name), 'rb') as f_in:
+            expected = f_in.read()
+        for prefix in ['/static/' + group + '/' + page, '/static/tools/' + page] + aliases:
+            response = client.get(prefix + '/' + name)
+            assert response.status_code == 200
+            assert response.content == expected
+
+
+@pytest.mark.parametrize('url,controls', [
+    ('/', ['stations-list', 'ticker-form']),
+    ('/static/catalog.html', ['station-select', 'search-btn', 'rebuild-log', 'rebuild-log-dismiss']),
+    ('/static/schedule.html', ['station-select', 'build-schedule-btn', 'add-time-log', 'add-time-log-dismiss']),
+    ('/static/about.html', ['theme-select', 'autoscroll-checkbox']),
+    ('/static/stations.html', ['station-list', 'template-modal', 'type-filter']),
+    ('/static/station_editor.html?mode=create', ['editor-container', 'save-btn', 'format-btn']),
+    ('/static/guide.html', ['guide-frame']),
+    ('/static/guide_frame.html', ['guide-grid', 'stations-column', 'branding-overlay']),
+])
+def test_controls_are_rendered_before_javascript_runs(client, url, controls):
+    """
+    Deliver page controls as HTML and include each required script only once
+    """
+    html = client.get(url).text
+    for control in controls:
+        assert 'id="{}"'.format(control) in html
+    scripts = re.findall(r'<script src="([^"]+)"', html)
+    assert len(scripts) == len(set(scripts))
+    assert scripts.count('/static/utils/general.js') == 1
+    assert scripts.count('/static/utils/routing.js') == 1
+
+
+def test_station_editor_escapes_the_station_name(client):
+    """
+    Keep query-string station names as text in the server-rendered editor heading
+    """
+    html = client.get('/static/station_editor.html', params={'station': '<script>alert(1)</script>'}).text
+    assert '&lt;script&gt;alert(1)&lt;/script&gt;' in html
+    assert '<script>alert(1)</script>' not in html
+
+
+def test_navigation_uses_page_metadata(client, monkeypatch):
+    """
+    Build navigation from discovered console pages without adding chrome to Pi menus
+    """
+    from fs42.web.blueprints.web_interface import catalog
+    monkeypatch.setattr(catalog, 'MENU_TITLE', 'Media Catalog')
+    with TestClient(create_app(server_conf={})) as updated:
+        html = updated.get('/').text
+        assert '>Media Catalog</a>' in html
+        assert 'data-requires-player hidden' in html
+    for url in ('/static/customguide/customguide.html', '/static/ppv/ppv.html',
+                '/static/bump/bump.html', '/on-demand', '/static/guide_frame.html'):
+        html = client.get(url).text
+        assert 'id="mainMenu"' not in html
+
+
+def test_new_page_is_discovered_with_its_templates_and_assets(tmp_path, monkeypatch):
+    """
+    Register a new page package without editing central router or asset lists
+    """
+    import importlib
+    from fs42.web.blueprints import web_interface
+    package = tmp_path / 'example_page'
+    (package / 'static').mkdir(parents=True)
+    (package / 'templates' / 'example_page').mkdir(parents=True)
+    (package / 'static' / 'example_page.js').write_text('/* Example page script */')
+    (package / 'templates' / 'example_page' / 'index.html').write_text(
+        "{% extends 'web_interface/index.html' %}{% block tool_content %}Example content{% endblock %}")
+    (package / '__init__.py').write_text(
+        "from fastapi import APIRouter, Request\n"
+        "from fs42.web.core import blueprint as bu\n"
+        "TITLE = 'Example Page'\nMENU_TITLE = 'Example Navigation'\nrouter = APIRouter()\n"
+        "@router.get('/example', name='example_page.index')\n"
+        "def index(request: Request):\n    return bu.render_page(request, __name__)\n")
+    monkeypatch.setattr(web_interface, '__path__', list(web_interface.__path__) + [str(tmp_path)])
+    importlib.invalidate_caches()
+    try:
+        with TestClient(create_app(server_conf={})) as discovered:
+            html = discovered.get('/example').text
+            assert 'Example content' in html
+            assert '>Example Navigation</a>' in html
+            assert discovered.get('/static/web_interface/example_page/example_page.js').status_code == 200
+    finally:
+        sys.modules.pop('fs42.web.blueprints.web_interface.example_page', None)
+        monkeypatch.delattr(web_interface, 'example_page', raising=False)
 
 
 def test_factory_owns_player_and_job_state(tmp_path, monkeypatch):

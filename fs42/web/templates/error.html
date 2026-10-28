@@ -1,0 +1,13 @@
+{# This Source Code Form is subject to the Mozilla Public License, v. 2.0.
+   See https://mozilla.org/MPL/2.0/. #}
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>{{ code }} — {{ title }}</title></head>
+<body>
+    <main role="main">
+        <h1>{{ code }} — {{ title }}</h1>
+        <p role="alert">{{ message }}</p>
+        {% if details %}<details><summary>Debug details</summary><pre>{{ details }}</pre></details>{% endif %}
+    </main>
+</body>
+</html>

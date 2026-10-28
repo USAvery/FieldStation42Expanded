@@ -19,8 +19,3 @@ TMDB_IMAGE_BASE_URL = 'https://image.tmdb.org/t/p/w500'
 
 # Cache directory for TMDB results
 CACHE_DIR = 'catalog/.tmdb_cache'
-
-PAGES = [('about', []), ('catalog', []), ('diagnostics', []), ('guide', []), ('guide_frame', []), ('index', []),
-         ('remote', []), ('schedule', []), ('stations', []), ('station_editor', []), ('bump', ['/static/bump']),
-         ('customguide', ['/static/customguide']), ('ppv', ['/static/ppv']),
-         ('on_demand', ['/static/on_demand'])]

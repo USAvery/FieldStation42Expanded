@@ -1,0 +1,8 @@
+<label for="{{ widget.attributes.id }}">{{ widget.label }}</label>
+<select {{ render_attributes(widget.attributes) }}>
+    {% for option in widget.options %}
+    <option value="{{ option.value }}"{% if option.value == widget.get('selected') %} selected{% endif %}>{{ option.label }}</option>
+    {% endfor %}
+</select>
+
+<script>app.widgets.selector.setup({{ widget|tojson }});</script>

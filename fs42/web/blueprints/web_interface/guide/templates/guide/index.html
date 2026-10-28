@@ -1,0 +1,21 @@
+{% extends 'web_interface/index.html' %}
+
+<!-- Page Content -->
+{% block tool_content %}
+<div class="pure-u-1">
+    <iframe id="guide-frame" src="{{ sub_url_for('guide_frame') }}" title="Guide">
+        <p>Your browser does not support iframes. Please <a href="{{ sub_url_for('guide_frame') }}">click here to view the Guide</a>.</p>
+    </iframe>
+</div>
+{% endblock tool_content %}
+
+{% block page_heading %}
+<h1 class="guide-heading">
+    Guide
+    <label class="debug-toggle" title="Show raw file names instead of normalized titles (shortcut: d)">
+        <span class="debug-toggle-label">Show File Names</span>
+        <span class="debug-toggle-track" aria-hidden="true"><span class="debug-toggle-thumb"></span></span>
+        <input type="checkbox" class="debug-toggle-input" role="switch">
+    </label>
+</h1>
+{% endblock %}

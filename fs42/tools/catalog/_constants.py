@@ -8,7 +8,7 @@ generated station bumps.
 """
 import os
 
-BUMP_VIDEO_DIR = os.path.join('fs42', 'web', 'blueprints', 'tools', 'bump', 'static', 'video')
+BUMP_VIDEO_DIR = os.path.join('fs42', 'web', 'blueprints', 'menu', 'bump', 'static', 'video')
 
 FF_USE_FLUID_FILE_CACHE = True
 

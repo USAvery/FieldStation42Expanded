@@ -1,0 +1,37 @@
+{% extends 'web_interface/index.html' %}
+
+<!-- Page Content -->
+{% block tool_content %}
+{{ include_widget('search', {'id': 'search', 'placeholder': 'Search All Schedules...'}) }}
+<div style="margin-bottom: 1em;">
+    <h3 style="margin-top: 0; margin-bottom: 0.5em; color: #ff00cc;">Schedule Operations</h3>
+    <div class="station-select-container">
+        {{ include_widget('selector', {'attributes': {'id': 'station-select'}}) }}
+        <label for="time-amount-select" style="margin-left: 1em;">Time to Add:</label>
+        <select id="time-amount-select" class="pure-input-1" style="max-width: 150px;">
+            <option value="month">Month</option>
+            <option value="week">Week</option>
+            <option value="day">Day</option>
+        </select>
+        <button id="build-schedule-btn" class="pure-button primary" style="margin-left: 1em;">Add Time</button>
+        <button id="reset-schedules-btn" class="pure-button danger" style="margin-left: 1em;">Reset Schedule</button>
+    </div>
+</div>
+<div id="station-summary" class="pure-u-1">
+    <h2 id="station-summary-header" style="display:none;">Station Summary</h2>
+    <div id="station-summary-table"></div>
+</div>
+{{ include_widget('log_display', {'prefix': 'add-time'}) }}
+<div id="schedule-controls" class="pure-u-1" style="display:none;">
+    <h2 id="schedule-query-header" style="display:none;">Schedule Query</h2>
+    <label for="start-date" id="start-date-label" style="display:none;">Start:</label>
+    <input type="datetime-local" id="start-date" style="margin-right:1em; display:none;">
+    <label for="end-date" id="end-date-label" style="display:none;">End:</label>
+    <input type="datetime-local" id="end-date" style="margin-right:1em; display:none;">
+    <button id="get-schedule" class="pure-button pure-button-primary" style="display:none;">Get Schedule</button>
+</div>
+<div id="schedule-table-frame" class="pure-u-1">
+    <h2 id="schedule-blocks-header" style="display:none;">Schedule Blocks</h2>
+    <div id="schedule-table"></div>
+</div>
+{% endblock tool_content %}

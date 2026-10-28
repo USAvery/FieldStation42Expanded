@@ -7,6 +7,12 @@ app.utils = app.utils || {};
 app.utils.general = (function () {
     let self = {};
 
+    /** Escape display data before combining it with trusted layout markup. */
+    self.escapeHtml = function(value) {
+        return String(value ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+    };
+    const escapeHtml = self.escapeHtml;
+
     /**
      * Init Theme
      */
@@ -24,7 +30,7 @@ app.utils.general = (function () {
      */
     function setTheme(theme_name) {
         const theme_link = document.getElementById('theme-css');
-        theme_link.href = '/static/themes/' + theme_name + '.css';
+        theme_link.href = window.fs42Api.urlFor('/static/themes/' + theme_name + '.css');
         localStorage.setItem('fs42-theme', theme_name);
     }
 
@@ -45,111 +51,25 @@ app.utils.general = (function () {
         }
     });
 
-    // Layout components
     /**
-     * Create Main Menu
+     * Initialize the console theme and player-dependent navigation
      */
-    async function createMainMenu() {
-        // Check if player queue is connected
-        let player_menu_items = '';
+    self.setup = async function () {
+        initTheme();
+        const items = document.querySelectorAll('[data-requires-player]');
+        if (!items.length) {
+            return;
+        }
         try {
-            const response = await window.fs42Api.get('player/status/queue_connected');
-            if (response.queue_connected) {
-                player_menu_items =
-                    '<li class="pure-menu-item"><a href="/static/remote.html" class="pure-menu-link">Remote</a></li>';
+            const status = await window.fs42Api.get('api.player.get_connected');
+            for (const item of items) {
+                item.hidden = !status.queue_connected;
             }
         }
         catch (error) {
             console.log('Could not check player queue status:', error);
-            // Don't show player menu if we can't connect
         }
-        return (
-            [
-                '',
-                '        <div class="pure-menu pure-menu-horizontal custom-menu" id="mainMenu">',
-                '            <a href="#" class="pure-menu-heading">FieldStation42</a>',
-                '            <span class="menu-toggle" onclick="window.fs42Common.toggleMenu()">&#9776;</span>',
-                '            <ul class="pure-menu-list">',
-                '                <li class="pure-menu-item"><a href="/" class="pure-menu-link">Home</a></li>',
-                '                <li class="pure-menu-item"><a href="/static/catalog.html" class="pure-menu-link">Catalog</a></li>',
-                '                <li class="pure-menu-item"><a href="/static/schedule.html" class="pure-menu-link">Schedule</a></li>',
-                '                <li class="pure-menu-item"><a href="/static/guide.html" class="pure-menu-link">Guide</a></li>',
-                '                <li class="pure-menu-item"><a href="/static/stations.html" class="pure-menu-link">Stations</a></li>',
-                '                '
-            ].join('\n') +
-            player_menu_items +
-            [
-                '',
-                '                <li class="pure-menu-item"><a href="/static/about.html" class="pure-menu-link">About</a></li>',
-                '            </ul>',
-                '        </div>',
-                '    '
-            ].join('\n')
-        );
-    }
-    /**
-     * Create Page Layout
-     */
-    async function createPageLayout(title, content) {
-        const menu = await createMainMenu();
-        return (
-            '\n        ' +
-            menu +
-            '\n        <div class="pure-g">\n            <div class="pure-u-1">\n                <h1>' +
-            title +
-            '</h1>\n                ' +
-            content +
-            '\n            </div>\n        </div>\n    '
-        );
-    }
-    /**
-     * Create Station Selector
-     */
-    function createStationSelector() {
-        return [
-            '',
-            '        <div id="station-select-frame" class="station-select-container">',
-            '            <label for="station-select">Select Station:</label>',
-            '            <select id="station-select" class="pure-input-1"></select>',
-            '        </div>',
-            '    '
-        ].join('\n');
-    }
-    /**
-     * Create Action Buttons
-     */
-    function createActionButtons(buttons) {
-        const button_html = buttons
-            .map(function (btn) {
-                return (
-                    '<button id="' +
-                    btn.id +
-                    '" class="pure-button ' +
-                    (btn.classes || '') +
-                    '">' +
-                    btn.text +
-                    '</button>'
-                );
-            })
-            .join('');
-        return '<div class="action-buttons">' + button_html + '</div>';
-    }
-    /**
-     * Create Log Display
-     */
-    function createLogDisplay() {
-        return [
-            '',
-            '        <div id="log-frame" class="log-container" style="display:none;">',
-            '            <div class="log-header">',
-            '                <h2 id="log-header-text">Log</h2>',
-            '                <button id="log-dismiss" class="pure-button">Dismiss</button>',
-            '            </div>',
-            '            <pre id="log-content" class="fs42-terminal"></pre>',
-            '        </div>',
-            '    '
-        ].join('\n');
-    }
+    };
 
     // Fetch and display summary from /summary API
     /**
@@ -157,10 +77,11 @@ app.utils.general = (function () {
      */
     async function fetchStationSummary() {
         try {
-            const resp = await window.fs42Api.get('summary');
+            const resp = await window.fs42Api.get('api.summary.get_summary');
             return resp.summary_data || [];
         }
         catch (e) {
+            app.utils.errors.report(e);
             return [];
         }
     }
@@ -169,10 +90,11 @@ app.utils.general = (function () {
      */
     async function fetchChannels() {
         try {
-            const resp = await window.fs42Api.get('summary/channels');
+            const resp = await window.fs42Api.get('api.summary.get_channels');
             return resp.channels || [];
         }
         catch (e) {
+            app.utils.errors.report(e);
             return [];
         }
     }
@@ -183,10 +105,11 @@ app.utils.general = (function () {
      */
     async function fetchCatalog(network_id) {
         try {
-            const resp = await window.fs42Api.get('catalogs/' + network_id);
+            const resp = await window.fs42Api.get(window.fs42Api.urlFor('api.catalogs.get_catalog', {network_name: network_id}));
             return resp.catalog_entries || [];
         }
         catch (e) {
+            app.utils.errors.report(e);
             return [];
         }
     }
@@ -220,15 +143,15 @@ app.utils.general = (function () {
             }
             html +=
                 "<tr>\n            <td data-label='Network'><strong>" +
-                name +
+                escapeHtml(name) +
                 "</strong></td>\n            <td data-label='Catalog Entries'>" +
-                entry_count +
+                escapeHtml(entry_count) +
                 "</td>\n            <td data-label='Total Duration'>" +
-                total_duration +
+                escapeHtml(total_duration) +
                 "</td>\n            <td data-label='Schedule Start'>" +
-                start +
+                escapeHtml(start) +
                 "</td>\n            <td data-label='Schedule End'>" +
-                end +
+                escapeHtml(end) +
                 '</td>\n        </tr>';
         }
         html += '</tbody></table>';
@@ -258,17 +181,17 @@ app.utils.general = (function () {
             const short_path = full_path.length > 100 ? full_path.slice(-100) : full_path;
             html +=
                 "<tr>\n            <td data-label='Title'>" +
-                entry.title +
+                escapeHtml(entry.title) +
                 "</td>\n            <td data-label='Path'><span title=\"" +
-                full_path +
+                escapeHtml(full_path) +
                 '">' +
-                short_path +
+                escapeHtml(short_path) +
                 "</span></td>\n            <td data-label='Duration'>" +
                 Number(entry.duration).toFixed(2) +
                 "</td>\n            <td data-label='Count'>" +
-                entry.count +
+                escapeHtml(entry.count) +
                 "</td>\n            <td data-label='Hints'>" +
-                hints +
+                escapeHtml(hints) +
                 '</td>\n        </tr>';
         }
         html += '</tbody></table>';
@@ -281,10 +204,11 @@ app.utils.general = (function () {
      */
     async function fetchScheduleSummary(network_id) {
         try {
-            const resp = await window.fs42Api.get('summary/schedules/' + network_id);
+            const resp = await window.fs42Api.get(window.fs42Api.urlFor('api.summary.get_schedule_summary', {network_name: network_id}));
             return resp;
         }
         catch (e) {
+            app.utils.errors.report(e);
             return null;
         }
     }
@@ -295,7 +219,7 @@ app.utils.general = (function () {
      */
     async function fetchSchedule(network_id, start, end, include_meta) {
         try {
-            let url = 'schedules/' + network_id;
+            let url = window.fs42Api.urlFor('api.schedules.get_schedule', {network_name: network_id});
             const params = [];
             if (start) {
                 params.push('start=' + encodeURIComponent(start));
@@ -313,6 +237,7 @@ app.utils.general = (function () {
             return resp.schedule_blocks || [];
         }
         catch (e) {
+            app.utils.errors.report(e);
             return [];
         }
     }
@@ -339,6 +264,7 @@ app.utils.general = (function () {
             return resp.schedules || {};
         }
         catch (e) {
+            app.utils.errors.report(e);
             return {};
         }
     }
@@ -359,11 +285,11 @@ app.utils.general = (function () {
             const end = block.end_time ? formatDateTime(block.end_time) : '';
             html +=
                 "<tr>\n            <td data-label='Start Time'>" +
-                start +
+                escapeHtml(start) +
                 "</td>\n            <td data-label='End Time'>" +
-                end +
+                escapeHtml(end) +
                 "</td>\n            <td data-label='Title'>" +
-                (block.title || '') +
+                escapeHtml((block.title || '')) +
                 '</td>\n        </tr>';
         }
         html += '</tbody></table>';
@@ -388,17 +314,12 @@ app.utils.general = (function () {
         const min = String(d.getMinutes()).padStart(2, '0');
         return '' + yyyy + '-' + mm + '-' + dd + ' ' + hh + ':' + min;
     }
-    self = {
+    Object.assign(self, {
         // Theme management
         initTheme,
         setTheme,
-        // Menu and layout
+        // Menu controls
         toggleMenu,
-        createMainMenu,
-        createPageLayout,
-        createStationSelector,
-        createActionButtons,
-        createLogDisplay,
         // API functions
         fetchStationSummary,
         fetchChannels,
@@ -409,7 +330,7 @@ app.utils.general = (function () {
         fetchSchedule,
         fetchGuideSchedules,
         renderScheduleTable
-    };
+    });
     return self;
 })();
 window.fs42Common = app.utils.general;

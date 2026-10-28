@@ -1,0 +1,42 @@
+{% extends 'web_interface/index.html' %}
+
+{% block page_sources %}
+<link rel="stylesheet" href="{{ request.url_for('static', path='station_ui.css').path }}">
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.44.0/min/vs/loader.js"></script>
+{% endblock %}
+
+<!-- Page Content -->
+{% block tool_content %}
+<div class="editor-header">
+    <div>
+        <h1 style="margin:0;">{{ 'Create New Station' if request.query_params.get('mode') == 'create' else 'Edit Station Configuration' }}</h1>
+        <p style="color:#8b949e;margin:0.5em 0 0 0;">{{ 'Configure your new channel' if request.query_params.get('mode') == 'create' else request.query_params.get('station', '') }}</p>
+    </div>
+    <a href="{{ sub_url_for('stations') }}" class="pure-button">
+        ← Back to Stations
+    </a>
+</div>
+
+<div id="editor-container"></div>
+
+<div id="error-panel">
+    <div class="error-header">⚠️ Validation Errors</div>
+    <div id="error-list"></div>
+</div>
+
+<div id="success-message" class="success-message">
+    ✓ Configuration saved successfully!
+</div>
+
+<div class="editor-actions">
+    <button id="save-btn" class="pure-button pure-button-primary" onclick="app.web_interface.station_editor.saveStation()">
+        Save
+    </button>
+    <button class="pure-button" onclick="app.web_interface.station_editor.cancelEdit()">
+        Cancel
+    </button>
+    <button id="format-btn" class="pure-button" onclick="app.web_interface.station_editor.formatDocument()">
+        Format JSON
+    </button>
+</div>
+{% endblock tool_content %}
