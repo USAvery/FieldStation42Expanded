@@ -458,6 +458,23 @@ app.web_interface.remote = (function () {
             case 'back':
                 await self.sendPpvKey('Escape', 'BACK');
                 break;
+            case 'play_pause':
+            case 'rewind':
+            case 'fast_forward':
+                try {
+                    const commands = {
+                        play_pause: ['api.player.mpv_play_pause', 'PLAY/PAUSE'],
+                        rewind: ['api.player.mpv_rewind', 'REWIND'],
+                        fast_forward: ['api.player.mpv_fast_forward', 'FAST FORWARD']
+                    };
+                    await apiPost(commands[key][0]);
+                    display.textContent = commands[key][1];
+                }
+                catch (error) {
+                    console.error('Playback command failed:', error);
+                    display.textContent = 'ERROR';
+                }
+                break;
             case 'ch_up':
                 display.textContent = 'CHANNEL UP';
                 try {

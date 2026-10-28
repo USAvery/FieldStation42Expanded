@@ -149,6 +149,9 @@ class StationPlayer(object):
         'toggle_subtitles': ('cycle', 'sub-visibility'),
         'cycle_subtitles': ('cycle', 'sub'),
         'cycle_audio': ('cycle', 'audio'),
+        'play_pause': ('cycle', 'pause'),
+        'rewind': ('seek', -10, 'relative+exact'),
+        'fast_forward': ('seek', 10, 'relative+exact'),
     }
 
     scramble_effects = {

@@ -374,6 +374,24 @@ async def mpv_cycle_audio(request: Request):
     return await _queue_mpv_command(request, 'cycle_audio')
 
 
+@router.post('/mpv/play-pause')
+async def mpv_play_pause(request: Request):
+    """Toggle playback pause without replacing the active media."""
+    return await _queue_mpv_command(request, 'play_pause')
+
+
+@router.post('/mpv/rewind')
+async def mpv_rewind(request: Request):
+    """Move the active media backward ten seconds."""
+    return await _queue_mpv_command(request, 'rewind')
+
+
+@router.post('/mpv/fast-forward')
+async def mpv_fast_forward(request: Request):
+    """Move the active media forward ten seconds."""
+    return await _queue_mpv_command(request, 'fast_forward')
+
+
 @router.post('/parental/digit/{digit}')
 async def parental_digit(request: Request, digit: str):
     """

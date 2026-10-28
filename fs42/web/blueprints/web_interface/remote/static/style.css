@@ -11,3 +11,24 @@
     -webkit-user-select: none;
     user-select: none;
 }
+
+.nav-pad .nav-back {
+    grid-column: 1;
+    grid-row: 1;
+}
+
+.playback-section {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-bottom: 15px;
+}
+
+.icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.icon-btn svg {
+    width: 1.6em;
+    height: 1.6em;
+}

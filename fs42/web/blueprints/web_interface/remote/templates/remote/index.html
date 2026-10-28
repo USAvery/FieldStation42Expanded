@@ -31,6 +31,9 @@
 
         <!-- Nav Pad - swaps in for the number pad to drive web channels (PPV). -->
         <div class="button-grid nav-pad" id="nav-pad" hidden>
+            <button class="remote-btn nav-btn nav-back icon-btn" data-key="back" aria-label="Back" title="Back">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 4-6 6 6 6M3 10h11a7 7 0 0 1 7 7v3" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
             <button class="remote-btn nav-btn nav-up" data-key="nav_up">▲</button>
             <!-- Horizontal keys are used by interactive web channels such as the custom guide. -->
             <button class="remote-btn nav-btn nav-left" data-key="nav_left">◀</button>
@@ -48,6 +51,19 @@
             <button class="remote-btn channel-btn" data-key="ch_down">CH ▼</button>
         </div>
 
+        <!-- Playback Controls -->
+        <div class="button-grid playback-section" aria-label="Playback controls">
+            <button class="remote-btn icon-btn" data-key="rewind" aria-label="Rewind 10 seconds" title="Rewind 10 seconds">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 4 1 12l10 8V4Zm12 0-10 8 10 8V4Z" fill="currentColor"/></svg>
+            </button>
+            <button class="remote-btn icon-btn" data-key="play_pause" aria-label="Play/pause" title="Play/pause">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m2 3 12 9-12 9V3Zm14 0h3v18h-3V3Zm5 0h3v18h-3V3Z" fill="currentColor"/></svg>
+            </button>
+            <button class="remote-btn icon-btn" data-key="fast_forward" aria-label="Fast forward 10 seconds" title="Fast forward 10 seconds">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m1 4 10 8-10 8V4Zm12 0 10 8-10 8V4Z" fill="currentColor"/></svg>
+            </button>
+        </div>
+
         <!-- Currently Playing Display -->
         <div class="now-playing">
             <div class="now-playing-label">NOW PLAYING</div>
@@ -60,7 +76,6 @@
         <div class="button-grid function-section">
             <button class="remote-btn function-btn" data-key="guide">GUIDE</button>
             <button class="remote-btn function-btn" data-key="on_demand">ON DEMAND</button>
-            <button class="remote-btn function-btn" data-key="back">BACK</button>
             <button class="remote-btn function-btn" data-key="exit">EXIT</button>
             <button class="remote-btn function-btn" data-key="mute">MUTE</button>
             <button class="remote-btn function-btn" data-key="info">INFO</button>

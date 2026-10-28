@@ -649,7 +649,9 @@ def test_menu_top_panel_serves_the_tv_guide_image(app):
 def test_web_remote_back_sends_menu_key_without_leaving_remote(app):
     """Expose Back on the remote and send Escape through its existing menu-key transport."""
     with TestClient(app) as client:
-        assert 'data-key="back">BACK</button>' in client.get('/remote').text
+        html = client.get('/remote').text
+        assert 'data-key="back" aria-label="Back"' in html
+        assert html.index('id="nav-pad"') < html.index('data-key="back"') < html.index('data-key="nav_left"')
     node = shutil.which('node')
     if not node:
         pytest.skip('Node is required for browser utility checks')

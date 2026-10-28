@@ -223,6 +223,31 @@ def test_on_demand_page_and_assets_resolve_without_external_media(library):
             assert client.get('/static/tools/on_demand/' + name).status_code == 200
 
 
+@pytest.mark.parametrize('endpoint,action,command', [
+    ('play-pause', 'play_pause', ('cycle', 'pause')),
+    ('rewind', 'rewind', ('seek', -10, 'relative+exact')),
+    ('fast-forward', 'fast_forward', ('seek', 10, 'relative+exact')),
+])
+def test_remote_transport_controls_queue_non_interrupting_mpv_actions(endpoint, action, command):
+    """Playback controls act on the current player instead of opening media or changing channel."""
+    commands = queue.Queue()
+    with TestClient(create_app(command_queue=commands, server_conf={})) as client:
+        response = client.post('/player/mpv/' + endpoint)
+        assert response.status_code == 200
+        assert commands.get_nowait() == {'command': 'mpv_command', 'action': action}
+        assert commands.empty()
+    player = StationPlayer.__new__(StationPlayer)
+    player.mpv = Mock()
+    player._l = Mock()
+    outcome = PlayerOutcome(PlayerState.SUCCESS, 'mpv_command:' + action)
+    assert player.handle_runtime_command_outcome(outcome)
+    player.mpv.command.assert_called_once_with(*command)
+    player.mpv.play.assert_not_called()
+    player.mpv.terminate.assert_not_called()
+    with TestClient(create_app(server_conf={})) as client:
+        assert client.post('/player/mpv/' + endpoint).status_code == 503
+
+
 def test_single_play_finishes_at_eof_without_replacing_or_looping_mpv():
     """
     End an On Demand title at EOF while keeping the same MPV client available for the next channel
