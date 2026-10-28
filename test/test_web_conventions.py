@@ -646,6 +646,29 @@ def test_menu_top_panel_serves_the_tv_guide_image(app):
         assert response.headers['content-type'] == 'image/png'
 
 
+def test_web_remote_back_sends_menu_key_without_leaving_remote(app):
+    """Expose Back on the remote and send Escape through its existing menu-key transport."""
+    with TestClient(app) as client:
+        assert 'data-key="back">BACK</button>' in client.get('/remote').text
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('Node is required for browser utility checks')
+    source = Path(_constants.WEB_DIR, 'blueprints/web_interface/remote/static/remote.js').read_text(encoding='utf8')
+    script = r"""
+const vm=require('vm'),assert=require('assert');
+const app={},location={href:'/remote'};
+vm.runInNewContext(__SOURCE__,{app,window:{app,location},setTimeout:()=>{}});
+const remote=app.web_interface.remote;let sent=[];
+remote.sendPpvKey=async(...args)=>sent.push(args);
+(async()=>{await remote.handleRemoteCommand('back');
+    assert.deepEqual(sent,[['Escape','BACK']]);assert.equal(location.href,'/remote');
+})().catch(e=>{console.error(e);process.exitCode=1});
+"""
+    result = subprocess.run([node, '-'], input=script.replace('__SOURCE__', json.dumps(source)),
+                            capture_output=True, encoding='utf8', timeout=20)
+    assert result.returncode == 0, result.stderr
+
+
 def test_on_demand_back_stays_in_the_menu():
     """Back returns from a submenu but cannot navigate the retained menu window to the guide."""
     node = shutil.which('node')

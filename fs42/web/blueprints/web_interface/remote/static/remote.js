@@ -455,6 +455,9 @@ app.web_interface.remote = (function () {
             case 'nav_enter':
                 await self.sendPpvKey('Enter', 'SELECT');
                 break;
+            case 'back':
+                await self.sendPpvKey('Escape', 'BACK');
+                break;
             case 'ch_up':
                 display.textContent = 'CHANNEL UP';
                 try {
