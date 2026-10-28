@@ -3,6 +3,8 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Group the persistent on-screen display, logo selection, player-status readers, and screen-position
-calculations.
+Persistent on-screen displays
+    logo dispaly
+    media player status display
+    volume display
 """

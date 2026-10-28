@@ -3,7 +3,10 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at https://mozilla.org/MPL/2.0/.
 """
-Expose the overlay runner and player-facing process launchers
+Non-persistent on-screen overlay displays
+    now playing
+    parental controls
+    ticker
 """
 from fs42.tools.overlay import _api
 
