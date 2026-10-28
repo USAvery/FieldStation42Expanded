@@ -568,17 +568,6 @@ app.menu.customguide = (function () {
      */
     self.initGridInteraction = function() {
         selected_row_offset = 0;
-        const rows = self.getInteractiveRows();
-        if (rows.length) {
-            interactive_row_index = 0;
-            const programs = self.getProgramsForRow(rows[interactive_row_index]);
-            const current_index = programs.findIndex(function (program) {
-                return program.classList.contains('current');
-            });
-            interactive_program_index =
-                current_index >= 0 ? current_index : self.findClosestProgramIndex(programs, Date.now());
-            self.applyInteractiveSelection();
-        }
         document.addEventListener('keydown', self.handleInteractiveKeydown);
         const listings = document.getElementById('grid-listings');
         listings.addEventListener('click', function (event) {
@@ -596,10 +585,31 @@ app.menu.customguide = (function () {
     /**
      * Load current listings and enable channel and program selection
      */
+    self.selectCurrentChannel = async function() {
+        const rows = self.getInteractiveRows();
+        if (!rows.length) return;
+        let channel = null;
+        try {
+            const status = await apiGet('api.player.get_player_status');
+            channel = status.channel_number;
+        }
+        catch (error) {
+            console.warn('Could not read the current channel:', error.message);
+        }
+        const index = channel == null ? -1 : rows.findIndex(row =>
+            Number(row.dataset.channelNumber) === Number(channel));
+        interactive_row_index = index >= 0 ? index : 0;
+        const programs = self.getProgramsForRow(rows[interactive_row_index]);
+        const current = programs.findIndex(program => program.classList.contains('current'));
+        interactive_program_index = current >= 0 ? current : self.findClosestProgramIndex(programs, Date.now());
+        self.applyInteractiveSelection();
+    };
+
     self.initGuide = async function() {
         await self.fetchStations();
         await self.buildGrid();
         self.initGridInteraction();
+        await self.selectCurrentChannel();
     };
 
     /** Initialize the page and bind its controls. */
@@ -608,23 +618,11 @@ app.menu.customguide = (function () {
 
         // The guide process stays alive between opens. Refresh the visible grid after
         // the already-rendered window is shown so opening is not blocked on API work.
-        Promise.resolve()
+        interactive_slot_offset = 0;
+        return Promise.resolve()
             .then(self.fetchStations)
             .then(self.buildGrid)
-            .then(function () {
-                const rows = self.getInteractiveRows();
-                if (!rows.length) {
-                    return;
-                }
-                interactive_row_index = Math.min(interactive_row_index, rows.length - 1);
-                const programs = self.getProgramsForRow(rows[interactive_row_index]);
-                const current_index = programs.findIndex(function (program) {
-                    return program.classList.contains('current');
-                });
-                interactive_program_index =
-                    current_index >= 0 ? current_index : self.findClosestProgramIndex(programs, Date.now());
-                self.applyInteractiveSelection();
-            })
+            .then(self.selectCurrentChannel)
             .catch(function (e) {
                 console.warn('guide refresh after show failed:', e.message);
             });

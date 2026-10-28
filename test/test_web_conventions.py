@@ -613,8 +613,22 @@ guide.updateGridHeader=slots=>{assert.equal(slots.length,4);headers++};
 guide.fetchAllSchedules=async slots=>{assert.equal(slots.length,4);return {}};
 guide.buildGridStrip=slots=>{assert.equal(slots.length,4);return strip};
 guide.initGridInteraction=()=>{initialized=true};
+const selectCurrentChannel=guide.selectCurrentChannel;
+guide.selectCurrentChannel=async()=>{};
 (async()=>{await guide.setup();assert(initialized);assert.equal(headers,1);
-    assert(events.includes('fs42-guide-show'))})().catch(e=>{console.error(e);process.exitCode=1});
+    assert(events.includes('fs42-guide-show'));
+    const rows=[1,7,12].map(channel=>({dataset:{channelNumber:String(channel)}}));
+    guide.getInteractiveRows=()=>rows;
+    guide.getProgramsForRow=()=>[{classList:{contains:()=>true}}];
+    let chosen;
+    guide.applyInteractiveSelection=()=>{chosen=rows.indexOf(lastRow)};
+    let lastRow;
+    guide.getProgramsForRow=row=>{lastRow=row;return [{classList:{contains:()=>true}}]};
+    context.apiGet=async endpoint=>{assert.equal(endpoint,'api.player.get_player_status');return {channel_number:7}};
+    await selectCurrentChannel();assert.equal(chosen,1);
+    context.apiGet=async()=>({channel_number:99});
+    await selectCurrentChannel();assert.equal(chosen,0);
+})().catch(e=>{console.error(e);process.exitCode=1});
 """
     result = subprocess.run([node, '-'], input=script.replace('__SOURCE__', json.dumps(source)),
                             capture_output=True, encoding='utf8', timeout=20)
