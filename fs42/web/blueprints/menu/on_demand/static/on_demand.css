@@ -192,27 +192,90 @@ h1 {
 }
 
 #od-details {
-    height: calc(var(--od-height) * 0.26);
+    height: 100%;
     overflow: hidden;
+    font-weight: 700;
 }
 
 #od-title {
-    font-size: calc(var(--od-font) * 1.1);
+    font-size: var(--od-font);
     color: hsl(60.000000, 100.000000%, 81.764706%);
-    margin: 0 0 0.25em;
+    margin: 0;
+    line-height: 1.15;
 }
 
 #od-meta {
-    font-size: calc(var(--od-font) * 0.72);
-    margin: 0 0 0.5em;
+    font-size: var(--od-font);
+    margin: 0;
+    line-height: 1.15;
 }
 
 #od-description {
-    font-size: calc(var(--od-font) * 0.8);
-    line-height: 1.25;
+    font-size: var(--od-font);
+    line-height: 1.18;
     margin: 0;
     display: -webkit-box;
-    -webkit-line-clamp: 4;
+    -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+}
+
+/* Title listings use the original full-width rows rather than category buttons. */
+.od-listings #od-content {
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    background: #000;
+}
+
+#od-listings-heading {
+    flex: 0 0 calc(var(--od-height) * 0.07);
+    padding: 0 7.8%;
+    display: flex;
+    align-items: center;
+    background: #1b3963;
+    font-size: var(--od-font);
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+#od-listings-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.od-listings #od-options {
+    display: block;
+    max-height: calc(var(--od-height) * 0.37);
+    overflow-y: auto;
+    scrollbar-width: none;
+    flex-shrink: 0;
+}
+
+.od-listings #od-options::-webkit-scrollbar {
+    display: none;
+}
+
+.od-listings .od-choice {
+    display: block;
+    height: calc(var(--od-height) * 0.074);
+    padding: 0 7.8%;
+    text-align: left;
+    border: 0;
+    border-bottom: min(0.35vw, 0.47vh) solid #87939c;
+    border-radius: 0;
+    background: #112b4b;
+    box-shadow: none;
+}
+
+.od-listings .od-choice.is-selected,
+.od-listings .od-choice:focus-visible {
+    background: linear-gradient(180deg, #fff7af, #fff1a0);
+    color: #090909;
+}
+
+.od-listings #od-status {
+    order: 1;
+    padding: 0 7.8%;
 }

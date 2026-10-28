@@ -8,17 +8,18 @@
                 <h1><span class="od-mark" aria-hidden="true">OD</span> On Demand</h1>
                 <p id="od-selection">Top Picks</p>
             </div>
-        {% endcall %}
-        <!-- Library Categories, Results, and Playback Details -->
-        <section id="od-content" aria-label="Library">
-            <div id="od-search" hidden>
-                <label for="od-query">Search titles</label>
-                <input id="od-query" type="search" maxlength="200" autocomplete="off">
-            </div>
             <div id="od-details" hidden>
                 <h2 id="od-title"></h2>
                 <p id="od-meta"></p>
                 <p id="od-description"></p>
+            </div>
+        {% endcall %}
+        <!-- Library Categories, Results, and Playback Details -->
+        <section id="od-content" aria-label="Library">
+            <div id="od-listings-heading" hidden>ON&nbsp; <span id="od-listings-title"></span></div>
+            <div id="od-search" hidden>
+                <label for="od-query">Search titles</label>
+                <input id="od-query" type="search" maxlength="200" autocomplete="off">
             </div>
             <div id="od-status" role="status" aria-live="polite"></div>
             <div id="od-options" aria-label="Choices"></div>

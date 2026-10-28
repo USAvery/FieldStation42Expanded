@@ -646,6 +646,31 @@ def test_menu_top_panel_serves_the_tv_guide_image(app):
         assert response.headers['content-type'] == 'image/png'
 
 
+def test_on_demand_back_stays_in_the_menu():
+    """Back returns from a submenu but cannot navigate the retained menu window to the guide."""
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('Node is required for browser utility checks')
+    source = Path(_constants.WEB_DIR, 'blueprints/menu/on_demand/static/on_demand.js').read_text()
+    script = r"""
+const vm=require('vm'),assert=require('assert');
+const app={},location={href:'/on-demand'};
+vm.runInNewContext(__SOURCE__,{app,window:{app,location},document:{querySelectorAll:()=>[]}});
+const menu=app.menu.on_demand;let renders=0;
+menu.renderView=()=>renders++;
+menu.goBack();assert.equal(renders,0);assert.equal(location.href,'/on-demand');
+menu.openView({type:'titles',title:'TV Shows'});assert.equal(renders,1);
+menu.goBack();assert.equal(renders,2);
+menu.goBack();assert.equal(renders,2);assert.equal(location.href,'/on-demand');
+for(const key of ['Escape','Backspace','PageUp']) {
+    menu.onKeydown({key,preventDefault(){}});assert.equal(location.href,'/on-demand');
+}
+"""
+    result = subprocess.run([node, '-'], input=script.replace('__SOURCE__', json.dumps(source)),
+                            capture_output=True, encoding='utf8', timeout=20)
+    assert result.returncode == 0, result.stderr
+
+
 def test_on_demand_uses_both_shared_menu_panels(app):
     """
     Preserve browsing controls and preview hooks inside the reusable panel layouts

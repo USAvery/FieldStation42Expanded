@@ -15,6 +15,7 @@ app.menu.on_demand = (function() {
     let query_input = null;
     let details = null;
     let menu = null;
+    let listing_items = new Map();
     let view = {type: 'home', title: 'Top Picks'};
     let history = [];
     let selected_index = 0;
@@ -43,6 +44,13 @@ app.menu.on_demand = (function() {
         const button = buttons[selected_index];
         button.focus({preventScroll: true});
         selection.textContent = button.dataset.description || view.title;
+        if (listing_items.has(button)) self.updateDetails(listing_items.get(button));
+        if (view.type === 'titles' && button.parentElement === options) {
+            const row = button.getBoundingClientRect();
+            const viewport = options.getBoundingClientRect();
+            if (row.top < viewport.top) options.scrollTop += row.top - viewport.top;
+            else if (row.bottom > viewport.bottom) options.scrollTop += row.bottom - viewport.bottom;
+        }
     };
     /**
      * Create a text-only menu button with matching pointer and remote behavior
@@ -66,9 +74,10 @@ app.menu.on_demand = (function() {
         });
         button.addEventListener('click', action);
         parent.appendChild(button);
+        return button;
     };
     /**
-     * Return to a previous library screen or to the television listings
+     * Return to a previous library screen, staying in On Demand at the root
      */
     self.goBack = function() {
         if (playing) {
@@ -77,9 +86,6 @@ app.menu.on_demand = (function() {
         if (history.length) {
             view = history.pop();
             self.renderView();
-        }
-        else {
-            window.location.href = urlFor('/static/customguide/customguide.html');
         }
     };
     /**
@@ -116,20 +122,24 @@ app.menu.on_demand = (function() {
             });
     };
     /**
-     * Render the selected title's metadata and its explicit playback action
+     * Describe the highlighted title in the shared top panel
      */
-    self.showDetails = function() {
-        const item = view.item;
+    self.updateDetails = function(item) {
         details.hidden = false;
         document.getElementById('od-title').textContent = item.title;
-        const minutes = Math.round(item.duration / 60);
+        const minutes = item.duration ? Math.round(item.duration / 60) + ' min' : '';
         const episode = item.kind === 'episode' && item.season != null && item.episode != null
             ? 'Season ' + item.season + ', Episode ' + item.episode : '';
-        document.getElementById('od-meta').textContent = [item.year, minutes + ' min', episode, item.network]
+        document.getElementById('od-meta').textContent = [item.year, minutes, episode, item.network]
             .filter(Boolean).join('  •  ');
-        document.getElementById('od-description').textContent = item.description;
+        document.getElementById('od-description').textContent = item.description || '';
+    };
+
+    /** Show playback actions only after the viewer opens a title. */
+    self.showDetails = function() {
+        const item = view.item;
+        self.updateDetails(item);
         self.addChoice(options, 'Play', function() { self.playTitle(item); }, item.title);
-        self.addChoice(options, 'Back', self.goBack, 'Back to titles');
         self.selectChoice(0);
     };
     /**
@@ -190,9 +200,10 @@ app.menu.on_demand = (function() {
                 }
                 status.textContent = result.total ? '' : 'No titles found. Choose another category or search.';
                 result.items.forEach(function(item) {
-                    self.addChoice(options, item.title, function() {
+                    const button = self.addChoice(options, item.title, function() {
                         self.openView({type: 'details', title: item.title, item: item});
                     });
+                    listing_items.set(button, item);
                 });
                 if (result.page > 0) {
                     self.addChoice(navigation, '◀ Previous', function() { view.page--; self.renderView(); });
@@ -214,13 +225,19 @@ app.menu.on_demand = (function() {
     self.renderView = function() {
         const token = ++request_id;
         options.replaceChildren();
+        options.scrollTop = 0;
+        listing_items.clear();
         navigation.replaceChildren();
+        const listings = view.type === 'titles' || view.type === 'details';
+        document.getElementById('od-wrapper').classList.toggle('od-listings', listings);
+        document.getElementById('od-heading').hidden = listings;
+        document.getElementById('od-listings-heading').hidden = !listings;
+        document.getElementById('od-listings-title').textContent = view.title;
         options.classList.remove('od-keyboard');
         details.hidden = true;
         search.hidden = true;
         status.textContent = '';
         selection.textContent = view.title;
-        self.addChoice(navigation, history.length ? '◀ Back' : '◀ TV Listings', self.goBack);
         if (view.type === 'details') {
             self.showDetails();
         }
@@ -268,12 +285,11 @@ app.menu.on_demand = (function() {
             .then(function(result) { menu = result; self.renderView(); })
             .catch(function(error) {
                 navigation.replaceChildren();
-                self.addChoice(navigation, '◀ TV Listings', self.goBack);
                 self.showError(error, self.loadMenu);
             });
     };
     /**
-     * Move among the two-column menu, search keys, and footer with remote-control arrows
+     * Move among category buttons, listing rows, search keys, and navigation
      */
     self.onKeydown = function(event) {
         if (event.target === query_input) {
@@ -303,7 +319,7 @@ app.menu.on_demand = (function() {
             }
             return;
         }
-        const columns = view.type === 'search' ? 8 : 2;
+        const columns = view.type === 'search' ? 8 : (view.type === 'titles' || view.type === 'details' ? 1 : 2);
         const count = options.childElementCount;
         if (event.key === 'ArrowDown') {
             self.selectChoice(selected_index < count ? Math.min(count, selected_index + columns) : selected_index);
