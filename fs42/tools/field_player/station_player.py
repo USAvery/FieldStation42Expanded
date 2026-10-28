@@ -1151,6 +1151,7 @@ class StationPlayer(object):
                 if is_stream and str(file_path).startswith('https://www.youtube.com/watch?v='):
                     # Allow YouTube format extraction before MPV reports file-loaded.
                     timeout_seconds = max(timeout_seconds, 45)
+                    buffered_start_timeout = max(buffered_start_timeout, 45)
                 start_time = time.monotonic()
 
                 while True:
