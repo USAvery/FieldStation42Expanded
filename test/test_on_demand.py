@@ -312,6 +312,7 @@ def test_on_demand_respects_pin_interruptions_and_returns_to_menu_after_completi
     player._close_guide_overlay = Mock()
     player._open_guide_overlay = Mock()
     player._parental_controls_required = Mock(return_value=True)
+    player.mpv = Mock()
     player.parental_unlocked_network = None
     outcome = PlayerState.SUCCESS if authorized else PlayerState.CHANNEL_CHANGE
     player.prompt_parental_controls = Mock(return_value=PlayerOutcome(outcome))

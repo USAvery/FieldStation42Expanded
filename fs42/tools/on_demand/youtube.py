@@ -148,5 +148,6 @@ class YouTubeLibrary:
         for item in self._uploads(channel_id):
             if item['id'] == video_id:
                 return {'file_path': 'https://www.youtube.com/watch?v=' + video_id,
-                        'network_name': None, 'title': item['title'], 'source': 'youtube'}
+                        'network_name': None, 'title': item['title'], 'source': 'youtube',
+                        'source_label': 'YouTube · ' + item['network']}
         raise ValueError('This upload is no longer listed. Refresh the channel and try again.')

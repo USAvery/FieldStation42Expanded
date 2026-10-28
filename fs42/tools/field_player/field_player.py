@@ -216,6 +216,8 @@ class FieldPlayer(object):
                     case 'mpv_command':
                         action = q_message.get('action', '')
                         return PlayerOutcome(PlayerState.SUCCESS, 'mpv_command:{}'.format(action))
+                    case 'on_demand_seek' | 'on_demand_controls':
+                        return PlayerOutcome(PlayerState.SUCCESS, q_message)
                     case 'parental_digit':
                         digit = str(q_message.get('digit', ''))
                         return PlayerOutcome(PlayerState.SUCCESS, 'parental_digit:{}'.format(digit))

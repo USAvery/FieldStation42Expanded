@@ -12,6 +12,8 @@ import time
 import shutil
 import platform
 import subprocess
+from pydantic import BaseModel, Field
+from typing import Literal
 
 from fastapi import Request
 from fastapi import APIRouter
@@ -372,6 +374,35 @@ async def mpv_cycle_audio(request: Request):
     Cycle through available audio tracks for the active mpv player
     """
     return await _queue_mpv_command(request, 'cycle_audio')
+
+
+class OnDemandSeekRequest(BaseModel):
+    """Seek only within the playback session whose timeline the viewer is manipulating."""
+    session_id: str = Field(min_length=1, max_length=64)
+    position: float = Field(ge=0, allow_inf_nan=False)
+
+
+class OnDemandControlsRequest(BaseModel):
+    session_id: str = Field(min_length=1, max_length=64)
+    action: Literal['show', 'hide', 'hold']
+
+
+@router.post('/on-demand/controls')
+async def control_on_demand(payload: OnDemandControlsRequest, request: Request):
+    queue = request.app.state.player_command_queue
+    if queue is None:
+        raise HTTPException(status_code=503, detail='The player is not connected.')
+    queue.put({'command': 'on_demand_controls', 'session_id': payload.session_id, 'action': payload.action})
+    return {'success': True}
+
+
+@router.post('/on-demand/seek')
+async def seek_on_demand(payload: OnDemandSeekRequest, request: Request):
+    queue = request.app.state.player_command_queue
+    if queue is None:
+        raise HTTPException(status_code=503, detail='The player is not connected.')
+    queue.put({'command': 'on_demand_seek', 'session_id': payload.session_id, 'position': payload.position})
+    return {'success': True}
 
 
 @router.post('/mpv/play-pause')

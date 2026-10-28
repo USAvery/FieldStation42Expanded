@@ -27,6 +27,7 @@ from python_mpv_jsonipc import MPV
 
 from fs42.tools.catalog import autobump_agent
 from fs42.tools.on_demand._constants import YOUTUBE_FORMAT
+from fs42.tools.on_demand.playback_controls import OnDemandPlaybackControls
 from fs42.tools.guide.guide_tk import GuideCommands
 from fs42.tools.field_player._constants import PlayerState
 from fs42.tools.guide.guide_tk import guide_channel_runner
@@ -286,6 +287,7 @@ class StationPlayer(object):
         self._guide_video_layout = None
         self.parental_controls_panel = None
         self.parental_unlocked_network = None
+        self._on_demand_controls = None
         self.scrambler = None
         self.now_playing_panel = None
         self.schedule_lock = None
@@ -440,6 +442,10 @@ class StationPlayer(object):
 
         try:
             self.mpv.command(*mpv_command)
+            controls = getattr(self, '_on_demand_controls', None)
+            if controls and action in ('play_pause', 'rewind', 'fast_forward'):
+                controls.interact()
+                self._tick_on_demand_controls(force=True)
             self._l.info('Ran mpv runtime command: {}'.format(action))
             return True
         except Exception as e:
@@ -450,7 +456,25 @@ class StationPlayer(object):
         """
         Handle non-interrupting player commands and continue playback
         """
-        if not (response and response.status == PlayerState.SUCCESS and isinstance(response.payload, str)):
+        if not response or response.status != PlayerState.SUCCESS:
+            return False
+        controls = getattr(self, '_on_demand_controls', None)
+        if isinstance(response.payload, dict) and response.payload.get('command') == 'on_demand_seek':
+            if controls:
+                try:
+                    controls.seek(response.payload.get('session_id'), response.payload.get('position'))
+                except Exception as error:
+                    self._l.warning('Could not seek On Demand playback: {}'.format(error))
+            return True
+        if isinstance(response.payload, dict) and response.payload.get('command') == 'on_demand_controls':
+            if controls and response.payload.get('session_id') == controls.session_id:
+                if response.payload.get('action') == 'hide':
+                    controls.hide()
+                else:
+                    controls.interact(holding=response.payload.get('action') == 'hold')
+                    self._tick_on_demand_controls(force=True)
+            return True
+        if not isinstance(response.payload, str):
             return False
 
         if response.payload.startswith('mpv_command:'):
@@ -468,6 +492,16 @@ class StationPlayer(object):
 
         if response.payload.startswith('web_key:'):
             key_name = response.payload.split(':', 1)[1]
+            if controls and not self.guide_visible:
+                if key_name in ('Escape', 'Backspace'):
+                    controls.hide()
+                else:
+                    controls.interact()
+                    self._tick_on_demand_controls(force=True)
+                    key_name = {'PageUp': 'ArrowUp', 'PageDown': 'ArrowDown'}.get(key_name, key_name)
+                    if self.guide_queue:
+                        self.guide_queue.put('key:{}'.format(key_name))
+                return True
             if self.guide_visible and self.guide_process and self.guide_process.is_alive() and self.guide_queue:
                 self.guide_queue.put('key:{}'.format(key_name))
                 return True
@@ -595,6 +629,9 @@ class StationPlayer(object):
         """
         Show the preloaded guide, arrange its video preview, and report whether it opened
         """
+        controls = getattr(self, '_on_demand_controls', None)
+        if controls:
+            self._send_playback_state({'active': False, 'visible': False, 'menu_visible': True})
         # Re-apply the policy on every open in case HDMI renegotiated after the
         # renderer was preloaded (for example when a TV sleeps/wakes).
         match_display_refresh_rate(
@@ -638,6 +675,7 @@ class StationPlayer(object):
             with open(path) as f_in:
                 status = json.load(f_in)
             status['guide_visible'] = self.guide_visible
+            status['on_demand_playing'] = getattr(self, '_on_demand_controls', None) is not None
             temporary = path + '.tmp'
             with open(temporary, 'w') as f_out:
                 json.dump(status, f_out)
@@ -1368,6 +1406,9 @@ class StationPlayer(object):
             if response.status != PlayerState.SUCCESS:
                 return response
 
+        self._on_demand_controls = OnDemandPlaybackControls(
+            self.mpv, self._send_playback_state, selection['title'],
+            selection.get('source_label') or network or 'On Demand')
         previous_ytdl_format = self.mpv.ytdl_format if youtube else None
         previous_video_sync = self.mpv.video_sync if youtube else None
         try:
@@ -1389,6 +1430,12 @@ class StationPlayer(object):
             self._l.warning('On Demand playback failed: {}'.format(error))
             response = PlayerOutcome(PlayerState.FAILED)
         finally:
+            controls = self._on_demand_controls
+            self._on_demand_controls = None
+            was_ready = controls.ready
+            controls.stop(menu_visible=getattr(self, 'guide_visible', False))
+            if was_ready:
+                self._publish_guide_visibility()
             if youtube:
                 self.mpv.ytdl_format = previous_ytdl_format
                 self.mpv.video_sync = previous_video_sync
@@ -1417,8 +1464,15 @@ class StationPlayer(object):
                 return response
             return PlayerOutcome(PlayerState.FAILED)
 
+        controls = getattr(self, '_on_demand_controls', None)
+        if controls:
+            controls.ready = True
+            controls.interact()
+            self._tick_on_demand_controls(force=True)
+            self._publish_guide_visibility()
         # Monitor playback until completion or an interrupting command
         while True:
+            self._tick_on_demand_controls()
             self._poll_metadata_overlay()
             self._drain_guide_events()
             self._check_audio_clock()
@@ -1435,6 +1489,23 @@ class StationPlayer(object):
                     continue
                 self._close_now_playing()
                 return response
+
+    def _send_playback_state(self, state):
+        """Reuse the retained browser surface without moving the full-screen video into a preview."""
+        queue = getattr(self, 'guide_queue', None)
+        if queue:
+            try:
+                queue.put({'type': 'playback_state', 'state': state})
+            except (OSError, ValueError) as error:
+                self._l.debug('Playback overlay is unavailable: {}'.format(error))
+
+    def _tick_on_demand_controls(self, force=False):
+        controls = getattr(self, '_on_demand_controls', None)
+        if controls:
+            try:
+                controls.tick(menu_visible=getattr(self, 'guide_visible', False), force=force)
+            except Exception as error:
+                self._l.debug('Could not update playback controls: {}'.format(error))
 
     def play_file_list(self, file_list):
         """

@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 
 {% block page_content %}
+{{ include_widget('on_demand_controls') }}
 <main id="od-wrapper" aria-label="On Demand">
         <!-- Branding, Selection Details, and Native Channel Preview -->
         {% call include_widget('menu_top_panel', {'video_panel': true, 'clock': {'attributes': {'id': 'od-clock'}}}) %}

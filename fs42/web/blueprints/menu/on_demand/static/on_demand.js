@@ -322,6 +322,7 @@ app.menu.on_demand = (function() {
      * Move among category buttons, listing rows, search keys, and navigation
      */
     self.onKeydown = function(event) {
+        if (document.body.classList.contains('on-demand-playing')) return;
         if (event.target === query_input) {
             if (event.key === 'Enter') {
                 event.preventDefault();

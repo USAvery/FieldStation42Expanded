@@ -171,6 +171,7 @@ class WebRenderApp(QApplication):
         self.user_conf = user_conf
         self.persistent = bool(user_conf.get('persistent', False))
         self.start_hidden = bool(user_conf.get('start_hidden', False))
+        self.playback_state = None
         self.windowed = 'width' in user_conf and 'height' in user_conf
         self.window_x = None
         self.window_y = None
@@ -289,6 +290,15 @@ class WebRenderApp(QApplication):
                 return
             if isinstance(msg, dict) and self._handle_presentation_message(msg):
                 return
+            if isinstance(msg, dict) and msg.get('type') == 'playback_state':
+                self.playback_state = msg['state']
+                current_path = QUrl(self.window.current_url or '').path().rstrip('/')
+                if self.playback_state.get('active') and current_path not in ('/on-demand', '/static/on_demand/on_demand.html'):
+                    url = QUrl(self.window.current_url).resolved(QUrl('/on-demand'))
+                    self.window.navigate(url.toString())
+                else:
+                    self._render_playback_state()
+                return
             _logger.info('WebRender received message: {}'.format(msg))
             # Persistent renderers stay alive between open/close operations so
             # QtWebEngine/Chromium only pays its startup cost once.
@@ -362,8 +372,27 @@ class WebRenderApp(QApplication):
         Cache the actual transparent panel bounds after the guide loads
         """
         if success:
+            if getattr(self, 'playback_state', None) and self.playback_state.get('active'):
+                self._render_playback_state()
+                return
             self._preview_retries = 0
             self._query_preview_box()
+
+    def _render_playback_state(self):
+        """Show only the transport bar over full-size native video, without guide-preview layout."""
+        state = self.playback_state or {}
+        script = "window.dispatchEvent(new CustomEvent('fs42-playback-state', {detail:" + json.dumps(state) + "}));"
+        def rendered(_result):
+            if self.playback_state is not state:
+                return
+            if state.get('active') and state.get('visible'):
+                if not self.window.isVisible():
+                    self.window.showFullScreen()
+                    self.window.raise_()
+                    self.window.activateWindow()
+            elif not state.get('menu_visible'):
+                self.window.hide()
+        self.window.browser.page().runJavaScript(script, 0, rendered)
 
     def _on_preview_screen_added(self, screen):
         """

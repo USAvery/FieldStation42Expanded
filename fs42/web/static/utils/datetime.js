@@ -24,6 +24,16 @@ function formatTimeRange(start, end, {hide_zero_minutes=true, short_suffix=true,
     return label(start, start_suffix) + '-' + label(end, true);
 }
 
+/** Format elapsed seconds as m:ss or h:mm:ss. */
+function formatDuration(seconds=0) {
+    const number = Number(seconds);
+    const total = Number.isFinite(number) ? Math.max(0, Math.floor(number)) : 0;
+    const hours = Math.floor(total / 3600);
+    const minutes = Math.floor(total % 3600 / 60);
+    return (hours ? hours + ':' + String(minutes).padStart(2, '0') : String(minutes))
+        + ':' + String(total % 60).padStart(2, '0');
+}
+
 /** Serialize local date/time fields as YYYY-MM-DDTHH:mm:ss without a timezone suffix. */
 function formatLocalDateTime(date) {
     const pad = value => String(value).padStart(2, '0');

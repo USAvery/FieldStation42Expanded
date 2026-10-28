@@ -114,7 +114,7 @@ def custom_guide_is_active():
         if not response.ok:
             return False
         status = response.json()
-        return bool(status.get('guide_visible') or status.get('channel_number') == guide_channel)
+        return bool(status.get('guide_visible') or status.get('on_demand_playing') or status.get('channel_number') == guide_channel)
     except Exception:
         return False
 

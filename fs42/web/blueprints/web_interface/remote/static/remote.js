@@ -78,7 +78,7 @@ app.web_interface.remote = (function () {
      * Update Now Playing From Status
      */
     self.updateNowPlayingFromStatus = function(status) {
-        guide_visible = !!status.guide_visible;
+        guide_visible = !!(status.guide_visible || status.on_demand_playing);
         awaiting_pin = !!status.awaiting_pin;
         pin_digits_entered = status.pin_digits_entered || 0;
         if (info_mode === 'playing') {

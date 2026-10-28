@@ -445,3 +445,24 @@ API endpoints:
 - `POST /on-demand/youtube/channels/{channel_id}/play/{video_id}`: validate a saved
   channel's listed upload and queue single playback. Direct arbitrary URLs are
   not accepted.
+
+
+### On Demand playback overlay
+
+The `on_demand_controls` menu widget draws a transport bar over the existing native
+MPV video. It does not create another video player or move playback into the guide
+preview. It shows the title/source, elapsed time, total duration, green progress,
+and symbol controls for rewind, play/pause, and fast-forward.
+
+The bar appears at playback start and when transport or navigation controls are
+used, then hides after four seconds while playing. It remains visible when paused
+or buffering. Back dismisses it without leaving the video. Use left/right on the
+remote to preview a position on the timeline and OK to seek; up selects the symbol
+buttons and down returns to the timeline. The timeline also supports pointer or
+touch scrubbing. Rewind and fast-forward move ten seconds per press.
+
+Native playback sends position updates through the retained browser's queue at
+most four times per second. Hidden controls do not poll timestamps or repaint.
+Timeline requests carry a per-video session ID, and the player ignores stale
+sessions and clamps seeks to the video's duration. Controls and the playback
+session are cleared when the video ends or the channel changes.

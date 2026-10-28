@@ -547,7 +547,7 @@ def test_menu_widgets_have_separate_discovery_settings_and_page_assets(app):
     Keep Pi components out of console widget discovery and console page asset lists
     """
     assert set(widget.get_widgets(groups=('widgets',))) == {'selector', 'search', 'log_display'}
-    assert set(widget.get_widgets(groups=('menu_widgets',))) == {'menu_clock', 'menu_top_panel', 'menu_bottom_panel'}
+    assert set(widget.get_widgets(groups=('menu_widgets',))) == {'menu_clock', 'menu_top_panel', 'menu_bottom_panel', 'on_demand_controls'}
     assert 'menu_clock' in app.state.web_settings['menu_widgets']
     assert 'menu_clock' not in app.state.web_settings['widgets']
     with TestClient(app) as client:
@@ -680,7 +680,7 @@ def test_on_demand_back_stays_in_the_menu():
     script = r"""
 const vm=require('vm'),assert=require('assert');
 const app={},location={href:'/on-demand'};
-vm.runInNewContext(__SOURCE__,{app,window:{app,location},document:{querySelectorAll:()=>[]}});
+vm.runInNewContext(__SOURCE__,{app,window:{app,location},document:{body:{classList:{contains:()=>false}},querySelectorAll:()=>[]}});
 const menu=app.menu.on_demand;let renders=0;
 menu.renderView=()=>renders++;
 menu.goBack();assert.equal(renders,0);assert.equal(location.href,'/on-demand');

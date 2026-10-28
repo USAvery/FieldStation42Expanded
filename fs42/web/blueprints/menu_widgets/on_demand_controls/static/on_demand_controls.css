@@ -1,0 +1,133 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public License, v. 2.0. */
+body.on-demand-playing #od-wrapper {
+    display: none;
+}
+
+#on-demand-controls {
+    --transport-progress: 0%;
+    position: fixed;
+    left: 10.5%;
+    right: 9%;
+    bottom: 18%;
+    font: 700 min(2.4vw, 3.2vh)/1.2 Arial, Helvetica, sans-serif;
+    color: white;
+    text-shadow: 0.07em 0.07em 0.05em black;
+    z-index: 100;
+}
+
+.od-transport-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1em;
+    padding: 0.3em 0.35em;
+    background: #102d50;
+    border-radius: 0.4em 0.4em 0 0;
+}
+
+#od-transport-title {
+    color: #f8ed96;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+#od-transport-source {
+    max-width: 36%;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-weight: 400;
+}
+
+.od-transport-track {
+    display: grid;
+    grid-template-columns: 14% 1fr 16%;
+    align-items: center;
+    gap: 1%;
+    padding: 0.2em 0.35em;
+    background: linear-gradient(#367fb1, #214967);
+    border-radius: 0 0 0.3em 0.3em;
+    text-align: center;
+}
+
+#od-transport-timeline {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 100%;
+    font: inherit;
+    height: 1.1em;
+    margin: 0;
+    padding: 0;
+    border: none;
+    border-radius: 0.35em;
+    background: linear-gradient(to right, #0b7b3a var(--transport-progress), #050707 var(--transport-progress));
+    cursor: pointer;
+}
+
+#od-transport-timeline::-webkit-slider-thumb {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 0.22em;
+    height: 1.55em;
+    background: #eee;
+    border: 0;
+    border-right: 0.06em solid #aaa;
+    border-radius: 0;
+}
+
+#od-transport-timeline::-moz-range-thumb {
+    width: 0.22em;
+    height: 1.55em;
+    background: #eee;
+    border: none;
+    border-radius: 0;
+}
+
+.od-transport-bubble {
+    position: absolute;
+    top: 100%;
+    left: clamp(0%, calc(15% + var(--transport-progress) * 0.68 - 16%), 68%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35em;
+    min-width: 32%;
+    padding: 0.15em 0.35em;
+    border-radius: 0 0 0.5em 0.5em;
+    background: linear-gradient(#102d50, #397da5);
+}
+
+.od-transport-bubble button {
+    display: flex;
+    align-items: center;
+    border: none;
+    background: transparent;
+    color: white;
+    font: inherit;
+    cursor: pointer;
+    padding: 0.1em;
+    text-shadow: inherit;
+}
+
+.od-transport-bubble svg {
+    width: 1em;
+    height: 1em;
+}
+
+#on-demand-controls :focus-visible {
+    outline: 0.08em solid #fff1a0;
+    outline-offset: 0.1em;
+}
+
+#od-transport-status {
+    position: absolute;
+    top: calc(100% + 1.7em);
+    margin: 0;
+    padding: 0.15em 0.4em;
+    background: #102d50;
+}
+
+#od-transport-status:empty {
+    display: none;
+}
