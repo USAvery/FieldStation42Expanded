@@ -6,6 +6,10 @@
 Define On Demand menu choices and bounded catalog queries
 """
 PAGE_SIZE = 10
+# Pi 4 cannot decode YouTube's preferred 4K AV1/VP9 streams in hardware.
+# Select AVC + AAC at a resolution and frame rate suitable for direct playback.
+YOUTUBE_FORMAT = ('bestvideo[vcodec^=avc1][height<=1080][fps<=30]+'
+                  'bestaudio[acodec^=mp4a]/best[vcodec^=avc1][height<=1080][fps<=30]')
 CATEGORIES = [
     {'id': 'top', 'title': 'Top Picks'},
     {'id': 'search', 'title': 'Search'},

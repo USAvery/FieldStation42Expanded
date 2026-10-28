@@ -9,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from fs42.tools.on_demand.youtube import YouTubeLibrary, YouTubeError
+from fs42.tools.on_demand._constants import YOUTUBE_FORMAT
 from fs42.tools.field_player.station_player import StationPlayer, PlayerOutcome
 from fs42.tools.field_player._constants import PlayerState
 from fs42.web.app import create_app
@@ -148,8 +149,14 @@ def test_youtube_playback_uses_existing_player_once_and_returns_to_menu(youtube)
     player._parental_controls_required = Mock()
     player.parental_unlocked_network = None
     player.mpv = Mock()
+    player.mpv.ytdl_format = 'original-format'
+    player.mpv.video_sync = 'display-resample'
     player._l = Mock()
-    player.play_and_wait = Mock(return_value=PlayerOutcome(PlayerState.SUCCESS))
+    def play(*args, **kwargs):
+        assert player.mpv.ytdl_format == YOUTUBE_FORMAT
+        assert player.mpv.video_sync == 'audio'
+        return PlayerOutcome(PlayerState.SUCCESS)
+    player.play_and_wait = Mock(side_effect=play)
     with patch('fs42.tools.field_player.station_player.os.path.isfile', return_value=True):
         result = player.play_on_demand({'source': 'youtube', 'channel_id': CHANNEL, 'video_id': VIDEO})
     assert result.status == PlayerState.SUCCESS
@@ -157,6 +164,8 @@ def test_youtube_playback_uses_existing_player_once_and_returns_to_menu(youtube)
                                                 loop=False, title='Newest upload', is_stream=True)
     player._parental_controls_required.assert_not_called()
     player._open_guide_overlay.assert_called_once_with()
+    assert player.mpv.ytdl_format == 'original-format'
+    assert player.mpv.video_sync == 'display-resample'
 
 
 def test_failed_youtube_playback_restores_menu_instead_of_crashing_player(youtube):
@@ -167,9 +176,33 @@ def test_failed_youtube_playback_restores_menu_instead_of_crashing_player(youtub
     player._open_guide_overlay = Mock()
     player._l = Mock()
     player.mpv = Mock()
+    player.mpv.ytdl_format = 'original-format'
+    player.mpv.video_sync = 'display-resample'
     player.parental_unlocked_network = None
     player.play_and_wait = Mock(side_effect=RuntimeError('Video unavailable'))
     with patch('fs42.tools.field_player.station_player.os.path.isfile', return_value=True):
         result = player.play_on_demand({'source': 'youtube', 'channel_id': CHANNEL, 'video_id': VIDEO})
     assert result.status == PlayerState.FAILED
     player._open_guide_overlay.assert_called_once_with()
+    assert player.mpv.ytdl_format == 'original-format'
+    assert player.mpv.video_sync == 'display-resample'
+
+
+def test_youtube_formats_prefer_hardware_friendly_video_over_4k_av1():
+    """Reject costly codecs and high frame rates while retaining the best suitable AVC stream."""
+    yt_dlp = pytest.importorskip('yt_dlp')
+    formats = [
+        {'format_id': 'aac', 'vcodec': 'none', 'acodec': 'mp4a.40.2', 'ext': 'm4a'},
+        {'format_id': '720avc', 'vcodec': 'avc1.64001f', 'acodec': 'none', 'height': 720, 'fps': 30, 'ext': 'mp4'},
+        {'format_id': '1080avc', 'vcodec': 'avc1.640028', 'acodec': 'none', 'height': 1080, 'fps': 30, 'ext': 'mp4'},
+        {'format_id': '1080avc60', 'vcodec': 'avc1.64002a', 'acodec': 'none', 'height': 1080, 'fps': 60, 'ext': 'mp4'},
+        {'format_id': '4kav1', 'vcodec': 'av01.0.12M.08', 'acodec': 'none', 'height': 2160, 'fps': 30, 'ext': 'mp4'},
+    ]
+    for item in formats:
+        item['url'] = 'https://example.com/' + item['format_id']
+    with yt_dlp.YoutubeDL({'quiet': True}) as extractor:
+        select = extractor.build_format_selector(YOUTUBE_FORMAT)
+        selected = list(select({'formats': formats, 'has_merged_format': False, 'incomplete_formats': False}))
+        assert selected[0]['format_id'] == '1080avc+aac'
+        selected = list(select({'formats': formats[:2], 'has_merged_format': False, 'incomplete_formats': False}))
+        assert selected[0]['format_id'] == '720avc+aac'

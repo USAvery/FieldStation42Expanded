@@ -26,6 +26,7 @@ from urllib.parse import urlunsplit
 from python_mpv_jsonipc import MPV
 
 from fs42.tools.catalog import autobump_agent
+from fs42.tools.on_demand._constants import YOUTUBE_FORMAT
 from fs42.tools.guide.guide_tk import GuideCommands
 from fs42.tools.field_player._constants import PlayerState
 from fs42.tools.guide.guide_tk import guide_channel_runner
@@ -991,6 +992,7 @@ class StationPlayer(object):
         :return:               (bool) whether playback startup succeeded
         """
         try:
+            is_youtube = is_stream and str(file_path).startswith('https://www.youtube.com/watch?v=')
             is_autobump = autobump_agent.is_autobump_url(file_path)
             is_catalog_path = str(file_path).startswith('catalog/')
 
@@ -1096,8 +1098,9 @@ class StationPlayer(object):
                     {'live_start_index': '-3'} if is_stream else {},
                 )
 
-                self.mpv.command('set_property', 'options/demuxer-readahead-secs', 10 if is_stream else 0)
-                self.mpv.command('set_property', 'options/cache-pause-wait', 3 if is_stream else 1)
+                self.mpv.command('set_property', 'options/demuxer-readahead-secs', 45 if is_youtube else (10 if is_stream else 0))
+                self.mpv.command('set_property', 'options/demuxer-max-bytes', (64 if is_youtube else 32) * 1024 * 1024)
+                self.mpv.command('set_property', 'options/cache-pause-wait', 5 if is_youtube else (3 if is_stream else 1))
                 self.mpv.command('set_property', 'options/cache-pause-initial', bool(is_stream))
 
                 if 'panscan' in self.station_config:
@@ -1148,7 +1151,7 @@ class StationPlayer(object):
                             5,
                         ),
                     )
-                if is_stream and str(file_path).startswith('https://www.youtube.com/watch?v='):
+                if is_youtube:
                     # Allow YouTube format extraction before MPV reports file-loaded.
                     timeout_seconds = max(timeout_seconds, 45)
                     buffered_start_timeout = max(buffered_start_timeout, 45)
@@ -1362,6 +1365,8 @@ class StationPlayer(object):
             if response.status != PlayerState.SUCCESS:
                 return response
 
+        previous_ytdl_format = self.mpv.ytdl_format if youtube else None
+        previous_video_sync = self.mpv.video_sync if youtube else None
         try:
             if youtube:
                 executable = os.path.join(sysconfig.get_path('scripts'), 'yt-dlp.exe' if os.name == 'nt' else 'yt-dlp')
@@ -1370,6 +1375,10 @@ class StationPlayer(object):
                     raise RuntimeError('YouTube playback requires yt-dlp. Install the updated requirements.')
                 self.mpv.command('change-list', 'script-opts', 'append', 'ytdl_hook-ytdl_path=' + executable)
                 self.mpv.command('set_property', 'options/ytdl-raw-options', {'js-runtimes': 'node'})
+                self.mpv.ytdl_format = YOUTUBE_FORMAT
+                # Older Wayland presentation clocks jitter under display-resample;
+                # keep YouTube at its native cadence against the audio clock.
+                self.mpv.video_sync = 'audio'
                 response = self.play_and_wait(selection['file_path'], loop=False, title=selection['title'], is_stream=True)
             else:
                 response = self.play_and_wait(selection['file_path'], loop=False, title=selection['title'])
@@ -1377,6 +1386,9 @@ class StationPlayer(object):
             self._l.warning('On Demand playback failed: {}'.format(error))
             response = PlayerOutcome(PlayerState.FAILED)
         finally:
+            if youtube:
+                self.mpv.ytdl_format = previous_ytdl_format
+                self.mpv.video_sync = previous_video_sync
             self.parental_unlocked_network = None
         if response.status in (PlayerState.SUCCESS, PlayerState.FAILED):
             self._open_guide_overlay()

@@ -429,6 +429,13 @@ own Python environment before falling back to PATH. Keep the extractor and EJS
 script versions updated together when YouTube changes. Private, paid, and
 sign-in-only videos are not supported by this interface.
 
+YouTube playback selects H.264 video up to 1080p at 30 fps and AAC audio, avoiding
+4K AV1/VP9 software decoding on the Pi 4. MPV's codec-aware output hook can then
+use the hardware decoder and direct Wayland output. YouTube uses 45 seconds of
+read-ahead with a 64 MiB cache limit and uses the audio clock for frame timing on older
+Wayland builds. The prior format and timing options are restored after playback;
+local media and live streams retain their existing buffering settings.
+
 API endpoints:
 
 - `GET /on-demand/youtube/channels`: saved channels.
