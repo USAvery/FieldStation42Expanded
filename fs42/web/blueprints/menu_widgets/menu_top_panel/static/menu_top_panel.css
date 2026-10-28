@@ -102,7 +102,7 @@
 .menu-top-panel-badge img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
 }
 
 .menu-top-panel-details {
