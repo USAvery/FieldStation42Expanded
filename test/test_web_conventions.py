@@ -561,6 +561,43 @@ def test_menu_widgets_have_separate_discovery_settings_and_page_assets(app):
         assert '/static/menu_widgets/menu_top_panel/menu_top_panel.css' in menu
 
 
+def test_customguide_starts_and_builds_its_grid():
+    """Exercise guide startup so missing method references cannot leave an empty guide."""
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('Node is required for browser utility checks')
+    source = Path(_constants.WEB_DIR, 'blueprints/menu/customguide/static/customguide.js').read_text()
+    script = r"""
+const vm=require('vm'),assert=require('assert');
+const app={},events=[],strip={},listings={appendChild:node=>assert.equal(node,strip)};
+const context={app,window:{app,location:{search:''},addEventListener:name=>events.push(name)},
+    URLSearchParams,document:{getElementById:id=>{assert.equal(id,'grid-listings');return listings}}};
+vm.runInNewContext(__SOURCE__,context);
+const guide=app.menu.customguide;let headers=0,initialized=false;
+guide.fetchStations=async()=>{};
+guide.updateGridHeader=slots=>{assert.equal(slots.length,4);headers++};
+guide.fetchAllSchedules=async slots=>{assert.equal(slots.length,4);return {}};
+guide.buildGridStrip=slots=>{assert.equal(slots.length,4);return strip};
+guide.initGridInteraction=()=>{initialized=true};
+(async()=>{await guide.setup();assert(initialized);assert.equal(headers,1);
+    assert(events.includes('fs42-guide-show'))})().catch(e=>{console.error(e);process.exitCode=1});
+"""
+    result = subprocess.run([node, '-'], input=script.replace('__SOURCE__', json.dumps(source)),
+                            capture_output=True, encoding='utf8', timeout=20)
+    assert result.returncode == 0, result.stderr
+
+
+def test_menu_top_panel_serves_the_tv_guide_image(app):
+    """Keep the real TV Guide logo in the shared header on both Pi pages."""
+    logo = '/static/menu_widgets/menu_top_panel/images/tv_guide_logo.png'
+    with TestClient(app) as client:
+        for page in ('/static/customguide/customguide.html', '/on-demand'):
+            assert 'src="{}" alt="TV Guide"'.format(logo) in client.get(page).text
+        response = client.get(logo)
+        assert response.status_code == 200
+        assert response.headers['content-type'] == 'image/png'
+
+
 def test_on_demand_uses_both_shared_menu_panels(app):
     """
     Preserve browsing controls and preview hooks inside the reusable panel layouts

@@ -281,7 +281,7 @@ app.menu.customguide = (function () {
             }
             else {
                 for (const block of blocks) {
-                    const block_el = createGridProgramBlock(
+                    const block_el = self.createGridProgramBlock(
                         block,
                         guide_start_ms,
                         guide_end_ms,
@@ -303,12 +303,12 @@ app.menu.customguide = (function () {
      * Refresh the visible time headings and program rows
      */
     self.buildGrid = async function() {
-        const slots = computeSlotTimes(interactive_slot_offset);
-        updateGridHeader(slots);
-        const schedules = await fetchAllSchedules(slots, USE_META);
+        const slots = self.computeSlotTimes(interactive_slot_offset);
+        self.updateGridHeader(slots);
+        const schedules = await self.fetchAllSchedules(slots, USE_META);
         const grid_listings = document.getElementById('grid-listings');
         grid_listings.innerHTML = '';
-        grid_listings.appendChild(buildGridStrip(slots, schedules));
+        grid_listings.appendChild(self.buildGridStrip(slots, schedules));
     };
     /**
      * Return the channel rows available for selection
@@ -356,7 +356,7 @@ app.menu.customguide = (function () {
             if (best_distance < 0) {
                 return;
             }
-            const distance = Math.abs(getProgramCenterMs(program) - target_ms);
+            const distance = Math.abs(self.getProgramCenterMs(program) - target_ms);
             if (distance < best_distance) {
                 best_distance = distance;
                 best_index = index;
@@ -389,7 +389,7 @@ app.menu.customguide = (function () {
      * Scroll the selected channel row into the visible grid
      */
     self.ensureInteractiveSelectionVisible = function() {
-        const rows = getInteractiveRows();
+        const rows = self.getInteractiveRows();
         const row = rows[interactive_row_index];
         const listings = document.getElementById('grid-listings');
         const strip = document.getElementById('guide-rows');
@@ -414,12 +414,12 @@ app.menu.customguide = (function () {
      */
     self.updateSelectedProgramInfo = function() {
 
-        const rows = getInteractiveRows();
+        const rows = self.getInteractiveRows();
         const row = rows[interactive_row_index];
         if (!row) {
             return;
         }
-        const programs = getProgramsForRow(row);
+        const programs = self.getProgramsForRow(row);
         const program = programs[interactive_program_index];
         if (!program) {
             return;
@@ -438,7 +438,7 @@ app.menu.customguide = (function () {
             channel_el.textContent = ('' + channel_num + ' ' + channel_name).trim();
         }
         if (time_el) {
-            time_el.textContent = formatProgramTime(program.dataset.startMs, program.dataset.endMs);
+            time_el.textContent = self.formatProgramTime(program.dataset.startMs, program.dataset.endMs);
         }
         if (desc_el) {
             desc_el.textContent =
@@ -453,7 +453,7 @@ app.menu.customguide = (function () {
      * Highlight the selected program and refresh its details
      */
     self.applyInteractiveSelection = function() {
-        const rows = getInteractiveRows();
+        const rows = self.getInteractiveRows();
         if (!rows.length) {
             return;
         }
@@ -466,7 +466,7 @@ app.menu.customguide = (function () {
             el.removeAttribute('aria-selected');
         });
         const row = rows[interactive_row_index];
-        const programs = getProgramsForRow(row);
+        const programs = self.getProgramsForRow(row);
         if (!programs.length) {
             return;
         }
@@ -475,21 +475,21 @@ app.menu.customguide = (function () {
         const program = programs[interactive_program_index];
         program.classList.add('guide-selected');
         program.setAttribute('aria-selected', 'true');
-        ensureInteractiveSelectionVisible();
-        updateSelectedProgramInfo();
+        self.ensureInteractiveSelectionVisible();
+        self.updateSelectedProgramInfo();
     };
     /**
      * Select a channel and its program nearest the requested airtime
      */
     self.selectInteractiveRow = function(row_index, target_ms) {
-        const rows = getInteractiveRows();
+        const rows = self.getInteractiveRows();
         if (!rows.length) {
             return;
         }
         interactive_row_index = Math.max(0, Math.min(row_index, rows.length - 1));
-        const programs = getProgramsForRow(rows[interactive_row_index]);
-        interactive_program_index = findClosestProgramIndex(programs, target_ms);
-        applyInteractiveSelection();
+        const programs = self.getProgramsForRow(rows[interactive_row_index]);
+        interactive_program_index = self.findClosestProgramIndex(programs, target_ms);
+        self.applyInteractiveSelection();
     };
     /**
      * Move the visible schedule window and restore selection around the requested airtime
@@ -497,50 +497,50 @@ app.menu.customguide = (function () {
     self.shiftInteractiveWindow = async function(delta, target_ms) {
         const next_offset = Math.max(0, interactive_slot_offset + delta);
         if (next_offset === interactive_slot_offset) {
-            showGuideToast('LIVE');
+            self.showGuideToast('LIVE');
             return;
         }
         interactive_slot_offset = next_offset;
         const current_row = interactive_row_index;
-        await buildGrid();
-        const rows = getInteractiveRows();
+        await self.buildGrid();
+        const rows = self.getInteractiveRows();
         const row = rows[Math.max(0, Math.min(current_row, rows.length - 1))];
-        const programs = getProgramsForRow(row);
+        const programs = self.getProgramsForRow(row);
         interactive_row_index = Math.max(0, Math.min(current_row, rows.length - 1));
-        interactive_program_index = findClosestProgramIndex(programs, target_ms);
-        applyInteractiveSelection();
+        interactive_program_index = self.findClosestProgramIndex(programs, target_ms);
+        self.applyInteractiveSelection();
     };
     /**
      * Select an adjacent program, loading another time window when needed
      */
     self.moveInteractiveHorizontal = async function(direction) {
-        const rows = getInteractiveRows();
+        const rows = self.getInteractiveRows();
         const row = rows[interactive_row_index];
-        const programs = getProgramsForRow(row);
+        const programs = self.getProgramsForRow(row);
         if (!programs.length) {
             return;
         }
         const next_index = interactive_program_index + direction;
         if (next_index >= 0 && next_index < programs.length) {
             interactive_program_index = next_index;
-            applyInteractiveSelection();
+            self.applyInteractiveSelection();
             return;
         }
         const current = programs[interactive_program_index];
         const start = Number(current?.dataset.startMs) || Date.now();
         const end = Number(current?.dataset.endMs) || Date.now();
         const target_ms = direction > 0 ? end + 1 : start - 1;
-        await shiftInteractiveWindow(direction, target_ms);
+        await self.shiftInteractiveWindow(direction, target_ms);
     };
     /**
      * Select an adjacent channel while retaining the current airtime
      */
     self.moveInteractiveVertical = function(direction) {
-        const rows = getInteractiveRows();
+        const rows = self.getInteractiveRows();
         if (!rows.length) {
             return;
         }
-        const current_programs = getProgramsForRow(rows[interactive_row_index]);
+        const current_programs = self.getProgramsForRow(rows[interactive_row_index]);
         const current_program = current_programs[interactive_program_index];
         if (!current_program) {
             return;
@@ -548,7 +548,7 @@ app.menu.customguide = (function () {
         const program_start_ms = Number(current_program.dataset.startMs);
 
         // The leftmost visible grid slot is the start of the current guide window.
-        const slots = computeSlotTimes(interactive_slot_offset);
+        const slots = self.computeSlotTimes(interactive_slot_offset);
         const leftmost_grid_time_ms = slots[0].start.getTime();
 
         // Normally preserve the selected program's actual start time.
