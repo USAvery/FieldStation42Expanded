@@ -105,10 +105,12 @@ h1 {
     width: 100%;
     height: calc(var(--od-height) * 0.063);
     padding: 0 0.65em;
-    border: min(0.45vw, 0.6vh) solid hsl(120.000000, 6.796117%, 79.803922%);
+    border: min(0.45vw, 0.6vh) solid transparent;
     border-radius: 2em;
-    background: linear-gradient(hsl(214.455446, 50.753769%, 39.019608%), hsl(214.897959, 55.056180%, 34.901961%));
-    box-shadow: inset 0 min(0.16vw, 0.21vh) min(0.2vw, 0.27vh) hsl(212.631579, 27.272727%, 59.019608%), 0 min(0.2vw, 0.27vh) min(0.25vw, 0.33vh) hsl(216.000000, 56.701031%, 19.019608%);
+    --od-button-fill: linear-gradient(180deg, #2a5292 0%, #2b5391 45%, #2c5293 100%);
+    --od-button-rim: linear-gradient(180deg, #7d899b 0%, #b4bdc5 18%, #f0f2df 48%, #c5cdd0 72%, #7f8da3 100%);
+    background: var(--od-button-fill) padding-box, var(--od-button-rim) border-box;
+    box-shadow: inset 0 0 min(0.18vw, 0.24vh) #162e50, 0 min(0.2vw, 0.27vh) min(0.25vw, 0.33vh) #152b4c;
     color: white;
     font: 700 var(--od-font)/1 Arial, Helvetica, sans-serif;
     text-shadow: inherit;
@@ -119,10 +121,10 @@ h1 {
 }
 
 .od-choice.is-selected, .od-choice:focus-visible {
-    background: hsl(56.400000, 100.000000%, 80.392157%);
+    --od-button-fill: linear-gradient(180deg, #faf7b7 0%, #faf49e 15%, #faf49e 80%, #fdf5a1 100%);
+    --od-button-rim: linear-gradient(180deg, #a4a986 0%, #eeeec9 22%, #ffffe7 48%, #e1e3b8 76%, #7a8072 100%);
     color: hsl(0.000000, 0.000000%, 6.274510%);
     text-shadow: none;
-    border-color: hsl(58.571429, 72.413793%, 88.627451%);
     outline: none;
 }
 
