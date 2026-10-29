@@ -284,6 +284,7 @@ class StationPlayer(object):
         self._transition_ack = 0
         self._frame_dir = tempfile.TemporaryDirectory(prefix='fs42-presentation-')
         self.guide_visible = False
+        self._active_menu_page = None
         self._guide_video_layout = None
         self.parental_controls_panel = None
         self.parental_unlocked_network = None
@@ -487,7 +488,12 @@ class StationPlayer(object):
             return True
 
         if response.payload == 'on_demand_menu':
-            self._open_guide_overlay(page='on_demand')
+            self._toggle_on_demand_overlay()
+            return True
+
+        if response.payload == 'menu_close':
+            if self.guide_visible:
+                self._close_guide_overlay()
             return True
 
         if response.payload.startswith('web_key:'):
@@ -625,7 +631,7 @@ class StationPlayer(object):
         self._l.info('Preloading interactive guide renderer in background')
         return True
 
-    def _open_guide_overlay(self, page=None):
+    def _open_guide_overlay(self, page='guide'):
         """
         Show the preloaded guide, arrange its video preview, and report whether it opened
         """
@@ -651,9 +657,7 @@ class StationPlayer(object):
         self._apply_guide_video_layout()
 
         if self.guide_queue:
-            message = {'type': 'show_window'}
-            if page is not None:
-                message['page'] = page
+            message = {'type': 'show_window', 'page': page}
             if self._guide_video_layout:
                 message['preview_geometry'] = (
                     self._guide_video_layout.get('preview_geometry')
@@ -661,6 +665,7 @@ class StationPlayer(object):
             self.guide_queue.put(message)
 
         self.guide_visible = True
+        self._active_menu_page = page
         self._publish_guide_visibility()
         network_name = self.station_config.get('network_name', 'unknown') if self.station_config else 'unknown'
         self._l.info('Opened preloaded guide overlay over station: {0}'.format(network_name))
@@ -694,6 +699,7 @@ class StationPlayer(object):
                 pass
 
         self.guide_visible = False
+        self._active_menu_page = None
         self._publish_guide_visibility()
         self._restore_guide_video_layout()
 
@@ -702,6 +708,7 @@ class StationPlayer(object):
         Terminate the persistent guide renderer during application shutdown
         """
         self.guide_visible = False
+        self._active_menu_page = None
         self._publish_guide_visibility()
         self._restore_guide_video_layout()
 
@@ -730,12 +737,21 @@ class StationPlayer(object):
         """
         Toggle the interactive guide and return whether it is now visible
         """
-        if self.guide_visible:
+        if self.guide_visible and self._active_menu_page == 'guide':
             self._close_guide_overlay()
             self._l.info('Closed guide overlay')
             return False
 
-        return self._open_guide_overlay()
+        return self._open_guide_overlay(page='guide')
+
+    def _toggle_on_demand_overlay(self):
+        """Toggle On Demand, switching from Guide without changing playback."""
+        if self.guide_visible and self._active_menu_page == 'on_demand':
+            self._close_guide_overlay()
+            self._l.info('Closed On Demand overlay')
+            return False
+
+        return self._open_guide_overlay(page='on_demand')
 
     def _start_parental_controls_overlay(self, network_name):
         """
@@ -1441,7 +1457,7 @@ class StationPlayer(object):
                 self.mpv.video_sync = previous_video_sync
             self.parental_unlocked_network = None
         if response.status in (PlayerState.SUCCESS, PlayerState.FAILED):
-            self._open_guide_overlay()
+            self._open_guide_overlay(page='on_demand')
         return response
 
     def play_and_wait(self, file_path, loop=True, title='Unknown', is_stream=False):

@@ -319,6 +319,16 @@ async def show_guide(request: Request):
     return {'status': 'ok'}
 
 
+@router.post('/menu/close')
+async def close_menu(request: Request):
+    """Close the current guide or On Demand overlay without changing channels."""
+    command_queue = request.app.state.player_command_queue
+    if command_queue is None:
+        raise HTTPException(status_code=503, detail='The player is not connected.')
+    command_queue.put({'command': 'menu_close'})
+    return {'status': 'ok'}
+
+
 @router.get('/commands/stop')
 @router.post('/commands/stop')
 async def player_stop(request: Request):

@@ -210,6 +210,8 @@ class FieldPlayer(object):
                         return PlayerOutcome(PlayerState.ON_DEMAND, q_message.get('entry_id'))
                     case 'on_demand_menu':
                         return PlayerOutcome(PlayerState.SUCCESS, 'on_demand_menu')
+                    case 'menu_close':
+                        return PlayerOutcome(PlayerState.SUCCESS, 'menu_close')
                     case 'web_key':
                         key = q_message.get('key', '')
                         return PlayerOutcome(PlayerState.SUCCESS, 'web_key:{}'.format(key))

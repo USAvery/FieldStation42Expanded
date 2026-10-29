@@ -169,6 +169,7 @@ class WebRenderApp(QApplication):
 
         self.queue = queue
         self.user_conf = user_conf
+        self.guide_url = user_conf.get('url') or user_conf.get('web_url')
         self.persistent = bool(user_conf.get('persistent', False))
         self.start_hidden = bool(user_conf.get('start_hidden', False))
         self.playback_state = None
@@ -303,9 +304,15 @@ class WebRenderApp(QApplication):
             # Persistent renderers stay alive between open/close operations so
             # QtWebEngine/Chromium only pays its startup cost once.
             if isinstance(msg, dict) and msg.get('type') == 'show_window':
-                if msg.get('page') == 'on_demand':
-                    url = QUrl(self.window.current_url).resolved(QUrl('/on-demand'))
-                    self.window.navigate(url.toString())
+                page = msg.get('page')
+                if page == 'on_demand':
+                    target_url = QUrl(self.guide_url or self.window.current_url).resolved(QUrl('/on-demand')).toString()
+                elif page == 'guide':
+                    target_url = self.guide_url
+                else:
+                    target_url = None
+                if target_url and target_url != self.window.current_url:
+                    self.window.navigate(target_url)
                 geometry = msg.get('preview_geometry') or {}
                 if geometry:
                     left = float(geometry.get('left_pct', 0.0))

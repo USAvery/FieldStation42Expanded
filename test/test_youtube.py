@@ -163,7 +163,7 @@ def test_youtube_playback_uses_existing_player_once_and_returns_to_menu(youtube)
     player.play_and_wait.assert_called_once_with('https://www.youtube.com/watch?v=' + VIDEO,
                                                 loop=False, title='Newest upload', is_stream=True)
     player._parental_controls_required.assert_not_called()
-    player._open_guide_overlay.assert_called_once_with()
+    player._open_guide_overlay.assert_called_once_with(page='on_demand')
     assert player.mpv.ytdl_format == 'original-format'
     assert player.mpv.video_sync == 'display-resample'
 
@@ -183,7 +183,7 @@ def test_failed_youtube_playback_restores_menu_instead_of_crashing_player(youtub
     with patch('fs42.tools.field_player.station_player.os.path.isfile', return_value=True):
         result = player.play_on_demand({'source': 'youtube', 'channel_id': CHANNEL, 'video_id': VIDEO})
     assert result.status == PlayerState.FAILED
-    player._open_guide_overlay.assert_called_once_with()
+    player._open_guide_overlay.assert_called_once_with(page='on_demand')
     assert player.mpv.ytdl_format == 'original-format'
     assert player.mpv.video_sync == 'display-resample'
 

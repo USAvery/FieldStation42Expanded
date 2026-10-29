@@ -124,9 +124,9 @@ def test_dedicated_remote_opens_menu_without_starting_playback(library):
     assert outcome.status == PlayerState.SUCCESS
     assert outcome.payload == 'on_demand_menu'
     playback = StationPlayer.__new__(StationPlayer)
-    playback._open_guide_overlay = Mock()
+    playback._toggle_on_demand_overlay = Mock()
     assert playback.handle_runtime_command_outcome(outcome)
-    playback._open_guide_overlay.assert_called_once_with(page='on_demand')
+    playback._toggle_on_demand_overlay.assert_called_once_with()
     with TestClient(create_app(server_conf={})) as client:
         assert client.post('/on-demand/open').status_code == 503
 
@@ -139,11 +139,16 @@ def test_menu_command_navigates_the_existing_renderer_on_the_same_server():
     commands.put({'type': 'show_window', 'page': 'on_demand'})
     window = SimpleNamespace(current_url='http://localhost:4242/static/customguide/customguide.html',
                              navigate=Mock())
-    renderer = SimpleNamespace(queue=commands, window=window, show_window=Mock(),
+    guide_url = 'http://localhost:4242/static/customguide/customguide.html?interactive=1&live_preview=1'
+    renderer = SimpleNamespace(queue=commands, window=window, guide_url=guide_url, show_window=Mock(),
                                _handle_presentation_message=Mock(return_value=False))
     WebRenderApp.tick(renderer)
     window.navigate.assert_called_once_with('http://localhost:4242/on-demand')
-    renderer.show_window.assert_called_once_with()
+    window.current_url = 'http://localhost:4242/on-demand'
+    commands.put({'type': 'show_window', 'page': 'guide'})
+    WebRenderApp.tick(renderer)
+    assert window.navigate.call_args_list[-1].args == (guide_url,)
+    assert renderer.show_window.call_count == 2
 
 
 def test_standalone_remote_button_uses_the_existing_file_command_transport(tmp_path):
@@ -324,7 +329,84 @@ def test_on_demand_respects_pin_interruptions_and_returns_to_menu_after_completi
         assert player.play_on_demand(1).status == outcome
     if authorized:
         player.play_and_wait.assert_called_once_with('movie.mp4', loop=False, title='Movie')
-        player._open_guide_overlay.assert_called_once_with()
+        player._open_guide_overlay.assert_called_once_with(page='on_demand')
     else:
         player.play_and_wait.assert_not_called()
         player._open_guide_overlay.assert_not_called()
+
+
+def test_menu_buttons_switch_between_pages_and_toggle_their_own_menu():
+    """Guide and On Demand buttons each reopen their page or close it when already visible."""
+    player = StationPlayer.__new__(StationPlayer)
+    player.guide_visible = False
+    player._active_menu_page = None
+    player._l = Mock()
+    actions = []
+
+    def open_page(page='guide'):
+        player.guide_visible = True
+        player._active_menu_page = page
+        actions.append(('open', page))
+        return True
+
+    def close_page():
+        actions.append(('close', player._active_menu_page))
+        player.guide_visible = False
+        player._active_menu_page = None
+
+    player._open_guide_overlay = open_page
+    player._close_guide_overlay = close_page
+    steps = [
+        ('guide_toggle', ('open', 'guide')),
+        ('on_demand_menu', ('open', 'on_demand')),
+        ('on_demand_menu', ('close', 'on_demand')),
+        ('on_demand_menu', ('open', 'on_demand')),
+        ('guide_toggle', ('open', 'guide')),
+        ('guide_toggle', ('close', 'guide')),
+    ]
+    for command, expected in steps:
+        assert player.handle_runtime_command_outcome(PlayerOutcome(PlayerState.SUCCESS, command))
+        assert actions[-1] == expected
+
+
+def test_close_menu_command_exits_the_visible_overlay_without_retuning():
+    """Root Back requests a separate close command and leaves the station playing."""
+    commands = queue.Queue()
+    with TestClient(create_app(command_queue=commands, server_conf={})) as client:
+        assert client.post('/player/menu/close').json() == {'status': 'ok'}
+    assert commands.get_nowait() == {'command': 'menu_close'}
+
+    player = FieldPlayer(no_server=True)
+    player._command_queue = queue.Queue()
+    player._command_queue.put({'command': 'menu_close'})
+    outcome = player._check_input()
+    assert outcome.status == PlayerState.SUCCESS
+    assert outcome.payload == 'menu_close'
+
+    playback = StationPlayer.__new__(StationPlayer)
+    playback.guide_visible = True
+    playback._close_guide_overlay = Mock()
+    assert playback.handle_runtime_command_outcome(outcome)
+    playback._close_guide_overlay.assert_called_once_with()
+    with TestClient(create_app(server_conf={})) as client:
+        assert client.post('/player/menu/close').status_code == 503
+
+
+def test_physical_remote_back_uses_menu_navigation_and_preserves_last_channel(monkeypatch):
+    """The configured Back key becomes Escape only while a menu is active."""
+    import sys
+    monkeypatch.setitem(sys.modules, 'evdev', SimpleNamespace(ecodes=Mock(), InputDevice=Mock()))
+    remote = importlib.import_module('fs42.tools.remote_control.remote_control')
+    key = remote.KEY_MAPPINGS['last_channel']
+
+    with patch.object(remote, 'custom_guide_is_active', return_value=True), \
+            patch.object(remote, 'send_custom_guide_key') as send, \
+            patch.object(remote, 'last_channel_pressed') as last:
+        assert remote.handle_key_name(key)
+        send.assert_called_once_with('Escape')
+        last.assert_not_called()
+
+    with patch.object(remote, 'custom_guide_is_active', return_value=False), \
+            patch.object(remote, 'last_channel_pressed') as last:
+        assert remote.handle_key_name(key)
+        last.assert_called_once_with()

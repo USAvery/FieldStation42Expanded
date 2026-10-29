@@ -712,6 +712,11 @@ def handle_key_name(key_name):
     Handle a key press by key name (common logic for evdev and test mode)
     """
     if custom_guide_is_active():
+        # Back navigates menus while one is visible; outside menus this key
+        # retains its normal Last Channel (or controller Exit) mapping.
+        if key_name in (KEY_MAPPINGS.get('last_channel'), 'esc'):
+            send_custom_guide_key('Escape')
+            return True
         guide_keys = {
             'up': 'ArrowUp',
             'down': 'ArrowDown',

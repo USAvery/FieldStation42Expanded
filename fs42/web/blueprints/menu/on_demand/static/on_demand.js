@@ -77,15 +77,20 @@ app.menu.on_demand = (function() {
         return button;
     };
     /**
-     * Return to a previous library screen, staying in On Demand at the root
+     * Return to the previous library screen, or close the overlay at the root
      */
-    self.goBack = function() {
+    self.goBack = function(closeAtRoot=true) {
         if (playing) {
             return;
         }
         if (history.length) {
             view = history.pop();
             self.renderView();
+        }
+        else if (closeAtRoot) {
+            apiPost('api.player.close_menu').catch(function(error) {
+                console.error('Could not close On Demand:', error);
+            });
         }
     };
     /**
@@ -328,7 +333,11 @@ app.menu.on_demand = (function() {
                 event.preventDefault();
                 self.submitSearch();
             }
-            else if (event.key === 'ArrowDown' || event.key === 'Escape') {
+            else if (event.key === 'Escape' || event.key === 'Backspace') {
+                event.preventDefault();
+                self.goBack();
+            }
+            else if (event.key === 'ArrowDown') {
                 event.preventDefault();
                 self.selectChoice(0);
             }
@@ -341,7 +350,7 @@ app.menu.on_demand = (function() {
         event.preventDefault();
         const buttons = self.getButtons();
         if (event.key === 'Escape' || event.key === 'Backspace' || event.key === 'PageUp') {
-            self.goBack();
+            self.goBack(event.key !== 'PageUp');
             return;
         }
         if (event.key === 'Enter') {

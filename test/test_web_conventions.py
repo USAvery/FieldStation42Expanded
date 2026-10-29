@@ -671,25 +671,28 @@ remote.sendPpvKey=async(...args)=>sent.push(args);
     assert result.returncode == 0, result.stderr
 
 
-def test_on_demand_back_stays_in_the_menu():
-    """Back returns from a submenu but cannot navigate the retained menu window to the guide."""
+def test_on_demand_back_closes_at_the_root():
+    """Back exits from the root, navigates submenus, and keeps PageUp separate."""
     node = shutil.which('node')
     if not node:
         pytest.skip('Node is required for browser utility checks')
     source = Path(_constants.WEB_DIR, 'blueprints/menu/on_demand/static/on_demand.js').read_text()
     script = r"""
 const vm=require('vm'),assert=require('assert');
-const app={},location={href:'/on-demand'};
-vm.runInNewContext(__SOURCE__,{app,window:{app,location},document:{body:{classList:{contains:()=>false}},querySelectorAll:()=>[]}});
+const app={},location={href:'/on-demand'},closes=[];
+vm.runInNewContext(__SOURCE__,{
+    app,window:{app,location},apiPost:async name=>closes.push(name),
+    document:{body:{classList:{contains:()=>false}},querySelectorAll:()=>[]}
+});
 const menu=app.menu.on_demand;let renders=0;
 menu.renderView=()=>renders++;
-menu.goBack();assert.equal(renders,0);assert.equal(location.href,'/on-demand');
+menu.goBack();assert.equal(renders,0);assert.deepEqual(closes,['api.player.close_menu']);
 menu.openView({type:'titles',title:'TV Shows'});assert.equal(renders,1);
-menu.goBack();assert.equal(renders,2);
-menu.goBack();assert.equal(renders,2);assert.equal(location.href,'/on-demand');
+menu.goBack();assert.equal(renders,2);assert.equal(closes.length,1);
 for(const key of ['Escape','Backspace','PageUp']) {
     menu.onKeydown({key,preventDefault(){}});assert.equal(location.href,'/on-demand');
 }
+assert.deepEqual(closes,['api.player.close_menu','api.player.close_menu','api.player.close_menu']);
 """
     result = subprocess.run([node, '-'], input=script.replace('__SOURCE__', json.dumps(source)),
                             capture_output=True, encoding='utf8', timeout=20)
@@ -714,3 +717,31 @@ def test_on_demand_uses_both_shared_menu_panels(app):
         assert 'menu_buttom_panel' not in html
         assert '/static/menu_widgets/menu_bottom_panel/menu_bottom_panel.css' in html
         assert client.get('/static/menu_widgets/menu_bottom_panel/menu_bottom_panel.css').status_code == 200
+
+def test_custom_guide_back_closes_the_overlay():
+    """Back from the guide closes the overlay without changing the station."""
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('Node is required for browser utility checks')
+    source = Path(_constants.WEB_DIR, 'blueprints/menu/customguide/static/customguide.js').read_text(encoding='utf8')
+    script = r"""
+const vm=require('vm'),assert=require('assert');
+const app={},closes=[],location={search:''};
+vm.runInNewContext(__SOURCE__,{
+    app,window:{app,location},URLSearchParams,apiPost:async name=>closes.push(name)
+});
+(async()=>{
+    const guide=app.menu.customguide;
+    for(const key of ['Escape','Backspace']) {
+        let prevented=false,stopped=false;
+        await guide.handleInteractiveKeydown({
+            key,preventDefault(){prevented=true},stopPropagation(){stopped=true}
+        });
+        assert(prevented && stopped);
+    }
+    assert.deepEqual(closes,['api.player.close_menu','api.player.close_menu']);
+})().catch(e=>{console.error(e);process.exitCode=1});
+"""
+    result = subprocess.run([node, '-'], input=script.replace('__SOURCE__', json.dumps(source)),
+                            capture_output=True, encoding='utf8', timeout=20)
+    assert result.returncode == 0, result.stderr

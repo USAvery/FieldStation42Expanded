@@ -505,6 +505,17 @@ app.menu.customguide = (function () {
      * Translate guide navigation keys into selection, time-window, and tuning actions
      */
     self.handleInteractiveKeydown = async function(event) {
+        if (event.key === 'Escape' || event.key === 'Backspace') {
+            event.preventDefault();
+            event.stopPropagation();
+            try {
+                await apiPost('api.player.close_menu');
+            }
+            catch (error) {
+                console.error('Could not close guide:', error);
+            }
+            return;
+        }
         if (interactive_key_busy) {
             return;
         }
