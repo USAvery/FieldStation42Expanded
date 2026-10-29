@@ -745,3 +745,85 @@ vm.runInNewContext(__SOURCE__,{
     result = subprocess.run([node, '-'], input=script.replace('__SOURCE__', json.dumps(source)),
                             capture_output=True, encoding='utf8', timeout=20)
     assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize('page', ['remote', 'handheld_remote'])
+def test_mobile_remote_disables_double_tap_zoom_throughout_page(app, page):
+    """Suppress zoom on non-button areas while preserving rapid button input."""
+    root = Path(_constants.WEB_DIR, 'blueprints/web_interface', page, 'static')
+    css = (root / 'style.css').read_text(encoding='utf8')
+    assert 'body *' in css and 'touch-action: manipulation' in css
+    with TestClient(app) as client:
+        html = (client.get('/remote').text if page == 'remote'
+                else TestClient(create_remote()).get('/').text)
+        assert 'user-scalable=no' in html
+
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('Node is required for browser utility checks')
+    source = (root / ('remote.js' if page == 'remote' else 'handheld_remote.js')).read_text(encoding='utf8')
+    script = r"""
+const vm=require('vm'),assert=require('assert');
+const page=__PAGE__;
+const app={}, listeners={}, buttonListeners={}, actions=[];
+let clock=1000;
+const TestDate={now:()=>clock};
+const button={style:{},getAttribute:()=> 'guide',
+    addEventListener:(name,fn)=>buttonListeners[name]=fn,
+    closest:()=>button};
+const display={textContent:''};
+const document={
+    getElementById:()=>display,
+    querySelectorAll:()=>[button],
+    addEventListener:(name,fn,options)=>listeners[name]={fn,options}
+};
+const window={app,addEventListener:()=>{}};
+vm.runInNewContext(__SOURCE__,{app,window,document,Date:TestDate,
+    setTimeout:()=>{},setInterval:()=>{},WeakMap,URLSearchParams});
+const remote=app.web_interface[page];
+if (page==='remote') {
+    remote.startStatusPolling=()=>{};
+    remote.handleRemoteCommand=key=>actions.push(key);
+} else {
+    remote.updateStatus=()=>{};
+}
+(async()=>{
+    await remote.setup();
+    assert.equal(listeners.touchend.options.capture,true);
+    assert.equal(listeners.touchend.options.passive,false);
+    assert.equal(listeners.dblclick.options.capture,true);
+    const makeEvent=(target)=>({
+        target,currentTarget:target,changedTouches:[{}],touches:[],cancelable:true,
+        prevented:false,preventDefault(){this.prevented=true}
+    });
+    let first=makeEvent({closest:()=>null});
+    listeners.touchend.fn(first);
+    assert.equal(first.prevented,false);
+    clock+=200;
+    let second=makeEvent({closest:()=>null});
+    listeners.touchend.fn(second);
+    assert.equal(second.prevented,true);
+    let doubleClick=makeEvent(button);
+    listeners.dblclick.fn(doubleClick);
+    assert.equal(doubleClick.prevented,true);
+
+    clock+=1000;
+    let firstButton=makeEvent(button);
+    listeners.touchend.fn(firstButton);
+    if(page==='remote') buttonListeners.touchend(firstButton);
+    clock+=200;
+    let secondButton=makeEvent(button);
+    listeners.touchend.fn(secondButton);
+    if(page==='remote') {
+        buttonListeners.touchend(secondButton);
+        assert.deepEqual(actions,['guide','guide']);
+        assert.equal(secondButton.prevented,true);
+    } else {
+        assert.equal(firstButton.prevented,false);
+        assert.equal(secondButton.prevented,false);
+    }
+})().catch(e=>{console.error(e);process.exitCode=1});
+"""
+    script = script.replace('__PAGE__', json.dumps(page)).replace('__SOURCE__', json.dumps(source))
+    result = subprocess.run([node, '-'], input=script, capture_output=True, encoding='utf8', timeout=20)
+    assert result.returncode == 0, result.stderr

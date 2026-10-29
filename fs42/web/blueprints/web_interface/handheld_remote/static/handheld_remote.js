@@ -77,7 +77,21 @@ app.web_interface.handheld_remote = (function () {
             })
             .then(self.updateStatusDisplay).catch(reportError);
     };
-    /** Prevent rapid remote presses from zooming the page. */
+    /** Prevent rapid taps on non-controls from zooming the handheld remote. */
+    let lastPageTapTime = 0;
+    self.preventDoubleTapZoom = function(event) {
+        if (!event.changedTouches || event.changedTouches.length !== 1 ||
+                (event.touches && event.touches.length)) {
+            return;
+        }
+        const now = Date.now();
+        // Handheld buttons use native click handlers, so never cancel their touchend.
+        const control = event.target.closest('button, a, input, select, textarea');
+        if (!control && now - lastPageTapTime < 350 && event.cancelable) {
+            event.preventDefault();
+        }
+        lastPageTapTime = now;
+    };
     self.preventZoom = function(event) {
         event.preventDefault();
     };
@@ -86,10 +100,9 @@ app.web_interface.handheld_remote = (function () {
         setInterval(self.updateStatus, 2000);
         self.updateStatus();
 
-        /* Keep rapid remote-button taps from triggering browser double-tap zoom. */
-        for (const button of document.querySelectorAll('.btn')) {
-            button.addEventListener('dblclick', self.preventZoom);
-        }
+        /* Catch the entire page while preserving the native click handlers. */
+        document.addEventListener('touchend', self.preventDoubleTapZoom, {capture: true, passive: false});
+        document.addEventListener('dblclick', self.preventZoom, {capture: true});
     };
     /**
      * Open the television's On Demand menu without changing the tuned channel

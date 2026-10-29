@@ -3,6 +3,13 @@
  * See https://mozilla.org/MPL/2.0/.
  */
 
+/* Disable double-tap zoom everywhere on the handheld remote, not only buttons. */
+html,
+body,
+body * {
+    touch-action: manipulation;
+}
+
 /* -------- Remote -------- */
 
 html,

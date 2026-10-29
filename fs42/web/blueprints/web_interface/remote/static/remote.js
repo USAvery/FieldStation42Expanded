@@ -613,6 +613,7 @@ app.web_interface.remote = (function () {
 
     /** Bind page controls and load the initial data. */
     const lastTouchActivation = new WeakMap();
+    let lastPageTapTime = 0;
 
     /** Dispatch a remote press and briefly show button feedback. */
     self.activateButton = function(button) {
@@ -624,6 +625,19 @@ app.web_interface.remote = (function () {
     /** Keep appliance controls from triggering browser zoom gestures. */
     self.preventGesture = function(event) {
         event.preventDefault();
+    };
+
+    /** Suppress iOS Safari's page-wide double-tap zoom without swallowing button presses. */
+    self.preventDoubleTapZoom = function(event) {
+        if (!event.changedTouches || event.changedTouches.length !== 1 ||
+                (event.touches && event.touches.length)) {
+            return;
+        }
+        const now = Date.now();
+        if (now - lastPageTapTime < 350 && event.cancelable) {
+            event.preventDefault();
+        }
+        lastPageTapTime = now;
     };
 
     /** Dispatch a touch press and remember it to suppress synthetic clicks. */
@@ -661,6 +675,10 @@ app.web_interface.remote = (function () {
             button.addEventListener('click', self.onButtonClick);
             button.addEventListener('dblclick', self.preventGesture);
         }
+        // Catch taps on the display, labels, gaps, and any future controls.
+        // Capture runs before button touchend, whose explicit activation still fires.
+        document.addEventListener('touchend', self.preventDoubleTapZoom, {capture: true, passive: false});
+        document.addEventListener('dblclick', self.preventGesture, {capture: true});
         document.addEventListener('gesturestart', self.preventGesture, {passive: false});
         document.addEventListener('gesturechange', self.preventGesture, {passive: false});
 

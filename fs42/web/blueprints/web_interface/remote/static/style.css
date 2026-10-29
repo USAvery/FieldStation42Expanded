@@ -5,6 +5,14 @@
 
 /* -------- Style -------- */
 
+/* Disable double-tap zoom across the entire remote, including empty areas and SVG icons.
+ * Preserve normal scrolling and accessibility pinch zoom. */
+html,
+body,
+body * {
+    touch-action: manipulation;
+}
+
 /* Treat rapid taps as remote-control input, not browser zoom gestures. */
 .remote-btn {
     touch-action: manipulation;
