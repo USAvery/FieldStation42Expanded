@@ -349,3 +349,20 @@ On-demand supplies its heading and selection text through the top panel's caller
 block, enables the native video preview, and places `od-navigation` inside the
 bottom panel's caller block. The shared widgets own both panel layouts and their
 styles; the on-demand page owns its choices, title details, and navigation behavior.
+
+The On Demand details view keeps its description in the middle panel and its three
+symbol actions in the bottom panel. The page binds these local actions through
+`ControlBindings`; its existing `SpatialNavigator` handles their horizontal layout.
+Play / Resume is selected when a details screen opens. Playback requests carry a
+validated `start_over` option and retain the catalog/channel membership checks.
+
+`tools/on_demand/progress.py` stores positions in the runtime database's
+`on_demand_progress` table, keyed by a stable media identity rather than a catalog
+row that can change after rebuilding. Playback controls checkpoint at most every
+five seconds even when hidden, save on interruption, and clear on completion.
+`MAX_RESUME_POSITIONS` caps the shared local/YouTube history at 500 entries;
+each checkpoint refreshes recency, and writes evict the least recently watched
+entries in the same transaction. Existing tables migrate and trim automatically.
+Progress never affects live-channel scheduling, parental authorization, or MPV's
+hardware decoding and caching settings. Explicit start offsets apply to local
+videos and YouTube uploads; live streams keep their existing startup behavior.

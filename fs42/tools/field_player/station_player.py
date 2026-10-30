@@ -28,6 +28,7 @@ from python_mpv_jsonipc import MPV
 from fs42.tools.catalog import autobump_agent
 from fs42.tools.on_demand._constants import YOUTUBE_FORMAT
 from fs42.tools.on_demand.playback_controls import OnDemandPlaybackControls
+from fs42.tools.on_demand.progress import PlaybackHistory
 from fs42.core.controls import MPV_COMMANDS
 from fs42.tools.field_player.runtime_controls import RuntimeControlRouter
 from fs42.tools.guide.guide_tk import GuideCommands
@@ -1114,7 +1115,7 @@ class StationPlayer(object):
                 # self.mpv.vf = "lavfi=[]"
                 self._l.info('playing {0}'.format(file_path))
 
-                if not is_stream and offset_seconds is not None and offset_seconds > 0:
+                if (not is_stream or is_youtube) and offset_seconds is not None and offset_seconds > 0:
                     self.mpv.command(
                         'loadfile',
                         file_path,
@@ -1343,13 +1344,14 @@ class StationPlayer(object):
         :return:         (PlayerOutcome) normal completion or a command interrupting playback
         """
         from fs42.tools.on_demand import OnDemand
+        request = entry_id if isinstance(entry_id, dict) else {}
         try:
             youtube = isinstance(entry_id, dict) and entry_id.get('source') == 'youtube'
             if youtube:
                 from fs42.tools.on_demand.youtube import YouTubeLibrary
                 selection = YouTubeLibrary().get_selection(entry_id.get('channel_id', ''), entry_id.get('video_id', ''))
             else:
-                selection = OnDemand().get_selection(entry_id)
+                selection = OnDemand().get_selection(request.get('entry_id', entry_id))
         except (ValueError, RuntimeError) as error:
             self._l.warning('On Demand selection unavailable: {}'.format(error))
             return PlayerOutcome(PlayerState.SUCCESS)
@@ -1361,9 +1363,16 @@ class StationPlayer(object):
             if response.status != PlayerState.SUCCESS:
                 return response
 
+        history = PlaybackHistory()
+        media_key = history.media_key(selection['file_path'], youtube=youtube)
+        try:
+            offset = 0 if request.get('start_over', False) else history.position(media_key)
+        except Exception as error:
+            self._l.warning('Could not read On Demand progress: {}'.format(error))
+            offset = 0
         self._on_demand_controls = OnDemandPlaybackControls(
             self.mpv, self._send_playback_state, selection['title'],
-            selection.get('source_label') or network or 'On Demand')
+            selection.get('source_label') or network or 'On Demand', history=history, media_key=media_key)
         previous_ytdl_format = self.mpv.ytdl_format if youtube else None
         previous_video_sync = self.mpv.video_sync if youtube else None
         try:
@@ -1378,9 +1387,10 @@ class StationPlayer(object):
                 # Older Wayland presentation clocks jitter under display-resample;
                 # keep YouTube at its native cadence against the audio clock.
                 self.mpv.video_sync = 'audio'
-                response = self.play_and_wait(selection['file_path'], loop=False, title=selection['title'], is_stream=True)
+                response = self.play_and_wait(selection['file_path'], loop=False, title=selection['title'], is_stream=True,
+                                              offset_seconds=offset)
             else:
-                response = self.play_and_wait(selection['file_path'], loop=False, title=selection['title'])
+                response = self.play_and_wait(selection['file_path'], loop=False, title=selection['title'], offset_seconds=offset)
         except Exception as error:
             self._l.warning('On Demand playback failed: {}'.format(error))
             response = PlayerOutcome(PlayerState.FAILED)
@@ -1388,7 +1398,7 @@ class StationPlayer(object):
             controls = self._on_demand_controls
             self._on_demand_controls = None
             was_ready = controls.ready
-            controls.stop(menu_visible=getattr(self, 'guide_visible', False))
+            controls.stop(menu_visible=getattr(self, 'guide_visible', False), completed=response.status == PlayerState.SUCCESS)
             if was_ready:
                 self._publish_guide_visibility()
             if youtube:
@@ -1399,7 +1409,7 @@ class StationPlayer(object):
             self._open_guide_overlay(page='on_demand')
         return response
 
-    def play_and_wait(self, file_path, loop=True, title='Unknown', is_stream=False):
+    def play_and_wait(self, file_path, loop=True, title='Unknown', is_stream=False, offset_seconds=0):
         """
         Play a media file until interrupted, or until completion when looping is disabled
 
@@ -1412,7 +1422,7 @@ class StationPlayer(object):
         self.mpv.loop_playlist = 'inf' if loop else 'no'
         self.mpv.vf = ''
         self.mpv.af = ''
-        if not self.play_file(file_path, offset_seconds=0, media_type='video', title=title, is_stream=is_stream):
+        if not self.play_file(file_path, offset_seconds=offset_seconds, media_type='video', title=title, is_stream=is_stream):
             if self._pending_response:
                 response = self._pending_response
                 self._pending_response = None

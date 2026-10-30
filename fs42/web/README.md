@@ -449,6 +449,20 @@ API endpoints:
 
 ### On Demand playback overlay
 
+Selecting a video first opens its details screen, with the description above a
+bottom row of Return, Play / Resume, and Play from the beginning symbol buttons.
+Play / Resume is initially selected; its label updates as the viewer moves between
+actions. Return restores the previous listing and selection.
+
+Both local titles and YouTube uploads keep resume positions in the runtime database.
+History is capped at 500 videos across both sources. Saving progress refreshes a
+video's recency; the least recently watched entries are removed when the limit is exceeded.
+The player checkpoints every five seconds and when playback stops. Play / Resume
+starts at that position, or zero for an unwatched video. Play from the beginning
+starts at zero. Reaching the end clears the resume position. Failed starts and
+denied parental authorization preserve existing progress. Playback POST endpoints
+accept an optional `{"start_over": true}` body; omitted options default to resume.
+
 The `on_demand_controls` menu widget draws a transport bar over the existing native
 MPV video. It does not create another video player or move playback into the guide
 preview. It shows the title/source, elapsed time, total duration, green progress,

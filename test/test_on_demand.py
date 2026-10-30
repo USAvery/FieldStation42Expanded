@@ -29,6 +29,12 @@ from fs42.tools.field_player.station_player import update_status_socket
 from fs42.tools.web_channel.web_render import WebRenderApp
 
 
+@pytest.fixture(autouse=True)
+def progress_database(tmp_path, monkeypatch):
+    manager = SimpleNamespace(server_conf={'db_path': str(tmp_path / 'progress.db')})
+    monkeypatch.setattr('fs42.tools.on_demand.progress.StationManager', lambda: manager)
+
+
 @pytest.fixture
 def library(tmp_path, monkeypatch):
     """
@@ -209,7 +215,12 @@ def test_menu_api_queues_only_valid_catalog_ids_and_reports_disconnected_player(
         assert client.post('/on-demand/play/14').status_code == 404
         assert commands.empty()
         assert client.post('/on-demand/play/1').json() == {'success': True}
-        assert commands.get_nowait() == {'command': 'on_demand', 'entry_id': 1}
+        assert commands.get_nowait() == {'command': 'on_demand', 'entry_id':
+                                        {'source': 'catalog', 'entry_id': 1, 'start_over': False}}
+        assert client.post('/on-demand/play/1', json={'start_over': True}).status_code == 200
+        assert commands.get_nowait()['entry_id']['start_over'] is True
+        assert client.post('/on-demand/play/1', json={'start_over': 'false'}).status_code == 422
+        assert commands.empty()
     with TestClient(create_app(server_conf={})) as client:
         assert client.post('/on-demand/play/1').status_code == 503
 
@@ -328,7 +339,7 @@ def test_on_demand_respects_pin_interruptions_and_returns_to_menu_after_completi
                                                             'title': 'Movie'}
         assert player.play_on_demand(1).status == outcome
     if authorized:
-        player.play_and_wait.assert_called_once_with('movie.mp4', loop=False, title='Movie')
+        player.play_and_wait.assert_called_once_with('movie.mp4', loop=False, title='Movie', offset_seconds=0)
         player._open_guide_overlay.assert_called_once_with(page='on_demand')
     else:
         player.play_and_wait.assert_not_called()

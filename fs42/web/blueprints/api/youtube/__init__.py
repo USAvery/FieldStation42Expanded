@@ -3,6 +3,7 @@
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from fs42.tools.on_demand.youtube import YouTubeLibrary, YouTubeError
+from fs42.tools.on_demand.progress import PlaybackOptions
 
 router = APIRouter(prefix='/on-demand/youtube', tags=['youtube'])
 
@@ -47,11 +48,12 @@ def get_uploads(channel_id: str, page: int = Query(0, ge=0)):
 
 
 @router.post('/channels/{channel_id}/play/{video_id}')
-def play_upload(channel_id: str, video_id: str, request: Request):
+def play_upload(channel_id: str, video_id: str, request: Request, options: PlaybackOptions | None = None):
     """Queue a single upload only after validating its saved-channel membership."""
     queue = request.app.state.player_command_queue
     if queue is None:
         raise HTTPException(status_code=503, detail='The player is not connected. Start FieldStation42 and retry.')
     _call(YouTubeLibrary().get_selection, channel_id, video_id, missing=True)
-    queue.put({'command': 'on_demand', 'entry_id': {'source': 'youtube', 'channel_id': channel_id, 'video_id': video_id}})
+    queue.put({'command': 'on_demand', 'entry_id': {'source': 'youtube', 'channel_id': channel_id, 'video_id': video_id,
+                                                'start_over': (options or PlaybackOptions()).start_over}})
     return {'success': True}

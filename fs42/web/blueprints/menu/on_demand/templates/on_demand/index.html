@@ -22,11 +22,28 @@
                 <label for="od-query">Search titles</label>
                 <input id="od-query" type="search" maxlength="200" autocomplete="off">
             </div>
+            <article id="od-detail-description" aria-label="Video description" hidden>
+                <p id="od-full-description"></p>
+            </article>
             <div id="od-status" role="status" aria-live="polite"></div>
             <div id="od-options" aria-label="Choices"></div>
         </section>
         {% call include_widget('menu_bottom_panel') %}
             <nav id="od-navigation" aria-label="Menu navigation"></nav>
+            <div id="od-detail-controls" hidden>
+                <nav id="od-detail-actions" aria-label="Video actions">
+                    <button type="button" data-control="details.return" data-description="Return to the previous screen" aria-label="Return to the previous screen" title="Return to the previous screen">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3 1 10l8 7v-5h5a5 5 0 0 1 0 10c6 0 9-3 9-7s-3-8-9-8H9V3Z" fill="currentColor"/></svg>
+                    </button>
+                    <button type="button" data-control="details.resume" data-description="Play / Resume" aria-label="Play / Resume" title="Play / Resume">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 2 16 10L5 22V2Z" fill="currentColor"/></svg>
+                    </button>
+                    <button type="button" data-control="details.restart" data-description="Play from the beginning" aria-label="Play from the beginning" title="Play from the beginning">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3h4v18H3V3Zm18-1L8 12l13 10V2Z" fill="currentColor"/></svg>
+                    </button>
+                </nav>
+                <p id="od-detail-action-label" aria-live="polite">Play / Resume</p>
+            </div>
         {% endcall %}
     </main>
 {% endblock page_content %}

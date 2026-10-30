@@ -3,12 +3,15 @@
 import math
 import time
 import uuid
+from fs42.core import logger
+
+_logger = logger.setup(__name__)
 
 
 class OnDemandPlaybackControls:
     """Keep scrubbing scoped to the current video and leave MPV in full-screen playback."""
 
-    def __init__(self, mpv, send, title, source):
+    def __init__(self, mpv, send, title, source, history=None, media_key=None):
         self.mpv = mpv
         self.send = send
         self.title = title
@@ -20,6 +23,11 @@ class OnDemandPlaybackControls:
         self.holding_until = 0
         self.next_update = 0
         self.last_visible = None
+        self.history = history
+        self.media_key = media_key
+        self.next_checkpoint = 0
+        self.last_position = None
+        self.last_duration = 0
 
     def start(self):
         self.ready = True
@@ -56,6 +64,7 @@ class OnDemandPlaybackControls:
         now = time.monotonic()
         if not self.ready or (not force and now < self.next_update):
             return
+        self.checkpoint()
         self.next_update = now + 0.25
         if menu_visible:
             return
@@ -73,6 +82,26 @@ class OnDemandPlaybackControls:
                    'position': position if isinstance(position, (int, float)) and math.isfinite(position) else 0,
                    'duration': duration if isinstance(duration, (int, float)) and math.isfinite(duration) else 0})
 
-    def stop(self, menu_visible=False):
+    def checkpoint(self, force=False, completed=False):
+        """Persist at most once every five seconds, including while the bar is hidden."""
+        if not self.history or not self.ready or (not force and time.monotonic() < self.next_checkpoint):
+            return
+        self.next_checkpoint = time.monotonic() + 5
+        try:
+            if completed:
+                self.history.save(self.media_key, 0, 0, completed=True)
+                return
+            position, duration = self.mpv.time_pos, self.mpv.duration
+            if isinstance(position, (int, float)) and math.isfinite(position):
+                self.last_position = position
+            if isinstance(duration, (int, float)) and math.isfinite(duration):
+                self.last_duration = duration
+            if completed or self.last_position is not None:
+                self.history.save(self.media_key, self.last_position or 0, self.last_duration, completed=completed)
+        except Exception as error:
+            _logger.warning('Could not save On Demand progress: {}'.format(error))
+
+    def stop(self, menu_visible=False, completed=False):
+        self.checkpoint(force=True, completed=completed)
         self.send({'active': False, 'visible': False, 'menu_visible': menu_visible})
         self.ready = False

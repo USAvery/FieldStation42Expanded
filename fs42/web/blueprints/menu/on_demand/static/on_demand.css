@@ -279,3 +279,90 @@ h1 {
     order: 1;
     padding: 0 7.8%;
 }
+
+/* A title's description and actions have their own screen, below the shared preview. */
+.od-detail-view #od-content {
+    padding: 2.5% 7.2% 0;
+    border-top: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.od-detail-view #od-description,
+.od-detail-view #od-options {
+    display: none;
+}
+
+#od-detail-description {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#od-full-description {
+    margin: 0;
+    font-size: var(--od-font);
+    line-height: 1.28;
+    font-weight: 400;
+    display: -webkit-box;
+    -webkit-line-clamp: 6;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.od-detail-view > .menu-bottom-panel {
+    flex-basis: 22.4%;
+    height: 22.4%;
+    align-items: stretch;
+    justify-content: flex-start;
+}
+
+#od-detail-controls {
+    width: 100%;
+    padding: 1.1% 7.2% 0;
+}
+
+#od-detail-actions {
+    display: flex;
+    gap: calc(var(--od-height) * 0.013);
+}
+
+#od-detail-actions button {
+    width: calc(var(--od-height) * 0.097);
+    height: calc(var(--od-height) * 0.085);
+    padding: calc(var(--od-height) * 0.014);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: calc(var(--od-height) * 0.012);
+    background: linear-gradient(180deg, #254b7c, #19385f);
+    box-shadow: 0 min(0.25vw, 0.33vh) min(0.5vw, 0.67vh) #122b48;
+    color: white;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+#od-detail-actions button.is-selected,
+#od-detail-actions button:focus-visible {
+    background: linear-gradient(180deg, #fff7af, #f6ed89);
+    color: #111;
+    outline: none;
+}
+
+#od-detail-actions svg {
+    width: 100%;
+    height: 100%;
+    filter: drop-shadow(0 0.05em 0.04em #111);
+}
+
+#od-detail-actions .is-selected svg {
+    filter: none;
+}
+
+#od-detail-action-label {
+    margin: 1.5% 0 0;
+    font-size: var(--od-font);
+    line-height: 1.15;
+    font-weight: 400;
+}

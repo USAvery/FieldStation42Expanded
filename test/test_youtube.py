@@ -22,6 +22,7 @@ VIDEO = 'abcdefghijk'
 def youtube(tmp_path, monkeypatch):
     manager = SimpleNamespace(server_conf={'db_path': str(tmp_path / 'youtube.db')})
     monkeypatch.setattr('fs42.tools.on_demand.youtube.StationManager', lambda: manager)
+    monkeypatch.setattr('fs42.tools.on_demand.progress.StationManager', lambda: manager)
     extractor = Mock(side_effect=lambda url, **kwargs:
                      {'channel_id': CHANNEL, 'channel': 'Example Channel'} if kwargs.get('limit') == 1 else
                      {'entries': [{'id': VIDEO, 'title': 'Newest upload', 'duration': 120},
@@ -126,7 +127,9 @@ def test_youtube_api_management_playback_validation_and_offline_errors(youtube):
         assert client.get(base + '/' + CHANNEL + '/uploads').json()['total'] == 2
         assert client.post(base + '/' + CHANNEL + '/play/' + VIDEO).json() == {'success': True}
         assert commands.get_nowait() == {'command': 'on_demand', 'entry_id':
-            {'source': 'youtube', 'channel_id': CHANNEL, 'video_id': VIDEO}}
+            {'source': 'youtube', 'channel_id': CHANNEL, 'video_id': VIDEO, 'start_over': False}}
+        assert client.post(base + '/' + CHANNEL + '/play/' + VIDEO, json={'start_over': True}).status_code == 200
+        assert commands.get_nowait()['entry_id']['start_over'] is True
         assert client.post(base + '/' + CHANNEL + '/play/zzzzzzzzzzz').status_code == 404
         assert commands.empty()
         assert client.delete(base + '/' + CHANNEL).status_code == 200
@@ -161,7 +164,7 @@ def test_youtube_playback_uses_existing_player_once_and_returns_to_menu(youtube)
         result = player.play_on_demand({'source': 'youtube', 'channel_id': CHANNEL, 'video_id': VIDEO})
     assert result.status == PlayerState.SUCCESS
     player.play_and_wait.assert_called_once_with('https://www.youtube.com/watch?v=' + VIDEO,
-                                                loop=False, title='Newest upload', is_stream=True)
+                                                loop=False, title='Newest upload', is_stream=True, offset_seconds=0)
     player._parental_controls_required.assert_not_called()
     player._open_guide_overlay.assert_called_once_with(page='on_demand')
     assert player.mpv.ytdl_format == 'original-format'

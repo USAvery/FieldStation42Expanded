@@ -12,6 +12,7 @@ from fastapi import HTTPException
 
 from fs42.tools.on_demand import OnDemand
 from fs42.tools.on_demand._constants import CATEGORIES
+from fs42.tools.on_demand.progress import PlaybackOptions
 
 
 router = APIRouter(prefix='/on-demand', tags=['on-demand'])
@@ -49,7 +50,7 @@ def get_titles(category: str = 'all', query: str = Query('', max_length=200),
 
 
 @router.post('/play/{entry_id}')
-def play_title(entry_id: int, request: Request):
+def play_title(entry_id: int, request: Request, options: PlaybackOptions | None = None):
     """
     Validate a catalog selection and ask the existing player to play it once
     """
@@ -60,5 +61,6 @@ def play_title(entry_id: int, request: Request):
     queue = request.app.state.player_command_queue
     if queue is None:
         raise HTTPException(status_code=503, detail='The player is not connected. Start FieldStation42 and retry.')
-    queue.put({'command': 'on_demand', 'entry_id': entry_id})
+    selection = {'source': 'catalog', 'entry_id': entry_id, 'start_over': (options or PlaybackOptions()).start_over}
+    queue.put({'command': 'on_demand', 'entry_id': selection})
     return {'success': True}

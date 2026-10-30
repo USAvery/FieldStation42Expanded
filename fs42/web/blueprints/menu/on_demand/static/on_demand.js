@@ -21,12 +21,14 @@ app.menu.on_demand = (function() {
     let selected_index = 0;
     let request_id = 0;
     let playing = false;
+    let detail_bindings = null;
 
     /**
      * Return the selectable menu and navigation buttons in visual order
      */
     self.getButtons = function() {
-        return Array.from(document.querySelectorAll('#od-options button, #od-navigation button'));
+        return Array.from(document.querySelectorAll('#od-options button, #od-navigation button, #od-detail-actions button'))
+            .filter(button => !button.closest('[hidden]'));
     };
     /**
      * Highlight a choice and describe it in the upper information panel
@@ -44,6 +46,7 @@ app.menu.on_demand = (function() {
         const button = buttons[selected_index];
         button.focus({preventScroll: true});
         selection.textContent = button.dataset.description || view.title;
+        if (view.type === 'details') document.getElementById('od-detail-action-label').textContent = button.dataset.description;
         if (listing_items.has(button)) self.updateDetails(listing_items.get(button));
         if (view.type === 'titles' && button.parentElement === options) {
             const row = button.getBoundingClientRect();
@@ -114,7 +117,7 @@ app.menu.on_demand = (function() {
     /**
      * Ask the current player to play the selected catalog record exactly once
      */
-    self.playTitle = function(item) {
+    self.playTitle = function(item, start_over=false) {
         if (playing) {
             return;
         }
@@ -123,7 +126,7 @@ app.menu.on_demand = (function() {
         const endpoint = item.source === 'youtube'
             ? urlFor('api.youtube.play_upload', {channel_id:item.channel_id, video_id:item.id})
             : urlFor('api.on_demand.play_title', {entry_id:item.id});
-        apiPost(endpoint, {})
+        apiPost(endpoint, {start_over:start_over})
             .catch(function(error) {
                 status.textContent = error.detail || 'Playback could not start. Please try again.';
                 playing = false;
@@ -147,8 +150,8 @@ app.menu.on_demand = (function() {
     self.showDetails = function() {
         const item = view.item;
         self.updateDetails(item);
-        self.addChoice(options, 'Play', function() { self.playTitle(item); }, item.title);
-        self.selectChoice(0);
+        document.getElementById('od-full-description').textContent = item.description || 'No description available.';
+        self.selectChoice(1);
     };
     /**
      * Render a remote-operated search keyboard alongside a normal text field
@@ -239,10 +242,15 @@ app.menu.on_demand = (function() {
         options.scrollTop = 0;
         listing_items.clear();
         navigation.replaceChildren();
-        const listings = view.type === 'titles' || view.type === 'details';
+        const listings = view.type === 'titles';
+        const detail_view = view.type === 'details';
         document.getElementById('od-wrapper').classList.toggle('od-listings', listings);
-        document.getElementById('od-heading').hidden = listings;
+        document.getElementById('od-wrapper').classList.toggle('od-detail-view', detail_view);
+        document.getElementById('od-heading').hidden = listings || detail_view;
         document.getElementById('od-listings-heading').hidden = !listings;
+        document.getElementById('od-detail-description').hidden = !detail_view;
+        document.getElementById('od-detail-controls').hidden = !detail_view;
+        navigation.hidden = detail_view;
         document.getElementById('od-listings-title').textContent = view.title;
         options.classList.remove('od-keyboard');
         details.hidden = true;
@@ -362,6 +370,25 @@ app.menu.on_demand = (function() {
     self.onFs42GuideShow = function() {
         playing = false;
         status.textContent = '';
+        if (view.type === 'details') self.selectChoice(1);
+    };
+
+    self.detailActions = {
+        'details.return': () => self.goBack(false),
+        'details.resume': () => self.playTitle(view.item),
+        'details.restart': () => self.playTitle(view.item, true)
+    };
+
+    self.onDetailControl = function(action) {
+        if (view.type === 'details') return self.detailActions[action]?.();
+    };
+
+    self.onDetailFocus = function(event) {
+        const button = event.target.closest('button');
+        if (button) {
+            const index = self.getButtons().indexOf(button);
+            if (index >= 0 && index !== selected_index) self.selectChoice(index);
+        }
     };
 
     self.setup = function() {
@@ -372,6 +399,13 @@ app.menu.on_demand = (function() {
         search = document.getElementById('od-search');
         query_input = document.getElementById('od-query');
         details = document.getElementById('od-details');
+        const actions = document.getElementById('od-detail-actions');
+        detail_bindings?.destroy();
+        detail_bindings = new ControlBindings(actions, {onControl:self.onDetailControl});
+        actions.removeEventListener('pointermove', self.onDetailFocus);
+        actions.removeEventListener('focusin', self.onDetailFocus);
+        actions.addEventListener('pointermove', self.onDetailFocus);
+        actions.addEventListener('focusin', self.onDetailFocus);
         self.navigator = new SpatialNavigator({getItems:self.getButtons, getSelected:()=>selected_index, onSelect:self.selectChoice});
         document.addEventListener('keydown', self.onKeydown);
         window.addEventListener('fs42-guide-show', self.onFs42GuideShow);
