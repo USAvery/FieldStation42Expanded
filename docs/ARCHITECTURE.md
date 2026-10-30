@@ -182,6 +182,9 @@ button templates declare `data-control` and optional JSON `data-control-args`.
 `ControlBindings` delegates input for existing and dynamically added buttons,
 normalizes touch/mouse/keyboard activation, and releases listeners with `destroy()`.
 Page-local actions such as changing the number pad stay with their page.
+Bindings remove listeners explicitly, so phone input does not require abortable
+event listeners. Static URLs include content fingerprints, and page HTML revalidates
+on reload, preventing cached scripts from using an older button contract.
 `navigationAction()` resolves keyboard aliases, while `SpatialNavigator` follows
 rendered button geometry for grids, lists, and changing layouts.
 

@@ -112,7 +112,7 @@ def test_controls_are_rendered_before_javascript_runs(client, url, controls):
     html = client.get(url).text
     for control in controls:
         assert 'id="{}"'.format(control) in html
-    scripts = re.findall(r'<script src="([^"]+)"', html)
+    scripts = [asset.split('?', 1)[0] for asset in re.findall(r'<script src="([^"]+)"', html)]
     assert len(scripts) == len(set(scripts))
     assert scripts.count('/static/utils/general.js') == 1
     assert scripts.count('/static/utils/routing.js') == 1

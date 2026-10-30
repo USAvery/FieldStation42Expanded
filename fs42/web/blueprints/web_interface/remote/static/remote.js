@@ -365,7 +365,7 @@ app.web_interface.remote = (function () {
 
     /** Dispatch by action identity rather than button identity, with one error/feedback path. */
     self.handleRemoteCommand = async function(action, arguments_={}) {
-        const local = Object.hasOwn(self.localActions, action) ? self.localActions[action] : null;
+        const local = Object.prototype.hasOwnProperty.call(self.localActions, action) ? self.localActions[action] : null;
         if (local) return local(arguments_);
         const result = await sendControl(action, arguments_);
         const label = window.fs42Controls.actions[action].label;

@@ -6,6 +6,7 @@
 Check configurable registration, browser routes, widgets, and shared error responses.
 """
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -14,6 +15,7 @@ import pytest
 from fastapi import Request
 from fastapi.testclient import TestClient
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
 from fs42.core.controls import control_manifest
 from fs42.web.app import create_app
@@ -89,7 +91,7 @@ def test_route_map_tracks_prefixes_root_path_and_assets(app):
     config = {'root_path': '/station', 'url_prefixes': {'web_interface.catalog': '/console', 'api.summary': '/service'}}
     with TestClient(create_app(server_conf={'web': config})) as client:
         html = client.get('/station/console/static/catalog.html').text
-        assert 'src="/station/console/static/web_interface/catalog/catalog.js"' in html
+        assert 'src="/station/console/static/web_interface/catalog/catalog.js?v=' in html
         assert 'href="/station/console/static/catalog.html"' in html
         assert client.get('/station/console/static/web_interface/catalog/catalog.js').status_code == 200
         routes = client.get('/station/web/routes').json()
@@ -110,6 +112,31 @@ def test_standalone_remote_uses_the_same_configurable_registration(app):
         assert config['endpoints']['api.remote_control.handle_command'] == '/handset/api/command'
         assert client.get('/static/utils/routing.js').status_code == 200
         assert client.get('/static/catalog.html').status_code == 404
+
+
+def test_pages_version_scripts_and_revalidate_html(app, tmp_path):
+    """A newly deployed remote must not reuse JavaScript from its previous button contract."""
+    asset = tmp_path / 'remote.js'
+    asset.write_text('window.remoteVersion=1;')
+    app.mount('/test-assets', StaticFiles(directory=tmp_path), name='test-assets')
+
+    @app.get('/test-asset-url')
+    def asset_url(request: Request):
+        template = app.state.templates.env.from_string("{{ static_url('test-assets', path='remote.js') }}")
+        return HTMLResponse(template.render(request=request))
+
+    with TestClient(app) as client:
+        response = client.get('/remote')
+        assert response.headers['cache-control'] == 'no-cache'
+        scripts = re.findall(r'<script src="([^"]+)"', response.text)
+        assert scripts and all('?v=' in url for url in scripts)
+        assert all(client.get(url).status_code == 200 for url in scripts)
+        first = client.get('/test-asset-url').text
+        assert first == client.get('/test-asset-url').text
+        asset.write_text('window.remoteVersion=222;')
+        second = client.get('/test-asset-url').text
+        assert second != first
+        assert client.get(second).text == 'window.remoteVersion=222;'
 
 
 def test_widget_defaults_and_instances_escape_attributes_and_script_data(app):
@@ -641,7 +668,7 @@ def test_menu_top_panel_serves_the_tv_guide_image(app):
     logo = '/static/menu_widgets/menu_top_panel/images/tv_guide_logo.png'
     with TestClient(app) as client:
         for page in ('/static/customguide/customguide.html', '/on-demand'):
-            assert 'src="{}" alt="TV Guide"'.format(logo) in client.get(page).text
+            assert re.search(r'src="' + re.escape(logo) + r'\?v=[a-f0-9]+" alt="TV Guide"', client.get(page).text)
         response = client.get(logo)
         assert response.status_code == 200
         assert response.headers['content-type'] == 'image/png'
@@ -661,7 +688,7 @@ def test_web_remote_back_sends_menu_key_without_leaving_remote(app):
 const vm=require('vm'),assert=require('assert');
 const app={},location={href:'/remote'};
 let sent=[];
-vm.runInNewContext(__SOURCE__,{app,window:{app,location,fs42Controls:__MANIFEST__},sendControl:async(action,args)=>{sent.push([action,args]);return {}},setTimeout:()=>{}});
+vm.runInNewContext('Object.hasOwn=undefined;\n'+__SOURCE__,{app,window:{app,location,fs42Controls:__MANIFEST__},sendControl:async(action,args)=>{sent.push([action,args]);return {}},setTimeout:()=>{}});
 const remote=app.web_interface.remote;remote.showFeedback=()=>{};
 (async()=>{await remote.handleRemoteCommand('navigation.back');
     assert.deepEqual(sent,[['navigation.back',{}]]);assert.equal(location.href,'/remote');
@@ -770,10 +797,11 @@ const action=page==='remote'?'menu.guide':'channel.next';
 const button={disabled:false,dataset:{control:action},closest:selector=>selector==='[data-control]'?button:null};
 const display={textContent:''};
 const document={contains:()=>true,getElementById:()=>display,
-    addEventListener:(name,fn,options)=>listeners[name]={fn,options}};
+    addEventListener:(name,fn,options)=>listeners[name]={fn,options},
+    removeEventListener:(name,fn)=>{assert.equal(listeners[name].fn,fn);delete listeners[name]}};
 const window={app,addEventListener:()=>{}};
-vm.runInNewContext(__SOURCE__,{app,window,document,Date:{now:()=>clock},
-    setTimeout:()=>1,clearTimeout:()=>{},setInterval:()=>2,clearInterval:()=>{},AbortController,
+vm.runInNewContext('Object.hasOwn=undefined;\n'+__SOURCE__,{app,window,document,Date:{now:()=>clock},
+    setTimeout:()=>1,clearTimeout:()=>{},setInterval:()=>2,clearInterval:()=>{},
     reportError:error=>{throw error}});
 const remote=app.web_interface[page];
 if(page==='remote') {remote.startStatusPolling=()=>{};remote.handleRemoteCommand=name=>actions.push(name)}
@@ -790,7 +818,7 @@ const makeEvent=(target,detail=1)=>({target,detail,changedTouches:[{}],touches:[
     assert.deepEqual(actions,[action,action]);
     listeners.click.fn(makeEvent(button));assert.equal(actions.length,2);
     listeners.click.fn(makeEvent(button,0));assert.equal(actions.length,3);
-    const signal=listeners.click.options.signal;remote.cleanUp();assert(signal.aborted);
+    remote.cleanUp();assert.deepEqual(Object.keys(listeners),[]);
 })().catch(e=>{console.error(e);process.exitCode=1});
 """
     script = script.replace('__PAGE__', json.dumps(page)).replace('__SOURCE__', json.dumps(source))

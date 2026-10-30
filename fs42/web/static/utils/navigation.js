@@ -3,7 +3,7 @@
 /** Resolve physical keys using the same catalog that validates remote actions. */
 function navigationAction(event) {
     const keys = window.fs42Controls?.keys;
-    return keys && Object.hasOwn(keys, event.key) ? keys[event.key] : null;
+    return keys && Object.prototype.hasOwnProperty.call(keys, event.key) ? keys[event.key] : null;
 }
 
 /** Navigate rendered geometry rather than duplicating CSS column counts in JavaScript. */

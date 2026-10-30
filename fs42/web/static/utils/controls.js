@@ -12,21 +12,20 @@ class ControlBindings {
         this.root = root;
         this.onControl = onControl;
         this.onError = onError;
-        this.abort = new AbortController();
+        this.listeners = [];
         this.touches = new WeakMap();
         this.lastTap = 0;
-        const options = {signal:this.abort.signal};
-        root.addEventListener('click', event => {
+        this.listen('click', event => {
             const button = this.button(event);
             if (!button) return;
             const touched = this.touches.get(button);
             if (event.detail !== 0 && touched !== undefined && Date.now() - touched < 500) return;
             this.activate(button);
-        }, options);
-        root.addEventListener('touchstart', event => {
+        });
+        this.listen('touchstart', event => {
             if (this.button(event) && event.touches.length === 1) event.preventDefault();
-        }, {...options, passive:false});
-        root.addEventListener('touchend', event => {
+        }, {passive:false});
+        this.listen('touchend', event => {
             if (event.changedTouches.length !== 1 || event.touches.length) return;
             if (event.target.closest?.('input, select, textarea, a, [contenteditable="true"]')) return;
             const now = Date.now();
@@ -38,9 +37,9 @@ class ControlBindings {
             }
             else if (now - this.lastTap < 350 && event.cancelable) event.preventDefault();
             this.lastTap = now;
-        }, {...options, passive:false});
+        }, {passive:false});
         for (const type of ['dblclick', 'gesturestart', 'gesturechange']) {
-            root.addEventListener(type, event => event.preventDefault(), {...options, passive:false});
+            this.listen(type, event => event.preventDefault(), {passive:false});
         }
     }
 
@@ -57,5 +56,11 @@ class ControlBindings {
         catch (error) { this.onError(error); }
     }
 
-    destroy() { this.abort.abort(); }
+    listen(type, listener, options={}) {
+        // Explicit removal also works on phone browsers that lack abortable event listeners.
+        this.root.addEventListener(type, listener, options);
+        this.listeners.push(() => this.root.removeEventListener(type, listener, options));
+    }
+
+    destroy() { this.listeners.splice(0).forEach(remove => remove()); }
 }

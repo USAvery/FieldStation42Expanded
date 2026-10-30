@@ -17,7 +17,7 @@ app.web_interface.handheld_remote = (function () {
         'remote.submit': function() { return self.sendDirect(true); }
     };
     self.handleControl = async function(action, arguments_={}) {
-        if (Object.hasOwn(self.localActions, action)) return self.localActions[action](arguments_);
+        if (Object.prototype.hasOwnProperty.call(self.localActions, action)) return self.localActions[action](arguments_);
         const result = await sendControl(action, arguments_);
         if (result?.channel !== undefined) self.updateStatusDisplay(result);
         else self.updateStatus();

@@ -31,4 +31,4 @@ def render_page(request, module_name, **context):
                   heading=getattr(module, 'HEADING', module.TITLE))
     values.update(context)
     return request.app.state.templates.TemplateResponse(request=request, name=name + '/index.html',
-                                                        context=values)
+                                                        context=values, headers={'Cache-Control': 'no-cache'})

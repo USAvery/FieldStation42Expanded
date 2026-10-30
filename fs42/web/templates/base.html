@@ -10,22 +10,22 @@
     <link href="{{ sub_static(page_name, filename) }}" rel="stylesheet">
     {% endfor %}
     <script>window.fs42Routes = {{ browser_config(request)|tojson }};</script>
-    <script src="{{ request.url_for('static', path='utils/routing.js').path }}"></script>
-    <script src="{{ request.url_for('static', path='utils/errors.js').path }}"></script>
+    <script src="{{ static_url('static', path='utils/routing.js') }}"></script>
+    <script src="{{ static_url('static', path='utils/errors.js') }}"></script>
     <script>window.fs42Controls = {{ control_manifest(request.app.state.control_transport)|tojson }};</script>
-    <script src="{{ request.url_for('static', path='utils/controls.js').path }}"></script>
-    <script src="{{ request.url_for('static', path='utils/navigation.js').path }}"></script>
-    <script src="{{ request.url_for('static', path='utils/datetime.js').path }}"></script>
-    <script src="{{ request.url_for('static', path='utils/css.js').path }}"></script>
+    <script src="{{ static_url('static', path='utils/controls.js') }}"></script>
+    <script src="{{ static_url('static', path='utils/navigation.js') }}"></script>
+    <script src="{{ static_url('static', path='utils/datetime.js') }}"></script>
+    <script src="{{ static_url('static', path='utils/css.js') }}"></script>
     {% if shared_utils %}
-    <script src="{{ request.url_for('static', path='utils/general.js').path }}"></script>
+    <script src="{{ static_url('static', path='utils/general.js') }}"></script>
     {% endif %}
     {% for source in request.app.state.widget_sources %}
     {% if source.group == ('menu_widgets' if page_group == 'menu' else 'widgets') %}
     {% if source.css %}
-    <link href="{{ request.url_for(source.group + '.' + source.name + '.static', path=source.filename).path }}" rel="stylesheet">
+    <link href="{{ static_url(source.group + '.' + source.name + '.static', path=source.filename) }}" rel="stylesheet">
     {% else %}
-    <script src="{{ request.url_for(source.group + '.' + source.name + '.static', path=source.filename).path }}"></script>
+    <script src="{{ static_url(source.group + '.' + source.name + '.static', path=source.filename) }}"></script>
     {% endif %}
     {% endif %}
     {% endfor %}
