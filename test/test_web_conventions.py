@@ -15,6 +15,7 @@ from fastapi import Request
 from fastapi.testclient import TestClient
 from fastapi.responses import HTMLResponse
 
+from fs42.core.controls import control_manifest
 from fs42.web.app import create_app
 from fs42.web.remote_app import create_app as create_remote
 from fs42.web.core import settings
@@ -630,7 +631,7 @@ guide.selectCurrentChannel=async()=>{};
     await selectCurrentChannel();assert.equal(chosen,0);
 })().catch(e=>{console.error(e);process.exitCode=1});
 """
-    result = subprocess.run([node, '-'], input=script.replace('__SOURCE__', json.dumps(source)),
+    result = subprocess.run([node, '-'], input=script.replace('__SOURCE__', json.dumps(source)).replace('__MANIFEST__', json.dumps(control_manifest())),
                             capture_output=True, encoding='utf8', timeout=20)
     assert result.returncode == 0, result.stderr
 
@@ -650,8 +651,8 @@ def test_web_remote_back_sends_menu_key_without_leaving_remote(app):
     """Expose Back on the remote and send Escape through its existing menu-key transport."""
     with TestClient(app) as client:
         html = client.get('/remote').text
-        assert 'data-key="back" aria-label="Back"' in html
-        assert html.index('id="nav-pad"') < html.index('data-key="back"') < html.index('data-key="nav_left"')
+        assert 'data-control="navigation.back" aria-label="Back"' in html
+        assert html.index('id="nav-pad"') < html.index('data-control="navigation.back"') < html.index('data-control="navigation.left"')
     node = shutil.which('node')
     if not node:
         pytest.skip('Node is required for browser utility checks')
@@ -659,14 +660,14 @@ def test_web_remote_back_sends_menu_key_without_leaving_remote(app):
     script = r"""
 const vm=require('vm'),assert=require('assert');
 const app={},location={href:'/remote'};
-vm.runInNewContext(__SOURCE__,{app,window:{app,location},setTimeout:()=>{}});
-const remote=app.web_interface.remote;let sent=[];
-remote.sendPpvKey=async(...args)=>sent.push(args);
-(async()=>{await remote.handleRemoteCommand('back');
-    assert.deepEqual(sent,[['Escape','BACK']]);assert.equal(location.href,'/remote');
+let sent=[];
+vm.runInNewContext(__SOURCE__,{app,window:{app,location,fs42Controls:__MANIFEST__},sendControl:async(action,args)=>{sent.push([action,args]);return {}},setTimeout:()=>{}});
+const remote=app.web_interface.remote;remote.showFeedback=()=>{};
+(async()=>{await remote.handleRemoteCommand('navigation.back');
+    assert.deepEqual(sent,[['navigation.back',{}]]);assert.equal(location.href,'/remote');
 })().catch(e=>{console.error(e);process.exitCode=1});
 """
-    result = subprocess.run([node, '-'], input=script.replace('__SOURCE__', json.dumps(source)),
+    result = subprocess.run([node, '-'], input=script.replace('__SOURCE__', json.dumps(source)).replace('__MANIFEST__', json.dumps(control_manifest())),
                             capture_output=True, encoding='utf8', timeout=20)
     assert result.returncode == 0, result.stderr
 
@@ -676,25 +677,25 @@ def test_on_demand_back_closes_at_the_root():
     node = shutil.which('node')
     if not node:
         pytest.skip('Node is required for browser utility checks')
-    source = Path(_constants.WEB_DIR, 'blueprints/menu/on_demand/static/on_demand.js').read_text()
+    source = Path(_constants.WEB_DIR, 'static/utils/navigation.js').read_text() + '\n' + Path(_constants.WEB_DIR, 'blueprints/menu/on_demand/static/on_demand.js').read_text(encoding='utf8')
     script = r"""
 const vm=require('vm'),assert=require('assert');
 const app={},location={href:'/on-demand'},closes=[];
 vm.runInNewContext(__SOURCE__,{
-    app,window:{app,location},apiPost:async name=>closes.push(name),
+    app,window:{app,location,fs42Controls:__MANIFEST__},sendControl:async name=>closes.push(name),
     document:{body:{classList:{contains:()=>false}},querySelectorAll:()=>[]}
 });
 const menu=app.menu.on_demand;let renders=0;
 menu.renderView=()=>renders++;
-menu.goBack();assert.equal(renders,0);assert.deepEqual(closes,['api.player.close_menu']);
+menu.goBack();assert.equal(renders,0);assert.deepEqual(closes,['menu.close']);
 menu.openView({type:'titles',title:'TV Shows'});assert.equal(renders,1);
 menu.goBack();assert.equal(renders,2);assert.equal(closes.length,1);
 for(const key of ['Escape','Backspace','PageUp']) {
     menu.onKeydown({key,preventDefault(){}});assert.equal(location.href,'/on-demand');
 }
-assert.deepEqual(closes,['api.player.close_menu','api.player.close_menu','api.player.close_menu']);
+assert.deepEqual(closes,['menu.close','menu.close','menu.close']);
 """
-    result = subprocess.run([node, '-'], input=script.replace('__SOURCE__', json.dumps(source)),
+    result = subprocess.run([node, '-'], input=script.replace('__SOURCE__', json.dumps(source)).replace('__MANIFEST__', json.dumps(control_manifest())),
                             capture_output=True, encoding='utf8', timeout=20)
     assert result.returncode == 0, result.stderr
 
@@ -723,12 +724,12 @@ def test_custom_guide_back_closes_the_overlay():
     node = shutil.which('node')
     if not node:
         pytest.skip('Node is required for browser utility checks')
-    source = Path(_constants.WEB_DIR, 'blueprints/menu/customguide/static/customguide.js').read_text(encoding='utf8')
+    source = Path(_constants.WEB_DIR, 'static/utils/navigation.js').read_text() + '\n' + Path(_constants.WEB_DIR, 'blueprints/menu/customguide/static/customguide.js').read_text(encoding='utf8')
     script = r"""
 const vm=require('vm'),assert=require('assert');
 const app={},closes=[],location={search:''};
 vm.runInNewContext(__SOURCE__,{
-    app,window:{app,location},URLSearchParams,apiPost:async name=>closes.push(name)
+    app,window:{app,location,fs42Controls:__MANIFEST__},URLSearchParams,sendControl:async name=>closes.push(name)
 });
 (async()=>{
     const guide=app.menu.customguide;
@@ -739,10 +740,10 @@ vm.runInNewContext(__SOURCE__,{
         });
         assert(prevented && stopped);
     }
-    assert.deepEqual(closes,['api.player.close_menu','api.player.close_menu']);
+    assert.deepEqual(closes,['menu.close','menu.close']);
 })().catch(e=>{console.error(e);process.exitCode=1});
 """
-    result = subprocess.run([node, '-'], input=script.replace('__SOURCE__', json.dumps(source)),
+    result = subprocess.run([node, '-'], input=script.replace('__SOURCE__', json.dumps(source)).replace('__MANIFEST__', json.dumps(control_manifest())),
                             capture_output=True, encoding='utf8', timeout=20)
     assert result.returncode == 0, result.stderr
 
@@ -761,67 +762,35 @@ def test_mobile_remote_disables_double_tap_zoom_throughout_page(app, page):
     node = shutil.which('node')
     if not node:
         pytest.skip('Node is required for browser utility checks')
-    source = (root / ('remote.js' if page == 'remote' else 'handheld_remote.js')).read_text(encoding='utf8')
+    source = Path(_constants.WEB_DIR, 'static/utils/controls.js').read_text() + '\n' + (root / (page + '.js')).read_text(encoding='utf8')
     script = r"""
 const vm=require('vm'),assert=require('assert');
-const page=__PAGE__;
-const app={}, listeners={}, buttonListeners={}, actions=[];
-let clock=1000;
-const TestDate={now:()=>clock};
-const button={style:{},getAttribute:()=> 'guide',
-    addEventListener:(name,fn)=>buttonListeners[name]=fn,
-    closest:()=>button};
+const page=__PAGE__,listeners={},actions=[],app={};let clock=1000;
+const action=page==='remote'?'menu.guide':'channel.next';
+const button={disabled:false,dataset:{control:action},closest:selector=>selector==='[data-control]'?button:null};
 const display={textContent:''};
-const document={
-    getElementById:()=>display,
-    querySelectorAll:()=>[button],
-    addEventListener:(name,fn,options)=>listeners[name]={fn,options}
-};
+const document={contains:()=>true,getElementById:()=>display,
+    addEventListener:(name,fn,options)=>listeners[name]={fn,options}};
 const window={app,addEventListener:()=>{}};
-vm.runInNewContext(__SOURCE__,{app,window,document,Date:TestDate,
-    setTimeout:()=>{},setInterval:()=>{},WeakMap,URLSearchParams});
+vm.runInNewContext(__SOURCE__,{app,window,document,Date:{now:()=>clock},
+    setTimeout:()=>1,clearTimeout:()=>{},setInterval:()=>2,clearInterval:()=>{},AbortController,
+    reportError:error=>{throw error}});
 const remote=app.web_interface[page];
-if (page==='remote') {
-    remote.startStatusPolling=()=>{};
-    remote.handleRemoteCommand=key=>actions.push(key);
-} else {
-    remote.updateStatus=()=>{};
-}
+if(page==='remote') {remote.startStatusPolling=()=>{};remote.handleRemoteCommand=name=>actions.push(name)}
+else {remote.updateStatus=()=>{};remote.handleControl=name=>actions.push(name)}
+const makeEvent=(target,detail=1)=>({target,detail,changedTouches:[{}],touches:[],cancelable:true,prevented:false,
+    preventDefault(){this.prevented=true}});
 (async()=>{
     await remote.setup();
-    assert.equal(listeners.touchend.options.capture,true);
-    assert.equal(listeners.touchend.options.passive,false);
-    assert.equal(listeners.dblclick.options.capture,true);
-    const makeEvent=(target)=>({
-        target,currentTarget:target,changedTouches:[{}],touches:[],cancelable:true,
-        prevented:false,preventDefault(){this.prevented=true}
-    });
-    let first=makeEvent({closest:()=>null});
-    listeners.touchend.fn(first);
-    assert.equal(first.prevented,false);
-    clock+=200;
-    let second=makeEvent({closest:()=>null});
-    listeners.touchend.fn(second);
-    assert.equal(second.prevented,true);
-    let doubleClick=makeEvent(button);
-    listeners.dblclick.fn(doubleClick);
-    assert.equal(doubleClick.prevented,true);
-
+    listeners.touchend.fn(makeEvent({closest:()=>null}));clock+=200;
+    const blank=makeEvent({closest:()=>null});listeners.touchend.fn(blank);assert(blank.prevented);
     clock+=1000;
-    let firstButton=makeEvent(button);
-    listeners.touchend.fn(firstButton);
-    if(page==='remote') buttonListeners.touchend(firstButton);
-    clock+=200;
-    let secondButton=makeEvent(button);
-    listeners.touchend.fn(secondButton);
-    if(page==='remote') {
-        buttonListeners.touchend(secondButton);
-        assert.deepEqual(actions,['guide','guide']);
-        assert.equal(secondButton.prevented,true);
-    } else {
-        assert.equal(firstButton.prevented,false);
-        assert.equal(secondButton.prevented,false);
-    }
+    listeners.touchend.fn(makeEvent(button));clock+=200;
+    listeners.touchend.fn(makeEvent(button));
+    assert.deepEqual(actions,[action,action]);
+    listeners.click.fn(makeEvent(button));assert.equal(actions.length,2);
+    listeners.click.fn(makeEvent(button,0));assert.equal(actions.length,3);
+    const signal=listeners.click.options.signal;remote.cleanUp();assert(signal.aborted);
 })().catch(e=>{console.error(e);process.exitCode=1});
 """
     script = script.replace('__PAGE__', json.dumps(page)).replace('__SOURCE__', json.dumps(source))

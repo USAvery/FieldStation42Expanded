@@ -116,13 +116,13 @@ def test_dedicated_remote_opens_menu_without_starting_playback(library):
     commands = queue.Queue()
     with TestClient(create_app(command_queue=commands, server_conf={})) as client:
         assert client.post('/on-demand/open').json() == {'success': True}
-        assert 'data-key="on_demand"' in client.get('/static/remote.html').text
+        assert 'data-control="menu.on_demand"' in client.get('/static/remote.html').text
         assert 'guide-on-demand' not in client.get('/static/customguide/customguide.html').text
     player = FieldPlayer(no_server=True)
     player._command_queue = commands
     outcome = player._check_input()
     assert outcome.status == PlayerState.SUCCESS
-    assert outcome.payload == 'on_demand_menu'
+    assert outcome.payload['command'] == 'on_demand_menu'
     playback = StationPlayer.__new__(StationPlayer)
     playback._toggle_on_demand_overlay = Mock()
     assert playback.handle_runtime_command_outcome(outcome)
@@ -156,7 +156,7 @@ def test_standalone_remote_button_uses_the_existing_file_command_transport(tmp_p
     Open On Demand through the standalone remote without needing the main server's command queue
     """
     with TestClient(create_remote_app()) as client:
-        assert 'openOnDemand()' in client.get('/').text
+        assert 'data-control="menu.on_demand"' in client.get('/').text
         with patch('fs42.tools.field_player.remote_commands.write_command', return_value={}) as write:
             assert client.post('/api/command', json={'command': 'on_demand_menu', 'channel': -1}).status_code == 200
             write.assert_called_once_with({'command': 'on_demand_menu', 'channel': -1})
@@ -168,7 +168,7 @@ def test_standalone_remote_button_uses_the_existing_file_command_transport(tmp_p
         manager.return_value.server_conf = {'channel_socket': path}
         outcome = player._check_input()
     assert outcome.status == PlayerState.SUCCESS
-    assert outcome.payload == 'on_demand_menu'
+    assert outcome.payload['command'] == 'on_demand_menu'
 
 
 def test_catalog_without_metadata_table_still_recognizes_episode_filenames(library):
@@ -381,7 +381,7 @@ def test_close_menu_command_exits_the_visible_overlay_without_retuning():
     player._command_queue.put({'command': 'menu_close'})
     outcome = player._check_input()
     assert outcome.status == PlayerState.SUCCESS
-    assert outcome.payload == 'menu_close'
+    assert outcome.payload == {'command': 'menu_close'}
 
     playback = StationPlayer.__new__(StationPlayer)
     playback.guide_visible = True

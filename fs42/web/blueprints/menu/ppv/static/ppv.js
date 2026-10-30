@@ -239,40 +239,27 @@ app.menu.ppv = (function () {
          * Setup Keyboard Navigation
          */
         setupKeyboardNavigation() {
-            var _this3 = this;
-            document.addEventListener('keydown', function (e) {
-                switch (e.key) {
-                    case 'PageUp':
-                        e.preventDefault();
-                        _this3.nextSlide();
-                        // Reset slideshow timer
-                        _this3.startSlideshow();
-                        break;
-                    case 'PageDown':
-                        e.preventDefault();
-                        _this3.previousSlide();
-                        // Reset slideshow timer
-                        _this3.startSlideshow();
-                        break;
-                    case 'Enter':
-                        e.preventDefault();
-                        _this3.confirmSelection();
-                        break;
-                    case 'p':
-                    case 'P':
-                        // Pause/resume slideshow
-                        e.preventDefault();
-                        if (_this3.slideshowTimer) {
-                            _this3.stopSlideshow();
-                            console.log('Slideshow paused');
-                        }
-                        else {
-                            _this3.startSlideshow();
-                            console.log('Slideshow resumed');
-                        }
-                        break;
+            this.navigationAbort?.abort();
+            this.navigationAbort = new AbortController();
+            const advance = direction => {
+                direction > 0 ? this.nextSlide() : this.previousSlide();
+                this.startSlideshow();
+            };
+            const actions = {
+                'navigation.up': () => advance(1),
+                'navigation.page_previous': () => advance(1),
+                'navigation.down': () => advance(-1),
+                'navigation.page_next': () => advance(-1),
+                'navigation.select': () => this.confirmSelection()
+            };
+            document.addEventListener('keydown', event => {
+                const handler = actions[navigationAction(event)];
+                if (handler) {event.preventDefault(); handler()}
+                else if (event.key.toLowerCase() === 'p') {
+                    event.preventDefault();
+                    this.slideshowTimer ? this.stopSlideshow() : this.startSlideshow();
                 }
-            });
+            }, {signal:this.navigationAbort.signal});
         }
         /**
          * Confirm Selection

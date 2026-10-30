@@ -5,7 +5,7 @@
 <div class="remote-container">
         <div class="remote-header">
             <div class="remote-brand">FieldStation42</div>
-            <button class="remote-btn power-btn" data-key="power">STOP</button>
+            <button class="remote-btn power-btn" data-control="player.stop">STOP</button>
         </div>
 
         <div class="remote-screen" id="remote-display">
@@ -14,52 +14,52 @@
 
         <!-- Number Pad -->
         <div class="button-grid number-pad" id="number-pad">
-            <button class="remote-btn number-btn" data-key="1">1</button>
-            <button class="remote-btn number-btn" data-key="2">2</button>
-            <button class="remote-btn number-btn" data-key="3">3</button>
-            <button class="remote-btn number-btn" data-key="4">4</button>
-            <button class="remote-btn number-btn" data-key="5">5</button>
-            <button class="remote-btn number-btn" data-key="6">6</button>
-            <button class="remote-btn number-btn" data-key="7">7</button>
-            <button class="remote-btn number-btn" data-key="8">8</button>
-            <button class="remote-btn number-btn" data-key="9">9</button>
-            <button class="remote-btn number-btn pad-toggle-btn" data-key="pad_toggle">NAV</button>
-            <button class="remote-btn number-btn zero-btn" data-key="0">0</button>
+            <button class="remote-btn number-btn" data-control="remote.digit" data-control-args='{"digit":"1"}'>1</button>
+            <button class="remote-btn number-btn" data-control="remote.digit" data-control-args='{"digit":"2"}'>2</button>
+            <button class="remote-btn number-btn" data-control="remote.digit" data-control-args='{"digit":"3"}'>3</button>
+            <button class="remote-btn number-btn" data-control="remote.digit" data-control-args='{"digit":"4"}'>4</button>
+            <button class="remote-btn number-btn" data-control="remote.digit" data-control-args='{"digit":"5"}'>5</button>
+            <button class="remote-btn number-btn" data-control="remote.digit" data-control-args='{"digit":"6"}'>6</button>
+            <button class="remote-btn number-btn" data-control="remote.digit" data-control-args='{"digit":"7"}'>7</button>
+            <button class="remote-btn number-btn" data-control="remote.digit" data-control-args='{"digit":"8"}'>8</button>
+            <button class="remote-btn number-btn" data-control="remote.digit" data-control-args='{"digit":"9"}'>9</button>
+            <button class="remote-btn number-btn pad-toggle-btn" data-control="remote.pad_toggle">NAV</button>
+            <button class="remote-btn number-btn zero-btn" data-control="remote.digit" data-control-args='{"digit":"0"}'>0</button>
             <!-- Clears a half-typed channel number, or a half-typed parental PIN. -->
-            <button class="remote-btn number-btn clear-btn" data-key="clear">CLR</button>
+            <button class="remote-btn number-btn clear-btn" data-control="remote.clear">CLR</button>
         </div>
 
         <!-- Nav Pad - swaps in for the number pad to drive web channels (PPV). -->
         <div class="button-grid nav-pad" id="nav-pad" hidden>
-            <button class="remote-btn nav-btn nav-back icon-btn" data-key="back" aria-label="Back" title="Back">
+            <button class="remote-btn nav-btn nav-back icon-btn" data-control="navigation.back" aria-label="Back" title="Back">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 4-6 6 6 6M3 10h11a7 7 0 0 1 7 7v3" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
-            <button class="remote-btn nav-btn nav-up" data-key="nav_up">▲</button>
+            <button class="remote-btn nav-btn nav-up" data-control="navigation.up">▲</button>
             <!-- Horizontal keys are used by interactive web channels such as the custom guide. -->
-            <button class="remote-btn nav-btn nav-left" data-key="nav_left">◀</button>
-            <button class="remote-btn nav-btn nav-enter" data-key="nav_enter">OK</button>
-            <button class="remote-btn nav-btn nav-right" data-key="nav_right">▶</button>
-            <button class="remote-btn nav-btn pad-toggle-btn" data-key="pad_toggle">123</button>
-            <button class="remote-btn nav-btn nav-down" data-key="nav_down">▼</button>
+            <button class="remote-btn nav-btn nav-left" data-control="navigation.left">◀</button>
+            <button class="remote-btn nav-btn nav-enter" data-control="navigation.select">OK</button>
+            <button class="remote-btn nav-btn nav-right" data-control="navigation.right">▶</button>
+            <button class="remote-btn nav-btn pad-toggle-btn" data-control="remote.pad_toggle">123</button>
+            <button class="remote-btn nav-btn nav-down" data-control="navigation.down">▼</button>
         </div>
 
         <!-- Volume and Channel Controls in Vertical Columns -->
         <div class="button-grid volume-channel-section">
-            <button class="remote-btn volume-btn" data-key="vol_up">VOL +</button>
-            <button class="remote-btn channel-btn" data-key="ch_up">CH ▲</button>
-            <button class="remote-btn volume-btn" data-key="vol_down">VOL -</button>
-            <button class="remote-btn channel-btn" data-key="ch_down">CH ▼</button>
+            <button class="remote-btn volume-btn" data-control="volume.up">VOL +</button>
+            <button class="remote-btn channel-btn" data-control="channel.next">CH ▲</button>
+            <button class="remote-btn volume-btn" data-control="volume.down">VOL -</button>
+            <button class="remote-btn channel-btn" data-control="channel.previous">CH ▼</button>
         </div>
 
         <!-- Playback Controls -->
         <div class="button-grid playback-section" aria-label="Playback controls">
-            <button class="remote-btn icon-btn" data-key="rewind" aria-label="Rewind 10 seconds" title="Rewind 10 seconds">
+            <button class="remote-btn icon-btn" data-control="playback.seek_relative" data-control-args='{"seconds":-10}' aria-label="Rewind 10 seconds" title="Rewind 10 seconds">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 4 1 12l10 8V4Zm12 0-10 8 10 8V4Z" fill="currentColor"/></svg>
             </button>
-            <button class="remote-btn icon-btn" data-key="play_pause" aria-label="Play/pause" title="Play/pause">
+            <button class="remote-btn icon-btn" data-control="playback.play_pause" aria-label="Play/pause" title="Play/pause">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m2 3 12 9-12 9V3Zm14 0h3v18h-3V3Zm5 0h3v18h-3V3Z" fill="currentColor"/></svg>
             </button>
-            <button class="remote-btn icon-btn" data-key="fast_forward" aria-label="Fast forward 10 seconds" title="Fast forward 10 seconds">
+            <button class="remote-btn icon-btn" data-control="playback.seek_relative" data-control-args='{"seconds":10}' aria-label="Fast forward 10 seconds" title="Fast forward 10 seconds">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m1 4 10 8-10 8V4Zm12 0 10 8-10 8V4Z" fill="currentColor"/></svg>
             </button>
         </div>
@@ -74,15 +74,15 @@
 
         <!-- Function Buttons -->
         <div class="button-grid function-section">
-            <button class="remote-btn function-btn" data-key="guide">GUIDE</button>
-            <button class="remote-btn function-btn" data-key="on_demand">ON DEMAND</button>
-            <button class="remote-btn function-btn" data-key="exit">EXIT</button>
-            <button class="remote-btn function-btn" data-key="mute">MUTE</button>
-            <button class="remote-btn function-btn" data-key="info">INFO</button>
+            <button class="remote-btn function-btn" data-control="menu.guide">GUIDE</button>
+            <button class="remote-btn function-btn" data-control="menu.on_demand">ON DEMAND</button>
+            <button class="remote-btn function-btn" data-control="remote.exit">EXIT</button>
+            <button class="remote-btn function-btn" data-control="volume.mute">MUTE</button>
+            <button class="remote-btn function-btn" data-control="remote.info">INFO</button>
             <!-- Cycle MPV tracks without changing channel playback. The player shows
                  the selected audio/subtitle track on MPV's on-screen display. -->
-            <button class="remote-btn function-btn" data-key="subtitles">SUBS</button>
-            <button class="remote-btn function-btn" data-key="audio">AUDIO</button>
+            <button class="remote-btn function-btn" data-control="playback.subtitles">SUBS</button>
+            <button class="remote-btn function-btn" data-control="playback.audio">AUDIO</button>
         </div>
     </div>
 {% endblock page_content %}

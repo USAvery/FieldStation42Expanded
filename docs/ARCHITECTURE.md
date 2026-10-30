@@ -139,7 +139,8 @@ The page module declares `TITLE` and can declare `DESCRIPTION`, `MENU_TITLE`,
 `MENU_GROUP`, `MENU_ORDER`, and `HEADING`. Set `HIDE_FROM_MENU = True` for pages
 that do not belong in console navigation. `REQUIRES_PLAYER = True` hides a
 navigation item until a player queue is connected. `STANDALONE = True` selects
-the handheld-remote deployment. `STATIC_ALIASES` lists older asset prefixes.
+the handheld-remote deployment. `SHARED = True` includes an API router in both
+deployments. `STATIC_ALIASES` lists older asset prefixes.
 
 Give page routes names such as `catalog.index`, and render them with
 `bu.render_page(request, __name__)` from `core/blueprint.py`. Templates use
@@ -167,6 +168,30 @@ available at `/web/routes`. `urlFor('api.catalogs.get_catalog',
 {network_name: name})` builds an encoded URL from a registered endpoint. The shared
 API client uses the page's origin and these URLs, including configured deployment
 prefixes. Existing path-based callers remain supported by the same resolver.
+
+Control definitions live in `core/controls.py`. Each action has a stable name
+(`navigation.back`, `channel.tune`, `playback.seek_relative`), a label, a validated
+argument model, and a player transport adapter. Keyboard aliases are declared
+with the actions and exported alongside their public metadata to browser pages.
+`GET /controls` exposes the same manifest. The standalone remote advertises only
+actions supported by its file transport.
+
+Web remotes, menu pages, the playback widget, and the physical remote submit actions
+through `POST /controls/dispatch`. Browser callers use top-level `sendControl()`;
+button templates declare `data-control` and optional JSON `data-control-args`.
+`ControlBindings` delegates input for existing and dynamically added buttons,
+normalizes touch/mouse/keyboard activation, and releases listeners with `destroy()`.
+Page-local actions such as changing the number pad stay with their page.
+`navigationAction()` resolves keyboard aliases, while `SpatialNavigator` follows
+rendered button geometry for grids, lists, and changing layouts.
+
+`tools/field_player/runtime_controls.py` owns runtime dispatch and resolves focus
+when an action is executed: a visible menu, On Demand playback controls, or a web
+channel. The remote does not choose a target using stale status or guide URLs.
+The console sends commands through the player queue, including channel changes;
+the standalone remote retains its file adapter. Older endpoints and command strings
+remain compatibility adapters. New controls should extend the action catalog and
+the relevant runtime adapter, rather than add another endpoint and button switch.
 
 `core/errors.py` centralizes HTML error pages, JSON API errors, and traceback logging.
 API validation responses retain their structured `detail` list. Unexpected failures

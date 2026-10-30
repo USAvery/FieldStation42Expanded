@@ -12,6 +12,9 @@
     <script>window.fs42Routes = {{ browser_config(request)|tojson }};</script>
     <script src="{{ request.url_for('static', path='utils/routing.js').path }}"></script>
     <script src="{{ request.url_for('static', path='utils/errors.js').path }}"></script>
+    <script>window.fs42Controls = {{ control_manifest(request.app.state.control_transport)|tojson }};</script>
+    <script src="{{ request.url_for('static', path='utils/controls.js').path }}"></script>
+    <script src="{{ request.url_for('static', path='utils/navigation.js').path }}"></script>
     <script src="{{ request.url_for('static', path='utils/datetime.js').path }}"></script>
     <script src="{{ request.url_for('static', path='utils/css.js').path }}"></script>
     {% if shared_utils %}

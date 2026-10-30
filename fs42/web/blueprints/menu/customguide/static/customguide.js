@@ -494,7 +494,7 @@ app.menu.customguide = (function () {
         }
 
         try {
-            await apiGet('player/channels/' + encodeURIComponent(channel_number));
+            await sendControl('channel.tune', {channel:Number(channel_number)});
         }
         catch (e) {
             console.error('interactive guide tune failed', e);
@@ -504,75 +504,36 @@ app.menu.customguide = (function () {
     /**
      * Translate guide navigation keys into selection, time-window, and tuning actions
      */
+    self.navigationActions = {
+        'navigation.up': () => self.moveInteractiveVertical(-1),
+        'navigation.page_previous': () => self.moveInteractiveVertical(-1),
+        'navigation.down': () => self.moveInteractiveVertical(1),
+        'navigation.page_next': () => self.moveInteractiveVertical(1),
+        'navigation.left': () => self.moveInteractiveHorizontal(-1),
+        'navigation.right': () => self.moveInteractiveHorizontal(1),
+        'navigation.select': () => self.tuneInteractiveSelection(),
+        'navigation.back': () => sendControl('menu.close'),
+        'navigation.home': async function() {
+            interactive_slot_offset = 0;
+            await self.buildGrid();
+            const rows = self.getInteractiveRows();
+            const programs = self.getProgramsForRow(rows[interactive_row_index]);
+            interactive_program_index = self.findClosestProgramIndex(programs, Date.now());
+            self.applyInteractiveSelection();
+            self.showGuideToast('LIVE');
+        }
+    };
+
     self.handleInteractiveKeydown = async function(event) {
-        if (event.key === 'Escape' || event.key === 'Backspace') {
-            event.preventDefault();
-            event.stopPropagation();
-            try {
-                await apiPost('api.player.close_menu');
-            }
-            catch (error) {
-                console.error('Could not close guide:', error);
-            }
-            return;
-        }
-        if (interactive_key_busy) {
-            return;
-        }
-        let action = null;
-        if (event.key === 'ArrowUp' || event.key === 'PageUp') {
-            action = 'up';
-        }
-        else if (event.key === 'ArrowDown' || event.key === 'PageDown') {
-            action = 'down';
-        }
-        else if (event.key === 'ArrowLeft') {
-            action = 'left';
-        }
-        else if (event.key === 'ArrowRight') {
-            action = 'right';
-        }
-        else if (event.key === 'Enter') {
-            action = 'enter';
-        }
-        else if (event.key === 'Home') {
-            action = 'home';
-        }
-        if (!action) {
-            return;
-        }
+        const action = navigationAction(event);
+        const handler = self.navigationActions[action];
+        if (!handler || (interactive_key_busy && action !== 'navigation.back')) return;
         event.preventDefault();
         event.stopPropagation();
         interactive_key_busy = true;
-        try {
-            if (action === 'up') {
-                self.moveInteractiveVertical(-1);
-            }
-            else if (action === 'down') {
-                self.moveInteractiveVertical(1);
-            }
-            else if (action === 'left') {
-                await self.moveInteractiveHorizontal(-1);
-            }
-            else if (action === 'right') {
-                await self.moveInteractiveHorizontal(1);
-            }
-            else if (action === 'enter') {
-                await self.tuneInteractiveSelection();
-            }
-            else if (action === 'home') {
-                interactive_slot_offset = 0;
-                await self.buildGrid();
-                const rows = self.getInteractiveRows();
-                const programs = self.getProgramsForRow(rows[interactive_row_index]);
-                interactive_program_index = self.findClosestProgramIndex(programs, Date.now());
-                self.applyInteractiveSelection();
-                self.showGuideToast('LIVE');
-            }
-        }
-        finally {
-            interactive_key_busy = false;
-        }
+        try { await handler(); }
+        catch (error) { self.showGuideToast(errorMessage(error), true); }
+        finally { interactive_key_busy = false; }
     };
     /**
      * Enable keyboard and pointer selection and select an initial program

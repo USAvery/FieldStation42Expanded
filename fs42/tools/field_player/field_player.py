@@ -188,6 +188,8 @@ class FieldPlayer(object):
                 match command:
                     case 'exit':
                         return PlayerOutcome(PlayerState.EXIT_COMMAND)
+                    case 'direct' | 'up' | 'down':
+                        return PlayerOutcome(PlayerState.CHANNEL_CHANGE, json.dumps(q_message))
                     case 'reload_data':
                         LiquidManager().reload_schedules()
                     case 'guide':
@@ -195,7 +197,7 @@ class FieldPlayer(object):
                             # The guide is an overlay, not a channel change. Keeping this
                             # non-interrupting lets the currently tuned station continue
                             # playing underneath the guide preview.
-                            return PlayerOutcome(PlayerState.SUCCESS, 'guide_toggle')
+                            return PlayerOutcome(PlayerState.SUCCESS, q_message)
                         logging.getLogger('InputCheck').warning('Guide channel not configured')
                     case 'ticker':
                         message = q_message.get('message', None)
@@ -208,23 +210,9 @@ class FieldPlayer(object):
                         return PlayerOutcome(PlayerState.PLAY_FILE, file_path)
                     case 'on_demand':
                         return PlayerOutcome(PlayerState.ON_DEMAND, q_message.get('entry_id'))
-                    case 'on_demand_menu':
-                        return PlayerOutcome(PlayerState.SUCCESS, 'on_demand_menu')
-                    case 'menu_close':
-                        return PlayerOutcome(PlayerState.SUCCESS, 'menu_close')
-                    case 'web_key':
-                        key = q_message.get('key', '')
-                        return PlayerOutcome(PlayerState.SUCCESS, 'web_key:{}'.format(key))
-                    case 'mpv_command':
-                        action = q_message.get('action', '')
-                        return PlayerOutcome(PlayerState.SUCCESS, 'mpv_command:{}'.format(action))
-                    case 'on_demand_seek' | 'on_demand_controls':
+                    case ('on_demand_menu' | 'menu_close' | 'web_key' | 'mpv_command' | 'on_demand_seek'
+                          | 'on_demand_controls' | 'mpv_seek' | 'parental_digit' | 'parental_clear'):
                         return PlayerOutcome(PlayerState.SUCCESS, q_message)
-                    case 'parental_digit':
-                        digit = str(q_message.get('digit', ''))
-                        return PlayerOutcome(PlayerState.SUCCESS, 'parental_digit:{}'.format(digit))
-                    case 'parental_clear':
-                        return PlayerOutcome(PlayerState.SUCCESS, 'parental_clear')
         channel_socket = StationManager().server_conf['channel_socket']
         with open(channel_socket, 'r') as r_sock:
             contents = r_sock.read()
@@ -234,7 +222,7 @@ class FieldPlayer(object):
             try:
                 message = json.loads(contents)
                 if message.get('command') == 'on_demand_menu':
-                    return PlayerOutcome(PlayerState.SUCCESS, 'on_demand_menu')
+                    return PlayerOutcome(PlayerState.SUCCESS, message)
             except (ValueError, AttributeError):
                 pass
             return PlayerOutcome(PlayerState.CHANNEL_CHANGE, contents)

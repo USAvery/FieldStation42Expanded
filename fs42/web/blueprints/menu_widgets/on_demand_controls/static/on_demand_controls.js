@@ -59,9 +59,9 @@ app.menu_widgets.on_demand_controls = (function() {
             document.getElementById('od-transport-position').textContent = formatDuration(value);
         }
 
-        async request(endpoint, data) {
+        async request(action, data) {
             try {
-                await apiPost(endpoint, data);
+                await sendControl(action, data);
                 this.status.textContent = '';
                 return true;
             }
@@ -73,7 +73,7 @@ app.menu_widgets.on_demand_controls = (function() {
 
         interact(action='show') {
             if (!this.state.active) return;
-            return this.request('api.player.control_on_demand', {session_id:this.state.session_id, action:action});
+            return this.request('playback.controls', {session_id:this.state.session_id, action:action});
         }
 
         preview(position) {
@@ -92,59 +92,68 @@ app.menu_widgets.on_demand_controls = (function() {
             if (this.draft === null) return;
             const session_id = this.state.session_id;
             this.pending_until = Date.now() + 15000;
-            if (!await this.request('api.player.seek_on_demand', {session_id:session_id, position:this.draft})) {
+            if (!await this.request('playback.seek', {session_id:session_id, position:this.draft})) {
                 this.draft = null;
                 this.pending_until = 0;
                 this.renderPosition();
             }
         }
 
-        transport(action) {
+        transport(action, arguments_={}) {
             this.draft = null;
             this.pending_until = 0;
-            return this.request('api.player.' + action);
+            return this.request(action, arguments_);
         }
 
         onKeydown(event) {
             if (!this.state.active || this.state.menu_visible) return;
-            if (!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Enter','Escape','Backspace',' '].includes(event.key)) return;
+            const action = navigationAction(event);
+            if (!['navigation.left','navigation.right','navigation.up','navigation.down','navigation.select','navigation.back','playback.play_pause'].includes(action)) return;
             event.preventDefault();
             event.stopImmediatePropagation();
             const index = this.buttons.indexOf(document.activeElement);
-            if (event.key === 'Escape' || event.key === 'Backspace') {
+            if (action === 'navigation.back') {
                 this.draft = null;
                 this.interact('hide');
             }
-            else if (event.key === 'ArrowUp') this.buttons[1].focus({preventScroll:true});
-            else if (event.key === 'ArrowDown') this.timeline.focus({preventScroll:true});
-            else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-                const direction = event.key === 'ArrowLeft' ? -1 : 1;
+            else if (action === 'navigation.up') this.buttons[1].focus({preventScroll:true});
+            else if (action === 'navigation.down') this.timeline.focus({preventScroll:true});
+            else if (action === 'navigation.left' || action === 'navigation.right') {
+                const direction = action === 'navigation.left' ? -1 : 1;
                 if (index >= 0) this.buttons[Math.max(0, Math.min(index + direction, 2))].focus({preventScroll:true});
                 else this.preview((this.draft ?? this.state.position ?? 0) + direction * 10);
             }
+            else if (action === 'playback.play_pause') this.transport('playback.play_pause');
             else if (index >= 0) this.buttons[index].click();
-            else if (event.key === 'Enter' && this.draft !== null) this.commit();
-            else this.transport('mpv_play_pause');
+            else if (action === 'navigation.select' && this.draft !== null) this.commit();
+            else this.transport('playback.play_pause');
         }
 
         start() {
-            window.addEventListener('fs42-playback-state', this.onState);
-            document.addEventListener('keydown', this.onKeydown, true);
-            this.buttons[0].addEventListener('click', () => this.transport('mpv_rewind'));
-            this.buttons[1].addEventListener('click', () => this.transport('mpv_play_pause'));
-            this.buttons[2].addEventListener('click', () => this.transport('mpv_fast_forward'));
-            this.timeline.addEventListener('input', () => this.preview(Number(this.timeline.value)));
-            this.timeline.addEventListener('change', () => this.commit());
+            this.abort = new AbortController();
+            const options = {signal:this.abort.signal};
+            window.addEventListener('fs42-playback-state', this.onState, options);
+            document.addEventListener('keydown', this.onKeydown, {...options, capture:true});
+            this.bindings = new ControlBindings(this.root, {onControl:(action, arguments_)=>this.transport(action, arguments_),
+                onError:error=>{this.status.textContent=errorMessage(error)}});
+            this.timeline.addEventListener('input', () => this.preview(Number(this.timeline.value)), options);
+            this.timeline.addEventListener('change', () => this.commit(), options);
             this.root.addEventListener('pointermove', () => {
                 if (Date.now() - this.last_interaction > 2000) {
                     this.last_interaction = Date.now();
                     this.interact(this.draft === null ? 'show' : 'hold');
                 }
-            });
+            }, options);
+        }
+
+        destroy() {
+            this.bindings?.destroy();
+            this.abort?.abort();
         }
     }
 
     self.setup = function() {
+        self.instance?.destroy();
         self.instance = new PlaybackControls();
         self.instance.start();
     };

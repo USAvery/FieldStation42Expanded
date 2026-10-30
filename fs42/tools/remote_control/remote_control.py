@@ -18,6 +18,7 @@ import requests
 from evdev import ecodes
 from evdev import InputDevice
 
+from fs42.core.controls import ACTIONS, KEY_ACTIONS
 from fs42.tools.remote_control._constants import PRESS_SOCKET
 from fs42.tools.remote_control._constants import DEBOUNCE_TIME
 from fs42.tools.remote_control._constants import SETTINGS_FILE
@@ -105,30 +106,33 @@ def custom_guide_is_active():
     """
     Check the actual player status so normal remote mappings resume after tuning away
     """
-    guide_channel = get_custom_guide_channel()
-    if guide_channel is None:
-        return False
-
     try:
         response = requests.get('{}/player/status'.format(FS42_BASE_URL), timeout=1)
         if not response.ok:
             return False
         status = response.json()
-        return bool(status.get('guide_visible') or status.get('on_demand_playing') or status.get('channel_number') == guide_channel)
+        guide_channel = get_custom_guide_channel()
+        return bool(status.get('guide_visible') or status.get('on_demand_playing')
+                    or (guide_channel is not None and status.get('channel_number') == guide_channel))
     except Exception:
         return False
 
 
-def send_custom_guide_key(key_name):
-    """
-    Forward a navigation key into the active custom web guide
-    """
-    guide_channel = get_custom_guide_channel()
-    if guide_channel is None:
-        return False
+def post_control(action, arguments=None):
+    """Use the same validated actions as the web remote, independent of page URLs."""
+    arguments = arguments or {}
+    ACTIONS[action].message(arguments)
+    return requests.post(FS42_BASE_URL + '/controls/dispatch',
+                         json={'action': action, 'arguments': arguments}, timeout=2)
 
+
+def send_custom_guide_key(key_name):
+    """Forward a key by action; the player determines which menu owns focus."""
+    action = KEY_ACTIONS.get(key_name)
+    if action is None:
+        return False
     try:
-        response = requests.post('{0}/ppv/{1}/key/{2}'.format(FS42_BASE_URL, guide_channel, key_name), timeout=2)
+        response = post_control(action)
         if response.ok:
             _logger.info('Custom guide key sent: {}'.format(key_name))
             return True
@@ -208,7 +212,7 @@ def send_channel_change():
             try:
                 channel_number = int(channel_input)
                 _logger.info('Sending channel change to {}'.format(channel_number))
-                response = requests.get('{0}/player/channels/{1}'.format(FS42_BASE_URL, channel_number))
+                response = post_control('channel.tune', {'channel': channel_number})
                 if response.ok:
                     _logger.info('Changed to channel {}'.format(channel_number))
                     # Update channel tracking - only update last_channel if we know the current channel
@@ -244,7 +248,7 @@ def send_parental_digit_if_active(number):
         if not status.get('awaiting_pin'):
             return False
 
-        response = requests.post('{0}/player/parental/digit/{1}'.format(FS42_BASE_URL, number), timeout=2)
+        response = post_control('parental.digit', {'digit': str(number)})
 
         if response.ok:
             _logger.info('Parental controls PIN digit entered: {}'.format(number))
@@ -297,7 +301,7 @@ def show_guide_pressed():
 
     global current_channel, last_channel
     try:
-        response = requests.post('{}/player/channels/guide'.format(FS42_BASE_URL))
+        response = post_control('menu.guide')
         if response.ok:
             _logger.info('Guide displayed')
             if current_channel is not None:
@@ -316,7 +320,7 @@ def show_on_demand_pressed():
     if not should_allow_press('show_on_demand'):
         return
     try:
-        response = requests.post('{}/on-demand/open'.format(FS42_BASE_URL), timeout=2)
+        response = post_control('menu.on_demand')
         response.raise_for_status()
     except requests.RequestException as error:
         _logger.error('On Demand command failed: {}'.format(error))
@@ -330,9 +334,9 @@ def volume_up_pressed():
         return  # Debounced - ignore this press
 
     try:
-        response = requests.get('{}/player/volume/up'.format(FS42_BASE_URL))
+        response = post_control('volume.up')
         if response.ok:
-            data = response.json()
+            data = response.json()['result']
             _logger.info('Volume up: {}'.format(data.get('volume', 'success')))
         else:
             _logger.error('Volume up failed')
@@ -348,9 +352,9 @@ def volume_down_pressed():
         return  # Debounced - ignore this press
 
     try:
-        response = requests.get('{}/player/volume/down'.format(FS42_BASE_URL))
+        response = post_control('volume.down')
         if response.ok:
-            data = response.json()
+            data = response.json()['result']
             _logger.info('Volume down: {}'.format(data.get('volume', 'success')))
         else:
             _logger.error('Volume down failed')
@@ -366,9 +370,9 @@ def mute_pressed():
         return  # Debounced - ignore this press
 
     try:
-        response = requests.get('{}/player/volume/mute'.format(FS42_BASE_URL))
+        response = post_control('volume.mute')
         if response.ok:
-            data = response.json()
+            data = response.json()['result']
             _logger.info('Mute toggled: {}'.format(data.get('volume', 'success')))
         else:
             _logger.error('Mute toggle failed')
@@ -385,7 +389,7 @@ def channel_up_pressed():
 
     global current_channel, last_channel
     try:
-        response = requests.get('{}/player/channels/up'.format(FS42_BASE_URL))
+        response = post_control('channel.next')
         if response.ok:
             _logger.info('Channel up success')
             # Poll status to wait for channel change (max 1 second)
@@ -433,7 +437,7 @@ def channel_down_pressed():
 
     global current_channel, last_channel
     try:
-        response = requests.get('{}/player/channels/down'.format(FS42_BASE_URL))
+        response = post_control('channel.previous')
         if response.ok:
             _logger.info('Channel down success')
             # Poll status to wait for channel change (max 1 second)
@@ -483,7 +487,7 @@ def last_channel_pressed():
     if last_channel is not None:
         try:
             _logger.info('Switching to last channel: {}'.format(last_channel))
-            response = requests.get('{0}/player/channels/{1}'.format(FS42_BASE_URL, last_channel))
+            response = post_control('channel.tune', {'channel': last_channel})
             if response.ok:
                 _logger.info('Switched to last channel {}'.format(last_channel))
                 # Swap current and last channel
@@ -506,7 +510,7 @@ def end_pressed():
         return  # Debounced - ignore this press
 
     try:
-        response = requests.get('{}/player/commands/stop'.format(FS42_BASE_URL))
+        response = post_control('player.stop')
         if response.ok:
             _logger.info('Player stopped')
         else:
@@ -707,6 +711,31 @@ def get_key_name_from_code(key_code):
     return key_map.get(key_code)
 
 
+MPV_ACTIONS = {
+    'toggle_subtitles': ('playback.toggle_subtitles', {}),
+    'cycle_subtitles': ('playback.subtitles', {}),
+    'cycle_audio': ('playback.audio', {}),
+    'play_pause': ('playback.play_pause', {}),
+    'rewind': ('playback.seek_relative', {'seconds': -10}),
+    'fast_forward': ('playback.seek_relative', {'seconds': 10}),
+}
+
+# Device configuration selects behavior by name; adding a mapping does not require
+# another branch in the input loop. Lambdas resolve handlers when a key is pressed.
+KEY_HANDLERS = {
+    'show_guide': lambda: show_guide_pressed(),
+    'show_on_demand': lambda: show_on_demand_pressed(),
+    'volume_up': lambda: volume_up_pressed(),
+    'volume_down': lambda: volume_down_pressed(),
+    'mute': lambda: mute_pressed(),
+    'channel_up': lambda: channel_up_pressed(),
+    'channel_down': lambda: channel_down_pressed(),
+    'last_channel': lambda: last_channel_pressed(),
+    'power_stop': lambda: toggle_services() if USE_SYSTEMCTL else end_pressed(),
+    **{name: (lambda action=name: mpv_command_pressed(action)) for name in MPV_ACTIONS},
+}
+
+
 def handle_key_name(key_name):
     """
     Handle a key press by key name (common logic for evdev and test mode)
@@ -732,36 +761,12 @@ def handle_key_name(key_name):
     for function_name, mapped_key in KEY_MAPPINGS.items():
         if key_name == mapped_key:
             _logger.info('DEBUG: Matched function: {}'.format(function_name))
-            if function_name == 'show_guide':
-                show_guide_pressed()
-            elif function_name == 'show_on_demand':
-                show_on_demand_pressed()
-            elif function_name == 'volume_up':
-                volume_up_pressed()
-            elif function_name == 'volume_down':
-                volume_down_pressed()
-            elif function_name == 'mute':
-                mute_pressed()
-            elif function_name == 'toggle_subtitles':
-                mpv_command_pressed('toggle_subtitles')
-            elif function_name == 'cycle_subtitles':
-                mpv_command_pressed('cycle_subtitles')
-            elif function_name == 'cycle_audio':
-                mpv_command_pressed('cycle_audio')
-            elif function_name == 'channel_up':
-                channel_up_pressed()
-            elif function_name == 'channel_down':
-                channel_down_pressed()
-            elif function_name == 'last_channel':
-                last_channel_pressed()
-            elif function_name == 'power_stop':
-                if USE_SYSTEMCTL:
-                    toggle_services()
-                else:
-                    end_pressed()
-            elif function_name == 'exit':
+            if function_name == 'exit':
                 _logger.info('Exiting remote controller...')
                 return False
+            handler = KEY_HANDLERS.get(function_name)
+            if handler:
+                handler()
             break
 
     if key_name in exec_mappings:
@@ -974,10 +979,10 @@ def mpv_command_pressed(action):
     if not should_allow_press(action):
         return
 
-    endpoint = action.replace('_', '-')
+    control, arguments = MPV_ACTIONS[action]
 
     try:
-        response = requests.post('{0}/player/mpv/{1}'.format(FS42_BASE_URL, endpoint), timeout=2)
+        response = post_control(control, arguments)
 
         if response.ok:
             _logger.info('MPV command sent: {}'.format(action))

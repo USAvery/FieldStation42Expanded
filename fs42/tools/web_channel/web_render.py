@@ -8,6 +8,7 @@ controlling window visibility and shutdown.
 """
 import json
 import signal
+from fs42.core.controls import NAVIGATION_KEYS
 from queue import Empty
 
 from PySide6.QtCore import Qt
@@ -355,10 +356,7 @@ class WebRenderApp(QApplication):
             # Handle key injection commands
             if isinstance(msg, str) and msg.startswith('key:'):
                 key_name = msg[4:]
-                if key_name not in {
-                        'PageUp', 'PageDown', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter',
-                        'Escape', 'Backspace', 'Home'
-                }:
+                if key_name not in NAVIGATION_KEYS:
                     _logger.info("WebRender: rejected disallowed key '{}'".format(key_name))
                     return
                 js = "\n                document.dispatchEvent(new KeyboardEvent('keydown', {{\n                    key: '{0}',\n                    code: '{1}',\n                    bubbles: true,\n                    cancelable: true\n                }}));\n                ".format(

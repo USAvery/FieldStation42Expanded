@@ -6,13 +6,13 @@
   <div id="network-name">Loading...</div>
 
   <div class="row">
-    <button class="btn btn-flex" onclick="app.web_interface.handheld_remote.sendCommand('up')">
+    <button class="btn btn-flex" data-control="channel.next">
       <span class="arrow">▲</span>
       <span class="label">Channel Up</span>
     </button>
   </div>
   <div class="row">
-    <button class="btn btn-flex" onclick="app.web_interface.handheld_remote.sendCommand('down')">
+    <button class="btn btn-flex" data-control="channel.previous">
       <span class="arrow">▼</span>
       <span class="label">Channel Down</span>
     </button>
@@ -20,22 +20,22 @@
 
   <div id="entry">_</div>
   <div class="row">
-    <button class="btn btn-flex" onclick="app.web_interface.handheld_remote.openOnDemand()">On Demand</button>
+    <button class="btn btn-flex" data-control="menu.on_demand">On Demand</button>
   </div>
 
   <div class="keypad">
-    <button class="btn" onclick="app.web_interface.handheld_remote.appendDigit(1)">1</button>
-    <button class="btn" onclick="app.web_interface.handheld_remote.appendDigit(2)">2</button>
-    <button class="btn" onclick="app.web_interface.handheld_remote.appendDigit(3)">3</button>
-    <button class="btn" onclick="app.web_interface.handheld_remote.appendDigit(4)">4</button>
-    <button class="btn" onclick="app.web_interface.handheld_remote.appendDigit(5)">5</button>
-    <button class="btn" onclick="app.web_interface.handheld_remote.appendDigit(6)">6</button>
-    <button class="btn" onclick="app.web_interface.handheld_remote.appendDigit(7)">7</button>
-    <button class="btn" onclick="app.web_interface.handheld_remote.appendDigit(8)">8</button>
-    <button class="btn" onclick="app.web_interface.handheld_remote.appendDigit(9)">9</button>
-    <button class="btn" onclick="app.web_interface.handheld_remote.clearEntry()">C</button>
-    <button class="btn" onclick="app.web_interface.handheld_remote.appendDigit(0)">0</button>
-    <button class="btn" onclick="app.web_interface.handheld_remote.sendDirect(true)">Enter</button>
+    <button class="btn" data-control="remote.digit" data-control-args='{"digit":"1"}'>1</button>
+    <button class="btn" data-control="remote.digit" data-control-args='{"digit":"2"}'>2</button>
+    <button class="btn" data-control="remote.digit" data-control-args='{"digit":"3"}'>3</button>
+    <button class="btn" data-control="remote.digit" data-control-args='{"digit":"4"}'>4</button>
+    <button class="btn" data-control="remote.digit" data-control-args='{"digit":"5"}'>5</button>
+    <button class="btn" data-control="remote.digit" data-control-args='{"digit":"6"}'>6</button>
+    <button class="btn" data-control="remote.digit" data-control-args='{"digit":"7"}'>7</button>
+    <button class="btn" data-control="remote.digit" data-control-args='{"digit":"8"}'>8</button>
+    <button class="btn" data-control="remote.digit" data-control-args='{"digit":"9"}'>9</button>
+    <button class="btn" data-control="remote.clear">C</button>
+    <button class="btn" data-control="remote.digit" data-control-args='{"digit":"0"}'>0</button>
+    <button class="btn" data-control="remote.submit">Enter</button>
   </div>
 
   <div id="title"></div>

@@ -8,24 +8,20 @@ app.web_interface.handheld_remote = (function () {
     let self = {};
     let entry_buffer = '';
     let entry_timer = null;
-    self.sendCommand = function(cmd) {
-        fetchURL('api.remote_control.handle_command', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                command: cmd,
-                channel: -1
-            })
-        })
-            .then(function (response) {
-                return response.json();
-            })
-            .then(function (data) {
-                console.log('Sent:', cmd, data);
-                self.updateStatusDisplay(data.current);
-            }).catch(reportError);
+    let bindings = null;
+    let status_timer = null;
+
+    self.localActions = {
+        'remote.digit': function({digit}) { self.appendDigit(digit); },
+        'remote.clear': function() { self.clearEntry(); },
+        'remote.submit': function() { return self.sendDirect(true); }
+    };
+    self.handleControl = async function(action, arguments_={}) {
+        if (Object.hasOwn(self.localActions, action)) return self.localActions[action](arguments_);
+        const result = await sendControl(action, arguments_);
+        if (result?.channel !== undefined) self.updateStatusDisplay(result);
+        else self.updateStatus();
+        return result;
     };
     self.appendDigit = function(n) {
         if (entry_buffer.length >= 2) entry_buffer = '';
@@ -41,24 +37,13 @@ app.web_interface.handheld_remote = (function () {
         document.getElementById('entry').innerText = '_';
         if (entry_timer) clearTimeout(entry_timer);
     };
-    self.sendDirect = function(force) {
-        const chan = parseInt(entry_buffer, 10);
-        if (!isNaN(chan)) {
-            fetchURL('api.remote_control.handle_command', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    command: 'direct',
-                    channel: chan
-                })
-            }).then(function () {
-                console.log('Sent direct', chan);
-                self.updateStatus();
-            });
-        }
+    self.sendDirect = async function(force) {
+        const channel = parseInt(entry_buffer, 10);
         if (force || entry_buffer.length > 0) self.clearEntry();
+        if (!Number.isNaN(channel)) {
+            try { await self.handleControl('channel.tune', {channel:channel}); }
+            catch (error) { reportError(error); }
+        }
     };
     self.updateStatusDisplay = function(data) {
         if (data.channel != null && data.channel >= 1) {
@@ -77,39 +62,20 @@ app.web_interface.handheld_remote = (function () {
             })
             .then(self.updateStatusDisplay).catch(reportError);
     };
-    /** Prevent rapid taps on non-controls from zooming the handheld remote. */
-    let lastPageTapTime = 0;
-    self.preventDoubleTapZoom = function(event) {
-        if (!event.changedTouches || event.changedTouches.length !== 1 ||
-                (event.touches && event.touches.length)) {
-            return;
-        }
-        const now = Date.now();
-        // Handheld buttons use native click handlers, so never cancel their touchend.
-        const control = event.target.closest('button, a, input, select, textarea');
-        if (!control && now - lastPageTapTime < 350 && event.cancelable) {
-            event.preventDefault();
-        }
-        lastPageTapTime = now;
-    };
-    self.preventZoom = function(event) {
-        event.preventDefault();
+    self.cleanUp = function() {
+        bindings?.destroy();
+        bindings = null;
+        if (status_timer !== null) clearInterval(status_timer);
+        if (entry_timer !== null) clearTimeout(entry_timer);
+        status_timer = entry_timer = null;
     };
 
-    self.setup = function () {
-        setInterval(self.updateStatus, 2000);
+    self.setup = function() {
+        self.cleanUp();
+        bindings = new ControlBindings(document, {onControl:self.handleControl});
+        status_timer = setInterval(self.updateStatus, 2000);
         self.updateStatus();
-
-        /* Catch the entire page while preserving the native click handlers. */
-        document.addEventListener('touchend', self.preventDoubleTapZoom, {capture: true, passive: false});
-        document.addEventListener('dblclick', self.preventZoom, {capture: true});
-    };
-    /**
-     * Open the television's On Demand menu without changing the tuned channel
-     */
-    self.openOnDemand = function() {
-        self.clearEntry();
-        self.sendCommand('on_demand_menu');
+        window.addEventListener('beforeunload', self.cleanUp);
     };
     return self;
 })();

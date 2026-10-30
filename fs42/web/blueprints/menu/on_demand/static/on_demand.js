@@ -88,7 +88,7 @@ app.menu.on_demand = (function() {
             self.renderView();
         }
         else if (closeAtRoot) {
-            apiPost('api.player.close_menu').catch(function(error) {
+            sendControl('menu.close').catch(function(error) {
                 console.error('Could not close On Demand:', error);
             });
         }
@@ -326,52 +326,34 @@ app.menu.on_demand = (function() {
     /**
      * Move among category buttons, listing rows, search keys, and navigation
      */
+    self.navigationActions = {
+        'navigation.back': () => self.goBack(true),
+        'navigation.page_previous': () => self.goBack(false),
+        'navigation.page_next': () => self.navigator.selectLast(),
+        'navigation.select': () => self.getButtons()[selected_index]?.click(),
+        ...Object.fromEntries(['up','down','left','right'].map(direction =>
+            ['navigation.' + direction, () => self.navigator.move(direction)]))
+    };
+
     self.onKeydown = function(event) {
         if (document.body.classList.contains('on-demand-playing')) return;
+        const action = navigationAction(event);
         if (event.target === query_input) {
-            if (event.key === 'Enter') {
+            const searchActions = {
+                'navigation.select': self.submitSearch,
+                'navigation.back': self.goBack,
+                'navigation.down': () => self.selectChoice(0)
+            };
+            if (searchActions[action]) {
                 event.preventDefault();
-                self.submitSearch();
-            }
-            else if (event.key === 'Escape' || event.key === 'Backspace') {
-                event.preventDefault();
-                self.goBack();
-            }
-            else if (event.key === 'ArrowDown') {
-                event.preventDefault();
-                self.selectChoice(0);
+                searchActions[action]();
             }
             return;
         }
-        const keys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Enter', 'Escape', 'Backspace', 'PageUp', 'PageDown'];
-        if (!keys.includes(event.key)) {
-            return;
-        }
-        event.preventDefault();
-        const buttons = self.getButtons();
-        if (event.key === 'Escape' || event.key === 'Backspace' || event.key === 'PageUp') {
-            self.goBack(event.key !== 'PageUp');
-            return;
-        }
-        if (event.key === 'Enter') {
-            if (buttons[selected_index]) {
-                buttons[selected_index].click();
-            }
-            return;
-        }
-        const columns = view.type === 'search' ? 8 : (view.type === 'titles' || view.type === 'details' ? 1 : 2);
-        const count = options.childElementCount;
-        if (event.key === 'ArrowDown') {
-            self.selectChoice(selected_index < count ? Math.min(count, selected_index + columns) : selected_index);
-        }
-        else if (event.key === 'ArrowUp') {
-            self.selectChoice(selected_index >= count ? Math.max(0, count - columns) : selected_index - columns);
-        }
-        else if (event.key === 'PageDown') {
-            self.selectChoice(buttons.length - 1);
-        }
-        else {
-            self.selectChoice(selected_index + (event.key === 'ArrowRight' ? 1 : -1));
+        const handler = self.navigationActions[action];
+        if (handler) {
+            event.preventDefault();
+            handler();
         }
     };
 
@@ -390,6 +372,7 @@ app.menu.on_demand = (function() {
         search = document.getElementById('od-search');
         query_input = document.getElementById('od-query');
         details = document.getElementById('od-details');
+        self.navigator = new SpatialNavigator({getItems:self.getButtons, getSelected:()=>selected_index, onSelect:self.selectChoice});
         document.addEventListener('keydown', self.onKeydown);
         window.addEventListener('fs42-guide-show', self.onFs42GuideShow);
         self.loadMenu();

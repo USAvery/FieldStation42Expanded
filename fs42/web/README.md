@@ -466,3 +466,27 @@ most four times per second. Hidden controls do not poll timestamps or repaint.
 Timeline requests carry a per-video session ID, and the player ignores stale
 sessions and clamps seeks to the video's duration. Controls and the playback
 session are cleared when the video ends or the channel changes.
+
+### Shared controls
+
+The web remote, physical remote, menus, and playback overlay use the shared action
+catalog in `fs42/core/controls.py`. `GET /controls` lists the current deployment's
+actions and argument schemas; `POST /controls/dispatch` validates and dispatches
+an action:
+
+```json
+{"action": "playback.seek_relative", "arguments": {"seconds": -10}}
+```
+
+Browser code calls `sendControl('playback.seek_relative', {seconds: -10})`.
+Buttons declare their behavior as `data-control="playback.seek_relative"` and
+`data-control-args='{"seconds":-10}'`. The shared `ControlBindings` utility handles
+touch, mouse, and keyboard activation, including buttons added after setup.
+Destroy the binding before setting it up again. Page-local display behavior stays
+in the page's action handlers.
+
+Keyboard mappings come from the same catalog through `navigationAction(event)`.
+On Demand navigation follows the actual button positions through `SpatialNavigator`,
+so grid column counts are not duplicated in JavaScript. The player resolves which
+menu or playback controls own focus. Existing API endpoints remain available for
+older integrations, and the standalone handheld remote keeps its file transport.

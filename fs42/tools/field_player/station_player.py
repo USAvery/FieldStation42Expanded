@@ -28,6 +28,8 @@ from python_mpv_jsonipc import MPV
 from fs42.tools.catalog import autobump_agent
 from fs42.tools.on_demand._constants import YOUTUBE_FORMAT
 from fs42.tools.on_demand.playback_controls import OnDemandPlaybackControls
+from fs42.core.controls import MPV_COMMANDS
+from fs42.tools.field_player.runtime_controls import RuntimeControlRouter
 from fs42.tools.guide.guide_tk import GuideCommands
 from fs42.tools.field_player._constants import PlayerState
 from fs42.tools.guide.guide_tk import guide_channel_runner
@@ -146,14 +148,7 @@ class StationPlayer(object):
     """
     Play timed station plans and coordinate MPV, guide windows, overlays, and runtime input
     """
-    MPV_RUNTIME_COMMANDS = {
-        'toggle_subtitles': ('cycle', 'sub-visibility'),
-        'cycle_subtitles': ('cycle', 'sub'),
-        'cycle_audio': ('cycle', 'audio'),
-        'play_pause': ('cycle', 'pause'),
-        'rewind': ('seek', -10, 'relative+exact'),
-        'fast_forward': ('seek', 10, 'relative+exact'),
-    }
+    MPV_RUNTIME_COMMANDS = MPV_COMMANDS
 
     scramble_effects = {
         'horizontal_line':
@@ -454,65 +449,11 @@ class StationPlayer(object):
             return False
 
     def handle_runtime_command_outcome(self, response):
-        """
-        Handle non-interrupting player commands and continue playback
-        """
-        if not response or response.status != PlayerState.SUCCESS:
-            return False
-        controls = getattr(self, '_on_demand_controls', None)
-        if isinstance(response.payload, dict) and response.payload.get('command') == 'on_demand_seek':
-            if controls:
-                try:
-                    controls.seek(response.payload.get('session_id'), response.payload.get('position'))
-                except Exception as error:
-                    self._l.warning('Could not seek On Demand playback: {}'.format(error))
-            return True
-        if isinstance(response.payload, dict) and response.payload.get('command') == 'on_demand_controls':
-            if controls and response.payload.get('session_id') == controls.session_id:
-                if response.payload.get('action') == 'hide':
-                    controls.hide()
-                else:
-                    controls.interact(holding=response.payload.get('action') == 'hold')
-                    self._tick_on_demand_controls(force=True)
-            return True
-        if not isinstance(response.payload, str):
-            return False
-
-        if response.payload.startswith('mpv_command:'):
-            action = response.payload.split(':', 1)[1]
-            self.mpv_runtime_command(action)
-            return True
-
-        if response.payload == 'guide_toggle':
-            self._toggle_guide_overlay()
-            return True
-
-        if response.payload == 'on_demand_menu':
-            self._toggle_on_demand_overlay()
-            return True
-
-        if response.payload == 'menu_close':
-            if self.guide_visible:
-                self._close_guide_overlay()
-            return True
-
-        if response.payload.startswith('web_key:'):
-            key_name = response.payload.split(':', 1)[1]
-            if controls and not self.guide_visible:
-                if key_name in ('Escape', 'Backspace'):
-                    controls.hide()
-                else:
-                    controls.interact()
-                    self._tick_on_demand_controls(force=True)
-                    key_name = {'PageUp': 'ArrowUp', 'PageDown': 'ArrowDown'}.get(key_name, key_name)
-                    if self.guide_queue:
-                        self.guide_queue.put('key:{}'.format(key_name))
-                return True
-            if self.guide_visible and self.guide_process and self.guide_process.is_alive() and self.guide_queue:
-                self.guide_queue.put('key:{}'.format(key_name))
-                return True
-
-        return False
+        """Route runtime controls without coupling playback loops to their input protocol."""
+        router = getattr(self, '_runtime_controls', None)
+        if router is None:
+            router = self._runtime_controls = RuntimeControlRouter(self)
+        return router.dispatch(response)
 
     def _guide_overlay_config(self):
         """
@@ -869,11 +810,9 @@ class StationPlayer(object):
                 if response.status != PlayerState.SUCCESS:
                     return response
 
-                if not isinstance(response.payload, str):
-                    continue
-
-                if response.payload.startswith('parental_digit:'):
-                    digit = response.payload.split(':', 1)[1]
+                command = RuntimeControlRouter.decode(response.payload)
+                if command.get('command') == 'parental_digit':
+                    digit = str(command.get('digit', ''))
                     if not digit.isdigit() or len(digit) != 1:
                         continue
 
@@ -904,7 +843,7 @@ class StationPlayer(object):
                             pin_digits_entered=0,
                         )
 
-                elif response.payload == 'parental_clear':
+                elif command.get('command') == 'parental_clear':
                     entered = ''
                     self._update_parental_controls_overlay(0, False)
                     update_status_socket(
@@ -1806,13 +1745,7 @@ class StationPlayer(object):
                 # Check if this is a web_key command - forward to web process
                 if self.handle_runtime_command_outcome(response):
                     continue
-                if response.payload and isinstance(response.payload,
-                                                   str) and response.payload.startswith('web_key:'):
-                    key_name = response.payload[8:]
-                    if self.web_queue:
-                        self.web_queue.put('key:{}'.format(key_name))
-                        self._l.info("Forwarded key '{}' to web process".format(key_name))
-                elif is_non_interrupting(response):
+                if is_non_interrupting(response):
                     self._l.debug('Ignoring non-interrupting command on web channel: {}'.format(response.payload))
                 else:
                     self._l.info('Sending the web channel shutdown command')

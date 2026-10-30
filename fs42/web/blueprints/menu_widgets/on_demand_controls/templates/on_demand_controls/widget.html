@@ -9,15 +9,15 @@
         <span id="od-transport-duration">0:00</span>
     </div>
     <div class="od-transport-bubble">
-        <button id="od-transport-rewind" type="button" aria-label="Rewind 10 seconds" title="Rewind 10 seconds">
+        <button id="od-transport-rewind" data-control="playback.seek_relative" data-control-args='{"seconds":-10}' type="button" aria-label="Rewind 10 seconds" title="Rewind 10 seconds">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 4 1 12l10 8V4Zm12 0-10 8 10 8V4Z" fill="currentColor"/></svg>
         </button>
         <span id="od-transport-position">0:00</span>
-        <button id="od-transport-toggle" type="button" aria-label="Play/pause" title="Play/pause">
+        <button id="od-transport-toggle" data-control="playback.play_pause" type="button" aria-label="Play/pause" title="Play/pause">
             <svg class="od-icon-play" viewBox="0 0 24 24" aria-hidden="true"><path d="m4 2 17 10L4 22V2Z" fill="currentColor"/></svg>
             <svg class="od-icon-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 2h5v20H5V2Zm9 0h5v20h-5V2Z" fill="currentColor"/></svg>
         </button>
-        <button id="od-transport-forward" type="button" aria-label="Fast forward 10 seconds" title="Fast forward 10 seconds">
+        <button id="od-transport-forward" data-control="playback.seek_relative" data-control-args='{"seconds":10}' type="button" aria-label="Fast forward 10 seconds" title="Fast forward 10 seconds">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m1 4 10 8-10 8V4Zm12 0 10 8-10 8V4Z" fill="currentColor"/></svg>
         </button>
     </div>

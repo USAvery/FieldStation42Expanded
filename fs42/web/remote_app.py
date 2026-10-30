@@ -22,6 +22,7 @@ def create_app(server_conf=None):
     app = FastAPI()
     conf = server_conf or {}
     setup.configure(app, conf)
+    app.state.control_transport = 'file'
     config = app.state.web_settings
     for module in _pages.get_pages(groups=('api',), standalone=True, config=config):
         routes.register_router(app, module)

@@ -31,7 +31,7 @@ def get_pages(groups=('web_interface', 'menu'), standalone=False, config=None):
             if not isinstance(getattr(module, 'router', None), APIRouter):
                 discover(module)
                 continue
-            if getattr(module, 'STANDALONE', False) != standalone:
+            if not getattr(module, 'SHARED', False) and getattr(module, 'STANDALONE', False) != standalone:
                 continue
             pages.append(module)
     for group in groups:

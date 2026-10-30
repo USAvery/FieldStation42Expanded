@@ -71,6 +71,7 @@ def configure(app, conf):
     """
     Configure shared routing, settings, and errors for either web application
     """
+    app.state.control_transport = 'queue'
     routes.initialize(app, settings.load(conf))
     errors.setup(app)
 
