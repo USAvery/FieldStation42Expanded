@@ -326,8 +326,7 @@ app.menu.on_demand = (function() {
                 status.textContent = sources.length ? '' : 'Add YouTube channels or playlists from the web console.';
                 const page = view.page || 0;
                 sources.slice(page * 10, page * 10 + 10).forEach(function(source) {
-                    const label = (source.type === 'playlist' ? 'Playlist · ' : 'Channel · ') + source.title;
-                    self.addChoice(options, label, function() {
+                    self.addChoice(options, source.title, function() {
                         const next = {type: 'titles', title: source.title, page: 0};
                         if (source.type === 'playlist') {
                             next.youtube_playlist = source.id;
