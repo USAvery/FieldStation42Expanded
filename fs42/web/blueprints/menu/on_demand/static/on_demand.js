@@ -123,9 +123,15 @@ app.menu.on_demand = (function() {
         }
         playing = true;
         status.textContent = 'Starting ' + item.title + '…';
-        const endpoint = item.source === 'youtube'
-            ? urlFor('api.youtube.play_upload', {channel_id:item.channel_id, video_id:item.id})
-            : urlFor('api.on_demand.play_title', {entry_id:item.id});
+        let endpoint = null;
+        if (item.source === 'youtube') {
+            endpoint = item.playlist_id
+                ? urlFor('api.youtube.play_playlist_video', {playlist_id:item.playlist_id, video_id:item.id})
+                : urlFor('api.youtube.play_upload', {channel_id:item.channel_id, video_id:item.id});
+        }
+        else {
+            endpoint = urlFor('api.on_demand.play_title', {entry_id:item.id});
+        }
         apiPost(endpoint, {start_over:start_over})
             .catch(function(error) {
                 status.textContent = error.detail || 'Playback could not start. Please try again.';
@@ -204,9 +210,13 @@ app.menu.on_demand = (function() {
         if (view.channel) {
             params.set('channel', view.channel);
         }
-        const endpoint = view.youtube_channel
-            ? urlFor('api.youtube.get_uploads', {channel_id:view.youtube_channel, page:view.page || 0})
-            : urlFor('api.on_demand.get_titles') + '?' + params.toString();
+        let endpoint = urlFor('api.on_demand.get_titles') + '?' + params.toString();
+        if (view.youtube_channel) {
+            endpoint = urlFor('api.youtube.get_uploads', {channel_id:view.youtube_channel, page:view.page || 0});
+        }
+        else if (view.youtube_playlist) {
+            endpoint = urlFor('api.youtube.get_playlist_videos', {playlist_id:view.youtube_playlist, page:view.page || 0});
+        }
         apiGet(endpoint)
             .then(function(result) {
                 if (token !== request_id) {
@@ -268,7 +278,7 @@ app.menu.on_demand = (function() {
             self.selectChoice(0);
         }
         else if (view.type === 'youtube') {
-            self.showYouTubeChannels(token);
+            self.showYouTubeSources(token);
         }
         else if (view.type === 'channels') {
             const page = view.page || 0;
@@ -301,25 +311,50 @@ app.menu.on_demand = (function() {
     /**
      * Load menu choices once and retain an explicit retry if the server is unavailable
      */
-    self.showYouTubeChannels = function(token) {
-        status.textContent = 'Loading YouTube channels…';
-        apiGet('api.youtube.get_channels').then(function(result) {
-            if (token !== request_id) return;
-            status.textContent = result.channels.length ? '' : 'Add YouTube channels from the web console to see them here.';
-            const page = view.page || 0;
-            result.channels.slice(page * 10, page * 10 + 10).forEach(function(channel) {
-                self.addChoice(options, channel.title, function() {
-                    self.openView({type:'titles', title:channel.title, youtube_channel:channel.id, page:0});
+    self.showYouTubeSources = function(token) {
+        status.textContent = 'Loading YouTube…';
+        Promise.all([apiGet('api.youtube.get_channels'), apiGet('api.youtube.get_playlists')])
+            .then(function(results) {
+                if (token !== request_id) {
+                    return;
+                }
+                const sources = results[0].channels.map(function(channel) {
+                    return {type: 'channel', id: channel.id, title: channel.title};
+                }).concat(results[1].playlists.map(function(playlist) {
+                    return {type: 'playlist', id: playlist.id, title: playlist.title};
+                }));
+                status.textContent = sources.length ? '' : 'Add YouTube channels or playlists from the web console.';
+                const page = view.page || 0;
+                sources.slice(page * 10, page * 10 + 10).forEach(function(source) {
+                    const label = (source.type === 'playlist' ? 'Playlist · ' : 'Channel · ') + source.title;
+                    self.addChoice(options, label, function() {
+                        const next = {type: 'titles', title: source.title, page: 0};
+                        if (source.type === 'playlist') {
+                            next.youtube_playlist = source.id;
+                        }
+                        else {
+                            next.youtube_channel = source.id;
+                        }
+                        self.openView(next);
+                    });
                 });
+                if (page > 0) {
+                    self.addChoice(navigation, '◀ Previous', function() {view.page--; self.renderView();});
+                }
+                if ((page + 1) * 10 < sources.length) {
+                    self.addChoice(navigation, 'More Choices ▼', function() {
+                        view.page++;
+                        view.selected = 0;
+                        self.renderView();
+                    });
+                }
+                self.selectChoice(view.selected || 0);
+            })
+            .catch(function(error) {
+                if (token === request_id) {
+                    self.showError(error, self.renderView);
+                }
             });
-            if (page > 0) self.addChoice(navigation, 'Previous', function() {view.page--; self.renderView()});
-            if ((page + 1) * 10 < result.channels.length) {
-                self.addChoice(navigation, 'More Choices', function() {view.page++; view.selected=0; self.renderView()});
-            }
-            self.selectChoice(view.selected || 0);
-        }).catch(function(error) {
-            if (token === request_id) self.showError(error, self.renderView);
-        });
     };
 
     self.loadMenu = function() {

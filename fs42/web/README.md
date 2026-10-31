@@ -445,6 +445,20 @@ API endpoints:
 - `POST /on-demand/youtube/channels/{channel_id}/play/{video_id}`: validate a saved
   channel's listed upload and queue single playback. Direct arbitrary URLs are
   not accepted.
+- `GET /on-demand/youtube/playlists`: saved public playlists.
+- `POST /on-demand/youtube/playlists`: save a playlist by URL or playlist ID
+  (including a watch URL with a `list` parameter).
+- `DELETE /on-demand/youtube/playlists/{playlist_id}`: remove a saved playlist.
+- `GET /on-demand/youtube/playlists/{playlist_id}/videos?page=0`: playlist videos
+  in their original order, using a 10-minute cache of at most 100 entries.
+- `POST /on-demand/youtube/playlists/{playlist_id}/play/{video_id}`: verify the
+  video belongs to the saved playlist before requesting single-video playback.
+
+Add playlists from the web console's **YouTube** page. They appear alongside
+channels in On Demand > YouTube, labeled by source type. Private or restricted
+videos are skipped; private playlists requiring authentication are unsupported.
+Both channels and playlists play via the existing player, preserve resume
+positions, and return to On Demand after playback.
 
 
 ### On Demand playback overlay

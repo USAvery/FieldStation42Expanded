@@ -1340,7 +1340,7 @@ class StationPlayer(object):
         """
         Authorize a catalog title or saved YouTube upload and play it once
 
-        :param entry_id: (int|dict) catalog record or saved-channel YouTube selection
+        :param entry_id: (int|dict) catalog record or saved YouTube channel/playlist video
         :return:         (PlayerOutcome) normal completion or a command interrupting playback
         """
         from fs42.tools.on_demand import OnDemand
@@ -1349,7 +1349,11 @@ class StationPlayer(object):
             youtube = isinstance(entry_id, dict) and entry_id.get('source') == 'youtube'
             if youtube:
                 from fs42.tools.on_demand.youtube import YouTubeLibrary
-                selection = YouTubeLibrary().get_selection(entry_id.get('channel_id', ''), entry_id.get('video_id', ''))
+                library = YouTubeLibrary()
+                if 'playlist_id' in entry_id:
+                    selection = library.get_playlist_selection(entry_id['playlist_id'], entry_id.get('video_id', ''))
+                else:
+                    selection = library.get_selection(entry_id.get('channel_id', ''), entry_id.get('video_id', ''))
             else:
                 selection = OnDemand().get_selection(request.get('entry_id', entry_id))
         except (ValueError, RuntimeError) as error:

@@ -1,13 +1,23 @@
 {% extends 'web_interface/index.html' %}
 {% block tool_content %}
 <section id="youtube-manager" class="pure-u-1">
-    <p>Choose the channels available under YouTube in On Demand. Their recent uploads appear automatically.</p>
+    <p>Add channels and public playlists to the YouTube section of On Demand. Channel uploads and playlist videos appear automatically.</p>
+    <h3>Channels</h3>
     <form id="youtube-add-form" class="pure-form">
         <label for="youtube-channel-url">YouTube channel</label>
         <input id="youtube-channel-url" type="text" required maxlength="500" placeholder="@channel or channel URL" autocomplete="off">
         <button id="youtube-add" class="pure-button primary" type="submit">Add Channel</button>
     </form>
-    <p id="youtube-status" role="status" aria-live="polite"></p>
+    <p id="youtube-channel-empty"></p>
     <ul id="youtube-channels" aria-label="Saved YouTube channels"></ul>
+    <h3>Playlists</h3>
+    <form id="youtube-playlist-form" class="pure-form">
+        <label for="youtube-playlist-url">YouTube playlist</label>
+        <input id="youtube-playlist-url" type="text" required maxlength="500" placeholder="Playlist URL or ID" autocomplete="off">
+        <button id="youtube-playlist-add" class="pure-button primary" type="submit">Add Playlist</button>
+    </form>
+    <p id="youtube-playlist-empty"></p>
+    <ul id="youtube-playlists" aria-label="Saved YouTube playlists"></ul>
+    <p id="youtube-status" role="status" aria-live="polite"></p>
 </section>
 {% endblock tool_content %}
