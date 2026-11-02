@@ -10,6 +10,8 @@ import json
 import queue
 import sqlite3
 import importlib
+import shutil
+import subprocess
 from types import SimpleNamespace
 from unittest.mock import Mock
 from unittest.mock import patch
@@ -421,3 +423,217 @@ def test_physical_remote_back_uses_menu_navigation_and_preserves_last_channel(mo
             patch.object(remote, 'last_channel_pressed') as last:
         assert remote.handle_key_name(key)
         last.assert_called_once_with()
+
+
+def test_tv_show_pages_group_series_and_filter_exactly(library):
+    """
+    Group duplicate catalog references into bounded show pages and isolate similarly named series
+    """
+    service, database, _ = library
+    special = "A & B's + 100%_Show"
+    shows = ['Example Show', 'Example Show Extra', special] + ['Series {:02d}'.format(i) for i in range(9)]
+    with sqlite3.connect(database) as connection:
+        paths = connection.execute("""SELECT DISTINCT m.path FROM file_meta AS m
+            JOIN catalog_entries AS c ON c.path = m.path
+            WHERE m.meta LIKE '%movie%' AND c.content_type = 'feature'
+                  AND c.media_type = 'video' AND c.station = 'Movies' ORDER BY m.path""").fetchall()
+        for (path,), show in zip(paths, shows):
+            connection.execute('UPDATE file_meta SET meta = ? WHERE path = ?',
+                               (json.dumps({'type': 'episode', 'show_title': show, 'title': 'Episode'}), path))
+        connection.execute("INSERT INTO file_meta VALUES ('secret.mp4', ?)",
+                           (json.dumps({'type': 'episode', 'show_title': 'Inactive Show'}),))
+    first = service.get_shows()
+    second = service.get_shows(page=1)
+    titles = [item['title'] for item in first['items'] + second['items']]
+    assert first['total'] == second['total'] == 12
+    assert len(first['items']) == 10 and len(second['items']) == 2
+    assert titles == sorted(set(shows), key=str.lower)
+    assert service.get_titles(category='tv', show='Example Show')['total'] == 2
+    assert service.get_titles(category='tv', show='Example Show Extra')['total'] == 1
+    assert service.get_titles(category='tv', show='example show')['total'] == 2
+    assert service.get_titles(category='tv', show=special)['total'] == 1
+    assert service.get_titles(category='tv', show="%' OR 1=1 --")['total'] == 0
+    assert service.get_shows(page=2)['items'] == []
+
+
+def test_show_browsing_without_cached_metadata_or_active_stations(library):
+    """
+    Keep filename-only catalogs browsable and return an empty page when all stations are disabled
+    """
+    service, database, _ = library
+    with sqlite3.connect(database) as connection:
+        connection.execute('DROP TABLE file_meta')
+    assert service.get_shows()['items'] == [{'title': 'Show'}]
+    assert service.get_titles(category='tv', show='Show')['total'] == 1
+    service._stations.clear()
+    assert service.get_shows()['items'] == []
+    assert service.get_shows()['total'] == 0
+
+
+@pytest.mark.parametrize('metadata,path,title', [
+    ('{"show_title": "  Cached Name  "}', '/tv/Other/S01E01.mp4', 'Cached Name'),
+    ('{}', '/tv/Example.Show.S01E01.Pilot.mp4', 'Example Show'),
+    ('invalid json', '/tv/Example_Show - 1x02.mp4', 'Example Show'),
+    ('[]', '/tv/Example Show/Season 01/S01E01.mp4', 'Example Show'),
+    ('{}', r'C:\TV\Example Show\Specials\S00E01.mp4', 'Example Show'),
+    ('{"type": "episode"}', '/tv/Example Show/Pilot.mp4', 'Example Show'),
+])
+def test_show_name_fallbacks(metadata, path, title):
+    """
+    Resolve cached names and common POSIX or Windows episode layouts without reading media
+    """
+    from fs42.tools.on_demand._utils import media_show
+    assert media_show(metadata, path) == title
+
+
+def test_show_api_pages_and_exact_series_filter(library):
+    """
+    Expose bounded show choices and reject invalid page and filter inputs at the HTTP boundary
+    """
+    with TestClient(create_app(server_conf={})) as client:
+        assert client.get('/on-demand/shows').json() == {
+            'items': [{'title': 'Example Show'}], 'total': 1, 'page': 0, 'page_size': 10}
+        assert client.get('/on-demand/shows?page=1').json()['items'] == []
+        assert client.get('/on-demand/shows?page=-1').status_code == 422
+        assert client.get('/on-demand/titles', params={'category': 'tv', 'show': 'Example Show'}).json()['total'] == 1
+        assert client.get('/on-demand/titles', params={'category': 'tv', 'show': 'Example'}).json()['total'] == 0
+        assert client.get('/on-demand/titles', params={'show': 'a' * 501}).status_code == 422
+        routes = client.get('/web/routes').json()
+        assert routes['endpoints']['api.on_demand.get_shows'] == '/on-demand/shows'
+
+
+def test_tv_show_menu_navigation_and_stale_requests():
+    """
+    Exercise show selection, pagination, episode details, Back, retries, and late HTTP responses
+    """
+    node = shutil.which('node')
+    if not node:
+        pytest.skip('Node is required for browser menu checks')
+    path = os.path.join(os.path.dirname(__file__), '..', 'fs42', 'web', 'blueprints',
+                        'menu', 'on_demand', 'static', 'on_demand.js')
+    with open(path, encoding='utf8') as f_in:
+        source = f_in.read()
+    script = r"""
+const assert = require('assert');
+const vm = require('vm');
+const elements = {};
+let focused = null, fail = false, empty = false, defer = false, pending = null;
+const requests = [];
+function element(id) {
+    const classes = new Set();
+    return {
+        id, children: [], dataset: {}, hidden: false, textContent: '', scrollTop: 0, events: {},
+        classList: {
+            add: name => classes.add(name), remove: name => classes.delete(name),
+            contains: name => classes.has(name),
+            toggle: (name, active) => active ? classes.add(name) : classes.delete(name)
+        },
+        replaceChildren() { this.children = []; },
+        appendChild(child) { child.parentElement = this; this.children.push(child); },
+        addEventListener(name, callback) { this.events[name] = callback; },
+        removeEventListener() {},
+        closest() { return this.hidden ? this : this.parentElement?.closest(); },
+        focus() { focused = this; this.events.focus?.(); },
+        click() { this.focus(); this.events.click?.(); },
+        getBoundingClientRect() { return {top: 0, bottom: 10}; }
+    };
+}
+const document = {
+    getElementById: id => elements[id] || (elements[id] = element(id)),
+    createElement: () => element('button'), addEventListener() {},
+    querySelectorAll: () => ['od-options', 'od-navigation', 'od-detail-actions']
+        .flatMap(id => document.getElementById(id).children),
+    body: element('body')
+};
+const app = {};
+const context = {
+    app, window: {app, addEventListener() {}}, document, URLSearchParams,
+    ControlBindings: class {}, SpatialNavigator: class {},
+    urlFor: (name, args={}) => name + (Object.keys(args).length ? '?' + new URLSearchParams(args) : ''),
+    apiGet(url) {
+        requests.push(url);
+        if (url === 'api.on_demand.get_menu') return Promise.resolve({
+            categories: [{id:'movies',title:'Movies'}, {id:'tv',title:'TV Shows'}], channels:[]
+        });
+        if (url.startsWith('api.on_demand.get_shows')) {
+            if (defer) return new Promise(resolve => pending = resolve);
+            if (fail) return Promise.reject({detail:'Offline'});
+            const page = Number(new URLSearchParams(url.split('?')[1]).get('page'));
+            return Promise.resolve({items: empty ? [] : page
+                ? [{title:"A & B's + Show"}]
+                : Array.from({length:10}, (_, i) => ({title:'Show ' + i})),
+                page, page_size:10, total:empty ? 0 : 11});
+        }
+        if (url.startsWith('api.on_demand.get_titles')) return Promise.resolve({
+            items:[{id:42,title:'Episode',kind:'episode'}], total:1, page:0, page_size:10
+        });
+        throw Error('Unexpected endpoint: ' + url);
+    }
+};
+vm.runInNewContext(__SOURCE__, context);
+const menu = app.menu.on_demand;
+const buttons = () => elements['od-options'].children;
+const navigation = () => elements['od-navigation'].children;
+const tick = () => new Promise(resolve => setImmediate(resolve));
+(async function() {
+    menu.setup();
+    await tick();
+    buttons()[1].click();
+    await tick();
+    assert.equal(buttons().length, 10);
+    assert.equal(elements['od-wrapper'].classList.contains('od-listings'), false);
+    assert.equal(elements['od-heading'].hidden, false);
+    assert.equal(buttons()[0].className, 'od-choice');
+    navigation()[0].click();
+    await tick();
+    assert.equal(buttons()[0].textContent, "A & B's + Show");
+    menu.selectChoice(0);
+    menu.navigationActions['navigation.select']();
+    await tick();
+    const query = new URLSearchParams(requests.at(-1).split('?')[1]);
+    assert.equal(query.get('show'), "A & B's + Show");
+    assert.equal(query.get('category'), 'tv');
+    assert.equal(elements['od-wrapper'].classList.contains('od-listings'), true);
+    buttons()[0].click();
+    assert.equal(elements['od-wrapper'].classList.contains('od-detail-view'), true);
+    menu.navigationActions['navigation.back']();
+    await tick();
+    assert.equal(buttons()[0].textContent, 'Episode');
+    menu.navigationActions['navigation.back']();
+    await tick();
+    assert.equal(buttons()[0].textContent, "A & B's + Show");
+    assert.equal(focused, buttons()[0]);
+    menu.navigationActions['navigation.back']();
+    assert.equal(focused.textContent, 'TV Shows');
+
+    defer = true;
+    buttons()[1].click();
+    menu.goBack();
+    pending({items:[{title:'Late show'}],page:0,page_size:10,total:1});
+    await tick();
+    assert.equal(buttons()[1].textContent, 'TV Shows');
+    assert.equal(buttons().length, 2);
+
+    defer = false;
+    fail = true;
+    buttons()[1].click();
+    await tick();
+    assert.equal(buttons()[0].textContent, 'Try Again');
+    assert.equal(elements['od-status'].textContent, 'Offline');
+    fail = false;
+    buttons()[0].click();
+    await tick();
+    assert.equal(buttons().length, 10);
+    menu.goBack();
+    empty = true;
+    buttons()[1].click();
+    await tick();
+    assert.equal(buttons().length, 0);
+    assert.match(elements['od-status'].textContent, /No TV shows/);
+    menu.goBack();
+    assert.equal(focused.textContent, 'TV Shows');
+})().catch(error => { console.error(error); process.exitCode = 1; });
+"""
+    result = subprocess.run([node, '-'], input=script.replace('__SOURCE__', json.dumps(source)),
+                            capture_output=True, encoding='utf8', timeout=20)
+    assert result.returncode == 0, result.stderr

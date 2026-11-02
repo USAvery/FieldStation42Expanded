@@ -36,6 +36,7 @@ class OnDemand(object):
         connection = sqlite3.connect(self._catalog.db_path)
         connection.row_factory = sqlite3.Row
         connection.create_function('media_kind', 2, _utils.media_kind, deterministic=True)
+        connection.create_function('media_show', 2, _utils.media_show, deterministic=True)
         connection.create_function('kids_content', 2, _utils.kids_content, deterministic=True)
         return connection
 
@@ -71,7 +72,27 @@ class OnDemand(object):
                 'description': meta.get('plot') or 'No description available.',
                 'season': meta.get('season'), 'episode': meta.get('episode')}
 
-    def get_titles(self, category='all', query='', channel='', page=0):
+    def get_shows(self, page=0):
+        """
+        Return one alphabetized page of distinct series from the active local library
+
+        :param page: (int) zero-based result page
+        :return:     (dict) show choices, result count, and pagination state
+        """
+        result = {'items': [], 'total': 0, 'page': page, 'page_size': _constants.PAGE_SIZE}
+        if not self._stations:
+            return result
+        stations = list(self._stations)
+        with closing(self._connect()) as connection:
+            sql = self._query(connection, 'show_title AS title', " AND kind = 'episode'", stations)
+            sql += ' GROUP BY show_title COLLATE NOCASE'
+            result['total'] = connection.execute('SELECT COUNT(*) FROM ({})'.format(sql), stations).fetchone()[0]
+            rows = connection.execute(sql + ' ORDER BY title COLLATE NOCASE LIMIT ? OFFSET ?',
+                                      stations + [_constants.PAGE_SIZE, page * _constants.PAGE_SIZE]).fetchall()
+            result['items'] = [{'title': row['title']} for row in rows]
+        return result
+
+    def get_titles(self, category='all', query='', channel='', page=0, show=''):
         """
         Fetch one stable title page with optional category, search, and channel filters
 
@@ -79,6 +100,7 @@ class OnDemand(object):
         :param query:    (str) literal title or series search text
         :param channel:  (str) optional network name
         :param page:     (int) zero-based result page
+        :param show:     (str) exact series name selected in the TV Shows menu
         :return:         (dict) title summaries, result count, and pagination state
         """
         result = {'items': [], 'total': 0, 'page': page, 'page_size': _constants.PAGE_SIZE}
@@ -91,6 +113,9 @@ class OnDemand(object):
         parameters = list(stations)
         if category in _constants.CATEGORY_FILTERS:
             filters.append(_constants.CATEGORY_FILTERS[category])
+        if show:
+            filters.append("kind = 'episode' AND show_title = ? COLLATE NOCASE")
+            parameters.append(show)
         if query.strip():
             filters.append("(instr(lower(title), lower(?)) > 0 OR instr(lower(meta), lower(?)) > 0)")
             parameters.extend([query.strip(), query.strip()])

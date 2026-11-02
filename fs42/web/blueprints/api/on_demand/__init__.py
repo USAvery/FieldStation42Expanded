@@ -38,15 +38,23 @@ def open_menu(request: Request):
     return {'success': True}
 
 
+@router.get('/shows')
+def get_shows(page: int = Query(0, ge=0)):
+    """
+    Return a bounded page of distinct TV shows for the two-column selection menu
+    """
+    return OnDemand().get_shows(page)
+
+
 @router.get('/titles')
 def get_titles(category: str = 'all', query: str = Query('', max_length=200),
-               channel: str = '', page: int = Query(0, ge=0)):
+               channel: str = '', page: int = Query(0, ge=0), show: str = Query('', max_length=500)):
     """
     Return a bounded page of movies and episodes matching the chosen menu or search
     """
     if category not in {item['id'] for item in CATEGORIES}:
         raise HTTPException(status_code=400, detail='Unknown library category')
-    return OnDemand().get_titles(category, query, channel, page)
+    return OnDemand().get_titles(category, query, channel, page, show)
 
 
 @router.post('/play/{entry_id}')

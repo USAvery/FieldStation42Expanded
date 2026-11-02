@@ -207,6 +207,9 @@ app.menu.on_demand = (function() {
         if (view.query) {
             params.set('query', view.query);
         }
+        if (view.show) {
+            params.set('show', view.show);
+        }
         if (view.channel) {
             params.set('channel', view.channel);
         }
@@ -277,6 +280,9 @@ app.menu.on_demand = (function() {
             self.showTitles(token);
             self.selectChoice(0);
         }
+        else if (view.type === 'tv') {
+            self.showTVShows(token);
+        }
         else if (view.type === 'youtube') {
             self.showYouTubeSources(token);
         }
@@ -301,7 +307,7 @@ app.menu.on_demand = (function() {
         else {
             menu.categories.forEach(function(category) {
                 self.addChoice(options, category.title, function() {
-                    const type = ['search', 'channels', 'youtube'].includes(category.id) ? category.id : 'titles';
+                    const type = ['search', 'channels', 'youtube', 'tv'].includes(category.id) ? category.id : 'titles';
                     self.openView({type: type, title: category.title, category: category.id, page: 0});
                 });
             });
@@ -309,7 +315,45 @@ app.menu.on_demand = (function() {
         }
     };
     /**
-     * Load menu choices once and retain an explicit retry if the server is unavailable
+     * List distinct TV shows with the same two-column choices as YouTube
+     */
+    self.showTVShows = function(token) {
+        status.textContent = 'Loading TV shows…';
+        apiGet(urlFor('api.on_demand.get_shows', {page: view.page || 0}))
+            .then(function(result) {
+                if (token !== request_id) {
+                    return;
+                }
+                status.textContent = result.total ? '' : 'No TV shows found in the active catalogs.';
+                result.items.forEach(function(show) {
+                    self.addChoice(options, show.title, function() {
+                        self.openView({type: 'titles', title: show.title, category: 'tv', show: show.title, page: 0});
+                    });
+                });
+                if (result.page > 0) {
+                    self.addChoice(navigation, '◀ Previous', function() {
+                        view.page = result.page - 1;
+                        view.selected = 0;
+                        self.renderView();
+                    });
+                }
+                if ((result.page + 1) * result.page_size < result.total) {
+                    self.addChoice(navigation, 'More Choices ▼', function() {
+                        view.page = result.page + 1;
+                        view.selected = 0;
+                        self.renderView();
+                    });
+                }
+                self.selectChoice(view.selected || 0);
+            })
+            .catch(function(error) {
+                if (token === request_id) {
+                    self.showError(error, self.renderView);
+                }
+            });
+    };
+    /**
+     * List saved YouTube channels and playlists as two-column menu choices
      */
     self.showYouTubeSources = function(token) {
         status.textContent = 'Loading YouTube…';

@@ -14,8 +14,11 @@ streams, and duplicate references to the same file are excluded. Title results a
 the menu reads the catalog and cached metadata instead of scanning directories or probing files.
 
 - **Top Picks** lists frequently scheduled titles using the catalog's existing play counts.
-- **Movies** and **TV Shows** use cached metadata; episode filenames are recognized when metadata
-  is missing. Unclassified feature videos appear under Movies and All Titles.
+- **TV Shows** lists distinct shows alphabetically in the same two-column menu layout as YouTube,
+  with ten shows per page. Select a show to browse its episodes; Back restores the show page and
+  selection. Show names come from cached metadata, episode filenames, or their show folders.
+- **Movies** uses cached metadata; episode filenames are recognized when metadata is missing.
+  Unclassified feature videos appear under Movies and All Titles.
 - **Kids** uses genre and catalog tags such as kids, children, family, animation, and cartoon.
 - **Recently Added** uses catalog insertion order.
 - **Short Features** includes titles under 30 minutes; **Long Features** includes titles of at least

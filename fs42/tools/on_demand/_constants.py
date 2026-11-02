@@ -7,6 +7,8 @@ Define On Demand menu choices and bounded catalog queries
 """
 PAGE_SIZE = 10
 MAX_RESUME_POSITIONS = 500
+EPISODE_NUMBER_PATTERN = r'(?i)(?:s\d{1,2}e\d{1,3}|\b\d{1,2}x\d{2}\b)'
+SEASON_FOLDER_PATTERN = r'(?i)^(?:season[ ._-]*\d+|specials)$'
 # Pi 4 cannot decode YouTube's preferred 4K AV1/VP9 streams in hardware.
 # Select AVC + AAC at a resolution and frame rate suitable for direct playback.
 YOUTUBE_FORMAT = ('bestvideo[vcodec^=avc1][height<=1080][fps<=30]+'
@@ -36,6 +38,7 @@ CATALOG_QUERY = '''
         SELECT c.id, c.station, c.path, c.title, c.duration, c.tag, c.count AS play_count,
                {metadata} AS meta,
                media_kind({metadata}, c.path) AS kind,
+               media_show({metadata}, c.path) AS show_title,
                kids_content({metadata}, c.tag) AS kids,
                ROW_NUMBER() OVER (
                    PARTITION BY COALESCE(NULLIF(c.realpath, ''), c.path)
